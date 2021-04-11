@@ -17,10 +17,12 @@ struct ParseError : std::exception {
 
 class Parser {
     std::istream &in;
+    u2 constant_pool_count;
 
     inline u1 eat_u1() {
+        // WARNING: >> and .get() are intended for text. They would filter out 0x0A characters...
         u1 a;
-        in >> a;
+        in.read((char *) &a, 1);
         return a;
     }
 
@@ -57,6 +59,12 @@ public:
     explicit Parser(std::istream &in);
 
     ClassFile parse();
+
+    ConstantPool parse_constant_pool(u2 major_version);
+
+    u2 eat_cp_index();
+
+    std::vector<attribute_info> parse_attributes();
 };
 
 #endif //SCHOKOVM_PARSER_HPP

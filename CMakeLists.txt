@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 if (MSVC)
     add_compile_options(/W4 /WX) # warning level 4 and all warnings as errors
 else ()
-    add_compile_options(-Wall -Wextra -pedantic -Werror
+    add_compile_options(-Wall -Wextra -pedantic # -Werror
             # https://interrupt.memfault.com/blog/best-and-worst-gcc-clang-compiler-flags
             -Wdouble-promotion -Wformat=2 -Wformat-truncation -Wundef -fno-common -Wconversion
 

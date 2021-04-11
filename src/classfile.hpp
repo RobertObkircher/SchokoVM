@@ -1,6 +1,8 @@
 #ifndef SCHOKOVM_CLASSFILE_HPP
 #define SCHOKOVM_CLASSFILE_HPP
 
+#include <vector>
+
 #include "types.hpp"
 
 // Initially generated like this:
@@ -19,6 +21,7 @@
 
 // forward declarations:
 struct cp_info;
+struct ConstantPool;
 struct field_info;
 struct method_info;
 struct attribute_info;
@@ -28,140 +31,225 @@ struct type_annotation;
 struct type_path;
 struct record_component_info;
 
+struct ConstantPool {
+    std::vector<cp_info> table;
+    std::vector<std::string> utf8_strings;
+};
 
 struct ClassFile {
     u4 magic;
     u2 minor_version;
     u2 major_version;
-    u2 constant_pool_count;
-//    cp_info constant_pool[constant_pool_count - 1];
+    ConstantPool constant_pool;
     u2 access_flags;
     u2 this_class;
     u2 super_class;
-    u2 interfaces_count;
-//    u2 interfaces[interfaces_count];
-    u2 fields_count;
-//    field_info fields[fields_count];
-    u2 methods_count;
-//    method_info methods[methods_count];
-    u2 attributes_count;
-//    attribute_info attributes[attributes_count];
+    std::vector<u2> interfaces;
+    std::vector<field_info> fields;
+    std::vector<method_info> methods;
+    std::vector<attribute_info> attributes;
 };
 
-struct cp_info {
-    u1 tag;
-//    u1 info[];
+enum CpTag : u1 {
+    // Just a dummy value used in the constant pool for index 0 and after longs/doubles
+    CONSTANT_Invalid = 0,
+    CONSTANT_Utf8 = 1,
+    CONSTANT_Integer = 3,
+    CONSTANT_Float = 4,
+    CONSTANT_Long = 5,
+    CONSTANT_Double = 6,
+    CONSTANT_Class = 7,
+    CONSTANT_String = 8,
+    CONSTANT_Fieldref = 9,
+    CONSTANT_Methodref = 10,
+    CONSTANT_InterfaceMethodref = 11,
+    CONSTANT_NameAndType = 12,
+    CONSTANT_MethodHandle = 15,
+    CONSTANT_MethodType = 16,
+    CONSTANT_Dynamic = 17,
+    CONSTANT_InvokeDynamic = 18,
+    CONSTANT_Module = 19,
+    CONSTANT_Package = 20,
 };
+
+// TODO remove if this stays unused
+inline bool is_loadable(CpTag tag) {
+    switch (tag) {
+        case CONSTANT_Integer:
+        case CONSTANT_Float:
+        case CONSTANT_Long:
+        case CONSTANT_Double:
+        case CONSTANT_Class:
+        case CONSTANT_String:
+        case CONSTANT_MethodHandle:
+        case CONSTANT_MethodType:
+        case CONSTANT_Dynamic:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// cp_info:
 
 struct CONSTANT_Class_info {
-    u1 tag;
     u2 name_index;
 };
 
 struct CONSTANT_Fieldref_info {
-    u1 tag;
     u2 class_index;
     u2 name_and_type_index;
 };
-struct
-CONSTANT_Methodref_info {
-    u1 tag;
+
+struct CONSTANT_Methodref_info {
     u2 class_index;
     u2 name_and_type_index;
 };
-struct
-CONSTANT_InterfaceMethodref_info {
-    u1 tag;
+
+struct CONSTANT_InterfaceMethodref_info {
     u2 class_index;
     u2 name_and_type_index;
 };
 
 struct CONSTANT_String_info {
-    u1 tag;
     u2 string_index;
 };
 
 struct CONSTANT_Integer_info {
-    u1 tag;
     u4 bytes;
 };
-struct
-CONSTANT_Float_info {
-    u1 tag;
-    u4 bytes;
+
+struct CONSTANT_Float_info {
+//    u4 bytes;
+    float value;
 };
 
 struct CONSTANT_Long_info {
-    u1 tag;
-    u4 high_bytes;
-    u4 low_bytes;
+//    u4 high_bytes;
+//    u4 low_bytes;
+    u8 value;
 };
-struct
-CONSTANT_Double_info {
-    u1 tag;
-    u4 high_bytes;
-    u4 low_bytes;
+
+struct CONSTANT_Double_info {
+//    u4 high_bytes;
+//    u4 low_bytes;
+    double value;
 };
 
 struct CONSTANT_NameAndType_info {
-    u1 tag;
     u2 name_index;
     u2 descriptor_index;
 };
 
 struct CONSTANT_Utf8_info {
-    u1 tag;
-    u2 length;
+    // This is an index into the utf8_strings vector of ConstantPool so that we don't have to store a vector
+    // inside the cp_info union.
+    size_t index;
+//    u2 length;
 //    u1 bytes[length];
 };
 
+enum MethodHandleKind : u1 {
+    REF_getField = 1,
+    REF_getStatic = 2,
+    REF_putField = 3,
+    REF_putStatic = 4,
+    REF_invokeVirtual = 5,
+    REF_invokeStatic = 6,
+    REF_invokeSpecial = 7,
+    REF_newInvokeSpecial = 8,
+    REF_invokeInterface = 9,
+};
+
 struct CONSTANT_MethodHandle_info {
-    u1 tag;
-    u1 reference_kind;
+    MethodHandleKind reference_kind;
     u2 reference_index;
 };
 
 struct CONSTANT_MethodType_info {
-    u1 tag;
     u2 descriptor_index;
 };
 
 struct CONSTANT_Dynamic_info {
-    u1 tag;
     u2 bootstrap_method_attr_index;
     u2 name_and_type_index;
 };
-struct
-CONSTANT_InvokeDynamic_info {
-    u1 tag;
+
+struct CONSTANT_InvokeDynamic_info {
     u2 bootstrap_method_attr_index;
     u2 name_and_type_index;
 };
 
 struct CONSTANT_Module_info {
-    u1 tag;
     u2 name_index;
 };
 
 struct CONSTANT_Package_info {
-    u1 tag;
     u2 name_index;
+};
+
+struct cp_info {
+    CpTag tag;
+    union {
+        CONSTANT_Class_info class_info;
+        CONSTANT_Fieldref_info fieldref_info;
+        CONSTANT_Methodref_info methodref_info;
+        CONSTANT_InterfaceMethodref_info interface_methodref_info;
+        CONSTANT_String_info string_info;
+        CONSTANT_Integer_info integer_info;
+        CONSTANT_Float_info float_info;
+        CONSTANT_Long_info long_info;
+        CONSTANT_Double_info double_info;
+        CONSTANT_NameAndType_info name_and_type_info;
+        CONSTANT_Utf8_info utf_8_info;
+        CONSTANT_MethodHandle_info method_handle_info;
+        CONSTANT_MethodType_info method_type_info;
+        CONSTANT_Dynamic_info dynamic_info;
+        CONSTANT_InvokeDynamic_info invoke_dynamic_info;
+        CONSTANT_Module_info module_info;
+        CONSTANT_Package_info package_info;
+    } info;
+};
+
+enum class FieldInfoAccessFlags {
+    ACC_PUBLIC = 0x0001,
+    ACC_PRIVATE = 0x0002,
+    ACC_PROTECTED = 0x0004,
+    ACC_STATIC = 0x0008,
+    ACC_FINAL = 0x0010,
+    ACC_VOLATILE = 0x0040,
+    ACC_TRANSIENT = 0x0080,
+    ACC_SYNTHETIC = 0x1000,
+    ACC_ENUM = 0x4000,
 };
 
 struct field_info {
     u2 access_flags;
     u2 name_index;
     u2 descriptor_index;
-    u2 attributes_count;
-//    attribute_info attributes[attributes_count];
+    std::vector<attribute_info> attributes;
+};
+
+enum class MethodInfoAccessFlags {
+    ACC_PUBLIC = 0x0001,
+    ACC_PRIVATE = 0x0002,
+    ACC_PROTECTED = 0x0004,
+    ACC_STATIC = 0x0008,
+    ACC_FINAL = 0x0010,
+    ACC_SYNCHRONIZED = 0x0020,
+    ACC_BRIDGE = 0x0040,
+    ACC_VARARGS = 0x0080,
+    ACC_NATIVE = 0x0100,
+    ACC_ABSTRACT = 0x0400,
+    ACC_STRICT = 0x0800,
+    ACC_SYNTHETIC = 0x1000,
 };
 
 struct method_info {
     u2 access_flags;
     u2 name_index;
     u2 descriptor_index;
-    u2 attributes_count;
-//    attribute_info attributes[attributes_count];
+    std::vector<attribute_info> attributes;
 };
 
 struct attribute_info {
