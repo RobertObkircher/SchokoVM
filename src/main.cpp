@@ -27,7 +27,7 @@ public:
             }
         }
         paths_to_delete.clear();
-    };
+    }
 };
 
 int main(int argc, char *argv[]) {

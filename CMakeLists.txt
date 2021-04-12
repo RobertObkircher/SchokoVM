@@ -9,6 +9,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 # https://cmake.org/cmake/help/latest/command/add_compile_options.html
 if (MSVC)
     add_compile_options(/W4 /WX) # warning level 4 and all warnings as errors
+elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+    add_compile_options(
+            -Weverything
+            -Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-switch-enum -Wno-padded
+            -fno-common
+            -fsanitize=address
+            )
+    add_link_options(-fsanitize=address)
 else ()
     add_compile_options(-Wall -Wextra -pedantic # -Werror
             # https://interrupt.memfault.com/blog/best-and-worst-gcc-clang-compiler-flags
@@ -18,9 +26,10 @@ else ()
             -fanalyzer
             -fsanitize=address -fsanitize=pointer-compare -fsanitize=pointer-subtract -fsanitize=leak -fsanitize=undefined
             )
+    add_link_options(
+            -fsanitize=address -fsanitize=pointer-compare -fsanitize=pointer-subtract -fsanitize=leak -fsanitize=undefined
+            )
 endif ()
-
-link_libraries(asan ubsan)
 
 # I'm not entirely sure how to use add_subdirectory(src) and we only have one executable anyway
 add_executable(SchokoVM

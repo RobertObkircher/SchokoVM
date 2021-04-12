@@ -47,13 +47,13 @@ class Parser {
                ((u8) bytes[4] << 24) | ((u8) bytes[5] << 16) | ((u8) bytes[6] << 8) | ((u8) bytes[7] << 0);
     }
 
-    inline s1 eat_s1() { return (s1) eat_u1(); };
+    inline s1 eat_s1() { return (s1) eat_u1(); }
 
-    inline s2 eat_s2() { return (s2) eat_u2(); };
+    inline s2 eat_s2() { return (s2) eat_u2(); }
 
-    inline s4 eat_s4() { return (s4) eat_u4(); };
+    inline s4 eat_s4() { return (s4) eat_u4(); }
 
-    inline s8 eat_s8() { return (s8) eat_u8(); };
+    inline s8 eat_s8() { return (s8) eat_u8(); }
 
 public:
     explicit Parser(std::istream &in);

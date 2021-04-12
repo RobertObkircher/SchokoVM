@@ -14,7 +14,7 @@ const char *ParseError::what() const noexcept {
 
 Parser::Parser(std::istream &in) : in(in) {
     // TODO How to handle errors?
-    // I think the follwoing enables exceptions for all of these.
+    // I think the following enables exceptions for all of these.
     // Is this a good idea?
     in.exceptions(std::ios::failbit | std::ios::badbit | std::ios::eofbit);
 }
