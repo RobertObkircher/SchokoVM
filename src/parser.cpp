@@ -50,7 +50,7 @@ ClassFile Parser::parse() {
         field_info.access_flags = eat_u2();
         field_info.name_index = eat_cp_index();
         field_info.descriptor_index = eat_cp_index();
-        field_info.attributes = parse_attributes();
+        field_info.attributes = parse_attributes(result.constant_pool);
         result.fields.push_back(field_info);
     }
 
@@ -60,14 +60,16 @@ ClassFile Parser::parse() {
         method_info.access_flags = eat_u2();
         method_info.name_index = eat_cp_index();
         method_info.descriptor_index = eat_cp_index();
-        method_info.attributes = parse_attributes();
+        method_info.attributes = parse_attributes(result.constant_pool);
         result.methods.push_back(method_info);
     }
 
-    result.attributes = parse_attributes();
+    result.attributes = parse_attributes(result.constant_pool);
 
+    in.exceptions(std::ios::goodbit);
+    u1 unexpected = eat_u1();
     if (!in.eof())
-        throw ParseError("Expected EOF");
+        throw ParseError("Expected EOF but got " + std::to_string((int) unexpected));
 
     return result;
 }
@@ -202,8 +204,72 @@ ConstantPool Parser::parse_constant_pool(u2 major_version) {
     return result;
 }
 
-std::vector<attribute_info> Parser::parse_attributes() {
+// TODO we probably do not want to store attributes as an array of structs.
+// For example attributes that only go on fields should be stored there as a member variable.
+std::vector<attribute_info> Parser::parse_attributes(const ConstantPool &constant_pool) {
     std::vector<attribute_info> result;
+
+    u2 attributes_count = eat_u2();
+
+    for (size_t attribute_index = 0; attribute_index < attributes_count; ++attribute_index) {
+        attribute_info info;
+        info.attribute_name_index = eat_cp_index();
+        info.attribute_length = eat_u4();
+
+        cp_info cp = constant_pool.table[info.attribute_name_index];
+        // TODO do this in eat_cp_index or create a getter
+        if (cp.tag != CONSTANT_Utf8) {
+            throw ParseError("Expected a string constant");
+        }
+        const std::string &s = constant_pool.utf8_strings[cp.info.utf_8_info.index];
+
+        if (s == "ConstantValue") {
+            // TODO: sometimes this info must be silently ignored
+
+            if (info.attribute_length != 2) {
+                throw ParseError("ConstantValue length must be 2, not " + std::to_string(info.attribute_length));
+            }
+
+            ConstantValue_attribute attribute;
+            attribute.constantvalue_index = eat_cp_index();
+            switch (constant_pool.table[attribute.constantvalue_index].tag) {
+                case CONSTANT_Integer:
+                case CONSTANT_Float:
+                case CONSTANT_Long:
+                case CONSTANT_Double:
+                case CONSTANT_String:
+                    break;
+                default:
+                    throw ParseError("Unexpected type for constant pool entry of ConstantValue");
+            }
+            info.variant = attribute;
+        } else if (s == "Code") {
+            Code_attribute attribute;
+            attribute.max_stack = eat_u2();
+            attribute.max_locals = eat_u2();
+            u4 code_length = eat_u4();
+            attribute.code.resize(code_length);
+            in.read(reinterpret_cast<char *>(attribute.code.data()), code_length);
+
+            u2 exception_table_length = eat_u2();
+            for (int i = 0; i < exception_table_length; ++i) {
+                ExceptionTableEntry entry{};
+                entry.start_pc = eat_u2();
+                entry.end_pc = eat_u2();
+                entry.handler_pc = eat_u2();
+                entry.catch_type = eat_u2();
+                attribute.exception_table.push_back(entry);
+            }
+
+            attribute.attributes = parse_attributes(constant_pool);
+
+            info.variant = attribute;
+        } else {
+            for (size_t i = 0; i < info.attribute_length; ++i) {
+                eat_u1();
+            }
+        }
+    }
 
     return result;
 }

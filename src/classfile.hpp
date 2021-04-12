@@ -2,6 +2,8 @@
 #define SCHOKOVM_CLASSFILE_HPP
 
 #include <vector>
+#include <variant>
+#include <cassert>
 
 #include "types.hpp"
 
@@ -252,34 +254,36 @@ struct method_info {
     std::vector<attribute_info> attributes;
 };
 
-struct attribute_info {
-    u2 attribute_name_index;
-    u4 attribute_length;
-//    u1 info[attribute_length];
-};
+// attribute_info...
 
 struct ConstantValue_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     u2 constantvalue_index;
 };
 
+struct ExceptionTableEntry {
+    u2 start_pc;
+    u2 end_pc;
+    u2 handler_pc;
+    u2 catch_type;
+};
+
 struct Code_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     u2 max_stack;
     u2 max_locals;
-    u4 code_length;
+//    u4 code_length;
 //    u1 code[code_length];
-    u2 exception_table_length;
+    std::vector<u1> code;
+//    u2 exception_table_length;
 //    {
 //        u2 start_pc;
 //        u2 end_pc;
 //        u2 handler_pc;
 //        u2 catch_type;
 //    } exception_table[exception_table_length];
-    u2 attributes_count;
+    std::vector<ExceptionTableEntry> exception_table;
+//    u2 attributes_count;
 //    attribute_info attributes[attributes_count];
+    std::vector<attribute_info> attributes;
 };
 
 struct StackMapTable_attribute {
@@ -747,6 +751,14 @@ struct record_component_info {
     u2 descriptor_index;
     u2 attributes_count;
 //    attribute_info attributes[attributes_count];
+};
+
+struct attribute_info {
+    // TODO: Do we even need to store these two fields?
+    u2 attribute_name_index;
+    u4 attribute_length;
+//    u1 info[attribute_length];
+    std::variant<ConstantValue_attribute, Code_attribute> variant;
 };
 
 

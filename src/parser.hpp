@@ -64,7 +64,7 @@ public:
 
     u2 eat_cp_index();
 
-    std::vector<attribute_info> parse_attributes();
+    std::vector<attribute_info> parse_attributes(const ConstantPool &constant_pool);
 };
 
 #endif //SCHOKOVM_PARSER_HPP
