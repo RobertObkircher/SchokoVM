@@ -17,7 +17,6 @@ std::optional<Arguments> parse_args(int argc, char *argv[]) {
     std::optional<std::string> classpath{};
     std::optional<std::string> mainclass{};
     std::vector<std::string> remaining;
-    std::optional<std::pair<std::string, std::string>> test{};
 
     int index = 1;
     while (index < argc) {
@@ -33,16 +32,6 @@ std::optional<Arguments> parse_args(int argc, char *argv[]) {
                 return usage("Expected argument after" + arg);
             } else {
                 classpath = argv[index++];
-            }
-        } else if (arg == "--test") {
-            if (test) {
-                return usage("--test is specified twice");
-            } else if (index + 1 >= argc) {
-                return usage("Expected two arguments after" + arg);
-            } else {
-                auto java = argv[index++];
-                auto output = argv[index++];
-                test = {java, output};
             }
         } else {
             mainclass = arg;
@@ -63,6 +52,5 @@ std::optional<Arguments> parse_args(int argc, char *argv[]) {
             *mainclass,
             *classpath,
             remaining,
-            test,
     };
 }

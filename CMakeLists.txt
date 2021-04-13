@@ -61,7 +61,7 @@ enable_testing()
 # https://cmake.org/cmake/help/latest/guide/tutorial/index.html#id11
 function(do_test path)
     get_filename_component(name ${path} NAME_WE)
-    add_test(NAME ${name} COMMAND SchokoVM --test ${Java_JAVA_EXECUTABLE} "out/${name}" --class-path tests.jar ${name})
+    add_test(NAME ${name} COMMAND sh ../compare.sh ${Java_JAVA_EXECUTABLE} ${name})
 endfunction(do_test)
 
 foreach (source ${JAVA_TEST_SOURCES})

@@ -9,7 +9,6 @@ struct Arguments {
     std::string mainclass;
     std::string classpath;
     std::vector<std::string> remaining;
-    std::optional<std::pair<std::string, std::string>> test;
 };
 
 std::optional<Arguments> parse_args(int argc, char *argv[]);

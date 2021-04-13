@@ -1,7 +1,7 @@
 JAVA="$1"
 CLASS="$2"
-OUT="$3"
 
+OUT="out/$CLASS"
 mkdir -p "$OUT" || exit 42
 
 R_OUT="$OUT/reference_stdout"
