@@ -3,19 +3,22 @@
 cmake_minimum_required(VERSION 3.19)
 project(SchokoVM)
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
 find_package(Java 1.8 REQUIRED)
 include(UseJava)
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
+find_package(libzip REQUIRED)
 
 # https://cmake.org/cmake/help/latest/command/add_compile_options.html
 if (MSVC)
     add_compile_options(/W4 /WX) # warning level 4 and all warnings as errors
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
     add_compile_options(
-            -Weverything
-            -Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-switch-enum -Wno-padded
+            -Wall -Wextra -pedantic
+            -Wold-style-cast
+            -Wno-nullability-extension
             -fno-common
             -fsanitize=address
     )
@@ -43,7 +46,7 @@ add_executable(SchokoVM
         src/args.cpp src/args.hpp
         src/jar.cpp src/jar.hpp
         )
-target_link_libraries(SchokoVM zip)
+target_link_libraries(SchokoVM libzip::zip)
 
 # Note: using glob to create this list is not recommended
 #file(GLOB JAVA_TEST_SOURCES CONFIGURE_DEPENDS tests/*.java)
@@ -61,7 +64,7 @@ enable_testing()
 # https://cmake.org/cmake/help/latest/guide/tutorial/index.html#id11
 function(do_test path)
     get_filename_component(name ${path} NAME_WE)
-    add_test(NAME ${name} COMMAND sh ../compare.sh ${Java_JAVA_EXECUTABLE} ${name})
+    add_test(NAME ${name} COMMAND sh "${CMAKE_SOURCE_DIR}/compare.sh" ${Java_JAVA_EXECUTABLE} ${name})
 endfunction(do_test)
 
 foreach (source ${JAVA_TEST_SOURCES})

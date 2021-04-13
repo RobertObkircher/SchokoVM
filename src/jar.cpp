@@ -58,7 +58,7 @@ read_entire_jar(const char *path, std::vector<char> &buffer, std::vector<ClassFi
 
         if (!(stat.valid & ZIP_STAT_SIZE)) return "zip_stat size";
 
-        if (buffer.size() < stat.size) buffer.resize(std::max(stat.size, buffer.size() * 2));
+        if (buffer.size() < stat.size) buffer.resize(std::max((size_t) stat.size, buffer.size() * 2));
 
         zip_file_t *file = zip_fopen_index(archive, index, 0);
         if (!file) return "zip_fopen";

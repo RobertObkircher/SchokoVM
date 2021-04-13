@@ -2,3 +2,5 @@
 /cmake-build-release
 /Testing
 /tests/*.class
+
+/build

@@ -12,10 +12,10 @@ S_OUT="$OUT/schoko_stdout"
 S_ERR="$OUT/schoko_stderr"
 S_STATUS="$OUT/schoko_status"
 
-"$JAVA" --class-path tests.jar "$CLASS" 1>"$R_OUT" 2>"$R_ERR"
+"$JAVA" -classpath tests.jar "$CLASS" 1>"$R_OUT" 2>"$R_ERR"
 echo "$?" > "$R_STATUS"
 
-./SchokoVM --class-path tests.jar "$CLASS" 1>"$S_OUT" 2>"$S_ERR"
+./SchokoVM -classpath tests.jar "$CLASS" 1>"$S_OUT" 2>"$S_ERR"
 echo "$?" > "$S_STATUS"
 
 X=0
