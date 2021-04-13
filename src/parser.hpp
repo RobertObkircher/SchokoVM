@@ -40,6 +40,7 @@ class Parser {
         return ((u4) bytes[0] << 24) | ((u4) bytes[1] << 16) | ((u4) bytes[2] << 8) | ((u4) bytes[3] << 0);
     }
 
+    // TODO remove eat_u8 and s? if we never use them
     inline u8 eat_u8() {
         u1 bytes[8];
         in.read((char *) bytes, 8);

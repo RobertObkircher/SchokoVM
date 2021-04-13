@@ -3,7 +3,7 @@
 #include <utility>
 #include <sstream>
 #include <vector>
-#include <cassert>
+#include <cstring>
 #include "classfile.hpp"
 
 ParseError::ParseError(std::string message) : message(std::move(message)) {}
@@ -117,7 +117,8 @@ ConstantPool Parser::parse_constant_pool(u2 major_version) {
                 break;
             case CONSTANT_Float: {
                 u4 bytes = eat_u4();
-                info.info.float_info.value = *reinterpret_cast<float *>(&bytes);
+                static_assert(sizeof(info.info.float_info.value) == sizeof(bytes));
+                memcpy(&info.info.float_info.value, &bytes, sizeof(bytes));
                 break;
             }
             case CONSTANT_Long: {
@@ -134,7 +135,8 @@ ConstantPool Parser::parse_constant_pool(u2 major_version) {
                 u4 high_bytes = eat_u4();
                 u4 low_bytes = eat_u4();
                 u8 bytes = (u8) high_bytes << 32 | low_bytes;
-                info.info.double_info.value = *reinterpret_cast<double *>(&bytes);
+                static_assert(sizeof(info.info.double_info.value) == sizeof(bytes));
+                memcpy(&info.info.double_info.value, &bytes, sizeof(bytes));
                 ++cp_index;
                 result.table.push_back(cp_info{CONSTANT_Invalid, {}});
                 continue;
