@@ -29,7 +29,7 @@ else ()
             -Wdouble-promotion -Wformat=2 -Wformat-truncation -Wundef -fno-common -Wconversion
 
             # from looking at man g++
-            -fanalyzer
+            # -fanalyzer # unfortunately this is very slow
             -fsanitize=address -fsanitize=pointer-compare -fsanitize=pointer-subtract -fsanitize=leak -fsanitize=undefined
             )
     add_link_options(
@@ -53,7 +53,7 @@ target_link_libraries(SchokoVM libzip::zip)
 set(JAVA_TEST_SOURCES
         tests/Empty.java
         tests/HelloWorld.java
-        # tests/KarelTheRobot.java
+        tests/KarelTheRobot.java
         )
 
 # https://cmake.org/cmake/help/latest/module/UseJava.html

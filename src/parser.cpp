@@ -178,13 +178,16 @@ ConstantPool Parser::parse_constant_pool(u2 major_version) {
                 break;
             case CONSTANT_Dynamic:
                 min_classfile_format = 55;
-                info.info.dynamic_info.bootstrap_method_attr_index = eat_cp_index();
+                info.info.dynamic_info.bootstrap_method_attr_index = eat_u2();
+                highest_parsed_bootstrap_method_attr_index = std::max(highest_parsed_bootstrap_method_attr_index,
+                                                                      info.info.dynamic_info.bootstrap_method_attr_index);
                 info.info.dynamic_info.name_and_type_index = eat_cp_index();
                 break;
             case CONSTANT_InvokeDynamic:
                 min_classfile_format = 51;
-                // TODO This is wrong: method attrs are not stored in the constant pool... There are also other places with the same mistake
-                info.info.invoke_dynamic_info.bootstrap_method_attr_index = eat_cp_index();
+                info.info.invoke_dynamic_info.bootstrap_method_attr_index = eat_u2();
+                highest_parsed_bootstrap_method_attr_index = std::max(highest_parsed_bootstrap_method_attr_index,
+                                                                      info.info.invoke_dynamic_info.bootstrap_method_attr_index);
                 info.info.invoke_dynamic_info.name_and_type_index = eat_cp_index();
                 break;
             case CONSTANT_Module:
@@ -268,6 +271,7 @@ std::vector<attribute_info> Parser::parse_attributes(const ConstantPool &constan
 
             info.variant = attribute;
         } else {
+            // if BootstrapMethods => check highest_parsed_bootstrap_method_attr_index
             for (size_t i = 0; i < info.attribute_length; ++i) {
                 eat_u1();
             }

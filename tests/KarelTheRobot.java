@@ -1,6 +1,13 @@
 // NOTE:
 // The original file can be found here: https://www.complang.tuwien.ac.at/andi/KarelTheRobotNr.java.html
-// To use it as a test case we will have to make some changes because it doesn't terminate.
+// To use it as a test case we had to make some changes because it didn't terminate.
+// Specifically we changed BlockNode.exec_step to go to "next" instead of (the first) "instruction" after
+// the entire block was executed. It now also sets the correct offset.
+// Another change was that in KarelTheRobot#main the BlockNode inside the DefineNode now returns to its
+// parent instead of being hardcoded to program.execution.
+//
+// Changes are marked with "CHANGED".
+
 
 /* Karel the Robot, a computer language learning game after Pattis            */
 /* Author:      Andreas Krall                                                 */
@@ -238,7 +245,7 @@ final class KarelTheRobot implements Globals{
 			}
 	}
 
-	static public void main(String args[]) 
+	static public void main(String args[])
 	throws java.io.IOException {
 		ProgramNode program;
 		Node n1, n2, n3;
@@ -259,8 +266,12 @@ final class KarelTheRobot implements Globals{
 		((DefineNode) n1).instruction = n2;
 		program = new ProgramNode();
 		program.define = (DefineNode) n1;
-		n2.offset = 3;
-		n2.next = program.execution;
+        // CHANGED return to caller instead of fixed target:
+        // n2.offset = 3;
+        // n2.next = program.execution;
+        n2.offset = 2;
+        n2.next = n1;
+        // END
 		program.execution.instruction = if_stmt = new IfThenElseNode();
 		if_stmt.test = 3;
 		if_stmt.next = new BasicInstrNode(turnoff_instr);
@@ -847,8 +858,10 @@ final class BlockNode extends Node implements Globals {
 				return incomplete_program_error;
 			KarelTheRobot.instruction = instruction;
 		} else {
-			KarelTheRobot.offset = 0;
-			KarelTheRobot.instruction = instruction;
+		    // CHANGED to fix == 0 check when resuming in DefineNode: KarelTheRobot.offset = 0;
+			KarelTheRobot.offset = offset;
+			// CHANGED: KarelTheRobot.instruction = instruction;
+			KarelTheRobot.instruction = next;
 		}
 		return 0;
 	}
