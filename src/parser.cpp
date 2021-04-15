@@ -183,6 +183,7 @@ ConstantPool Parser::parse_constant_pool(u2 major_version) {
                 break;
             case CONSTANT_InvokeDynamic:
                 min_classfile_format = 51;
+                // TODO This is wrong: method attrs are not stored in the constant pool... There are also other places with the same mistake
                 info.info.invoke_dynamic_info.bootstrap_method_attr_index = eat_cp_index();
                 info.info.invoke_dynamic_info.name_and_type_index = eat_cp_index();
                 break;

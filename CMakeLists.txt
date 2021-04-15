@@ -53,6 +53,7 @@ target_link_libraries(SchokoVM libzip::zip)
 set(JAVA_TEST_SOURCES
         tests/Empty.java
         tests/HelloWorld.java
+        # tests/KarelTheRobot.java
         )
 
 # https://cmake.org/cmake/help/latest/module/UseJava.html
