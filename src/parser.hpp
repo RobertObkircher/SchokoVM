@@ -66,6 +66,8 @@ public:
 
     u2 eat_cp_index();
 
+    std::string eat_utf8_string(u4 length);
+
     std::vector<attribute_info> parse_attributes(const ConstantPool &constant_pool);
 };
 

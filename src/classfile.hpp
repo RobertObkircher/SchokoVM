@@ -122,19 +122,14 @@ struct CONSTANT_Integer_info {
 };
 
 struct CONSTANT_Float_info {
-//    u4 bytes;
     float value;
 };
 
 struct CONSTANT_Long_info {
-//    u4 high_bytes;
-//    u4 low_bytes;
     u8 value;
 };
 
 struct CONSTANT_Double_info {
-//    u4 high_bytes;
-//    u4 low_bytes;
     double value;
 };
 
@@ -147,8 +142,6 @@ struct CONSTANT_Utf8_info {
     // This is an index into the utf8_strings vector of ConstantPool so that we don't have to store a vector
     // inside the cp_info union.
     size_t index;
-//    u2 length;
-//    u1 bytes[length];
 };
 
 enum MethodHandleKind : u1 {
@@ -270,30 +263,18 @@ struct ExceptionTableEntry {
 struct Code_attribute {
     u2 max_stack;
     u2 max_locals;
-//    u4 code_length;
-//    u1 code[code_length];
     std::vector<u1> code;
-//    u2 exception_table_length;
-//    {
-//        u2 start_pc;
-//        u2 end_pc;
-//        u2 handler_pc;
-//        u2 catch_type;
-//    } exception_table[exception_table_length];
     std::vector<ExceptionTableEntry> exception_table;
-//    u2 attributes_count;
-//    attribute_info attributes[attributes_count];
     std::vector<attribute_info> attributes;
 };
 
+#if 0
 struct StackMapTable_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
-    u2 number_of_entries;
+//    u2 number_of_entries;
 //    stack_map_frame entries[number_of_entries];
+    std::vector<stack_map_frame> entries;
 };
 
-#if 0
 union verification_type_info {
     Top_variable_info;
     Integer_variable_info;
@@ -343,9 +324,7 @@ struct Long_variable_info {
 struct Double_variable_info {
     u1 tag = ITEM_Double; /* 3 */
 };
-#endif
 
-#if 0
 union stack_map_frame {
     same_frame;
     same_locals_1_stack_item_frame;
@@ -398,15 +377,10 @@ struct full_frame {
 #endif
 
 struct Exceptions_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
-    u2 number_of_exceptions;
-//    u2 exception_index_table[number_of_exceptions];
+    std::vector<u2> exception_index_table;
 };
 
 struct InnerClasses_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     u2 number_of_classes;
 //    {
 //        u2 inner_class_info_index;
@@ -417,48 +391,35 @@ struct InnerClasses_attribute {
 };
 
 struct EnclosingMethod_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     u2 class_index;
     u2 method_index;
 };
 
 struct Synthetic_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
 };
 
 struct Signature_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     u2 signature_index;
 };
 
 struct SourceFile_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     u2 sourcefile_index;
 };
 
 struct SourceDebugExtension_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
-//    u1 debug_extension[attribute_length];
+        std::string debug_extension;
+};
+
+struct LineNumberTableEntry {
+    u2 start_pc;
+    u2 line_number;
 };
 
 struct LineNumberTable_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
-    u2 line_number_table_length;
-//        {
-//            u2 start_pc;
-//            u2 line_number;
-//    } line_number_table[line_number_table_length];
+    std::vector<LineNumberTableEntry> line_number_table;
 };
 
 struct LocalVariableTable_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     u2 local_variable_table_length;
 //    {
 //        u2 start_pc;
@@ -470,8 +431,6 @@ struct LocalVariableTable_attribute {
 };
 
 struct LocalVariableTypeTable_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     u2 local_variable_type_table_length;
 //    {
 //        u2 start_pc;
@@ -483,13 +442,9 @@ struct LocalVariableTypeTable_attribute {
 };
 
 struct Deprecated_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
 };
 
 struct RuntimeVisibleAnnotations_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     u2 num_annotations;
 //    annotation annotations[num_annotations];
 };
@@ -525,15 +480,11 @@ struct element_value {
 };
 
 struct RuntimeInvisibleAnnotations_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     u2 num_annotations;
 //    annotation annotations[num_annotations];
 };
 
 struct RuntimeVisibleParameterAnnotations_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     u1 num_parameters;
 //        {
 //            u2 num_annotations;
@@ -542,8 +493,6 @@ struct RuntimeVisibleParameterAnnotations_attribute {
 };
 
 struct RuntimeInvisibleParameterAnnotations_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     u1 num_parameters;
 //            {
 //                u2 num_annotations;
@@ -552,8 +501,6 @@ struct RuntimeInvisibleParameterAnnotations_attribute {
 };
 
 struct RuntimeVisibleTypeAnnotations_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     u2 num_annotations;
 //    type_annotation annotations[num_annotations];
 };
@@ -638,42 +585,33 @@ struct type_path {
 #endif
 
 struct RuntimeInvisibleTypeAnnotations_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     u2 num_annotations;
 //    type_annotation annotations[num_annotations];
 };
 
 struct AnnotationDefault_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     element_value default_value;
 };
 
+struct BootstrapMethod {
+    u2 bootstrap_method_ref;
+    std::vector<u2> bootstrap_arguments;
+};
+
 struct BootstrapMethods_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
-    u2 num_bootstrap_methods;
-//    {
-//        u2 bootstrap_method_ref;
-//        u2 num_bootstrap_arguments;
-//        u2 bootstrap_arguments[num_bootstrap_arguments];
-//    } bootstrap_methods[num_bootstrap_methods];
+    std::vector<BootstrapMethod> bootstrap_methods;
+};
+
+struct MethodParameter {
+    u2 name_index;
+    u2 access_flags;
 };
 
 struct MethodParameters_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
-    u1 parameters_count;
-//    {
-//        u2 name_index;
-//        u2 access_flags;
-//    } parameters[parameters_count];
+    std::vector<MethodParameter> parameters;
 };
 
 struct Module_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
 
     u2 module_name_index;
     u2 module_flags;
@@ -714,34 +652,23 @@ struct Module_attribute {
 };
 
 struct ModulePackages_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     u2 package_count;
 //    u2 package_index[package_count];
 };
 
 struct ModuleMainClass_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     u2 main_class_index;
 };
 
 struct NestHost_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     u2 host_class_index;
 };
 
 struct NestMembers_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
-    u2 number_of_classes;
-//    u2 classes[number_of_classes];
+    std::vector<u2> classes;
 };
 
 struct Record_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
     u2 components_count;
 //    record_component_info components[components_count];
 };
@@ -757,8 +684,21 @@ struct attribute_info {
     // TODO: Do we even need to store these two fields?
     u2 attribute_name_index;
     u4 attribute_length;
-//    u1 info[attribute_length];
-    std::variant<ConstantValue_attribute, Code_attribute> variant;
+    std::variant<
+            ConstantValue_attribute,
+            Code_attribute,
+            Exceptions_attribute,
+            Signature_attribute,
+            SourceFile_attribute,
+            SourceDebugExtension_attribute,
+            LineNumberTable_attribute,
+            Deprecated_attribute,
+            BootstrapMethods_attribute,
+            MethodParameters_attribute,
+            ModuleMainClass_attribute,
+            NestHost_attribute,
+            NestMembers_attribute
+    > variant;
 };
 
 

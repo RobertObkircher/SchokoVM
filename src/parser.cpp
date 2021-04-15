@@ -83,6 +83,18 @@ u2 Parser::eat_cp_index() {
     return index;
 }
 
+std::string Parser::eat_utf8_string(u4 length) {
+    std::string str;
+    str.resize(length); // not reserve
+    in.read(str.data(), length);
+    for (size_t i = 0; i < length; ++i) {
+        u1 byte = (u1) str[i];
+        if (byte == 0 || byte >= 0xf0)
+            throw ParseError("Invalid byte in utf8 string: " + std::to_string((int) byte));
+    }
+    return str;
+}
+
 ConstantPool Parser::parse_constant_pool(u2 major_version) {
     ConstantPool result{};
 
@@ -100,14 +112,7 @@ ConstantPool Parser::parse_constant_pool(u2 major_version) {
         switch (tag) {
             case CONSTANT_Utf8: {
                 u2 length = eat_u2();
-                std::string str;
-                str.resize(length); // not reserve
-                in.read(str.data(), length);
-                for (size_t i = 0; i < length; ++i) {
-                    u1 byte = (u1) str[i];
-                    if (byte == 0 || byte >= 0xf0)
-                        throw ParseError("Invalid byte in utf8 string: " + std::to_string((int) byte));
-                }
+                auto str = eat_utf8_string(length);
                 info.info.utf_8_info.index = result.utf8_strings.size();
                 result.utf8_strings.push_back(str);
                 break;
@@ -258,6 +263,7 @@ std::vector<attribute_info> Parser::parse_attributes(const ConstantPool &constan
             in.read(reinterpret_cast<char *>(attribute.code.data()), code_length);
 
             u2 exception_table_length = eat_u2();
+            attribute.exception_table.reserve(exception_table_length);
             for (int i = 0; i < exception_table_length; ++i) {
                 ExceptionTableEntry entry{};
                 entry.start_pc = eat_u2();
@@ -269,6 +275,87 @@ std::vector<attribute_info> Parser::parse_attributes(const ConstantPool &constan
 
             attribute.attributes = parse_attributes(constant_pool);
 
+            info.variant = attribute;
+        } else if (s == "StackMapTable") {
+            // I think/hope this is only used for verification
+            for (size_t i = 0; i < info.attribute_length; ++i) eat_u1();
+        } else if (s == "Exceptions") {
+            Exceptions_attribute attribute;
+            u2 number_of_exceptions = eat_u2();
+            attribute.exception_index_table.reserve(number_of_exceptions);
+            for (size_t i = 0; i < number_of_exceptions; ++i) {
+                u2 index = eat_cp_index();
+                attribute.exception_index_table.push_back(index);
+            }
+            info.variant = attribute;
+        } else if (s == "Signature") {
+            Signature_attribute attribute{};
+            attribute.signature_index = eat_cp_index();
+            info.variant = attribute;
+        } else if (s == "SourceFile") {
+            SourceFile_attribute attribute{};
+            attribute.sourcefile_index = eat_cp_index();
+            info.variant = attribute;
+        } else if (s == "SourceDebugExtension") {
+            SourceDebugExtension_attribute attribute;
+            attribute.debug_extension = eat_utf8_string(info.attribute_length);
+            info.variant = attribute;
+        } else if (s == "LineNumberTable") {
+            LineNumberTable_attribute attribute;
+            u2 line_number_table_length = eat_u2();
+            attribute.line_number_table.reserve(line_number_table_length);
+            for (size_t i = 0; i < line_number_table_length; ++i) {
+                LineNumberTableEntry entry{};
+                entry.start_pc = eat_u2();
+                entry.line_number = eat_u2();
+                attribute.line_number_table.push_back(entry);
+            }
+            info.variant = attribute;
+        } else if (s == "Deprecated") {
+            info.variant = Deprecated_attribute{};
+        } else if (s == "BootstrapMethods") {
+            BootstrapMethods_attribute attribute;
+            u2 num_bootstrap_methods = eat_u2();
+            attribute.bootstrap_methods.reserve(num_bootstrap_methods);
+            for (size_t i = 0; i < num_bootstrap_methods; ++i) {
+                BootstrapMethod method;
+                method.bootstrap_method_ref = eat_cp_index();
+                u2 num_bootstrap_arguments = eat_u2();
+                method.bootstrap_arguments.reserve(num_bootstrap_arguments);
+                for (size_t j = 0; j < num_bootstrap_arguments; ++j) {
+                    u2 index = eat_cp_index();
+                    method.bootstrap_arguments.push_back(index);
+                }
+                attribute.bootstrap_methods.push_back(method);
+            }
+            info.variant = attribute;
+        } else if (s == "MethodParameters") {
+            MethodParameters_attribute attribute;
+            u1 parameters_count = eat_u1();
+            attribute.parameters.reserve(parameters_count);
+            for (size_t i = 0; i < parameters_count; ++i) {
+                MethodParameter parameter{};
+                parameter.name_index = eat_u2(); // 0 or eat_cp_index()
+                parameter.access_flags = eat_u2();
+                attribute.parameters.push_back(parameter);
+            }
+            info.variant = attribute;
+        } else if (s == "ModuleMainClass") {
+            ModuleMainClass_attribute attribute{};
+            attribute.main_class_index = eat_u2();
+            info.variant = attribute;
+        } else if (s == "NestHost") {
+            NestHost_attribute attribute{};
+            attribute.host_class_index = eat_cp_index();
+            info.variant = attribute;
+        } else if (s == "NestMembers") {
+            NestMembers_attribute attribute;
+            u2 number_of_classes = eat_u2();
+            attribute.classes.reserve(number_of_classes);
+            for (size_t i = 0; i < number_of_classes; ++i) {
+                u2 index = eat_cp_index();
+                attribute.classes.push_back(index);
+            }
             info.variant = attribute;
         } else {
             // if BootstrapMethods => check highest_parsed_bootstrap_method_attr_index
