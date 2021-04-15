@@ -434,6 +434,7 @@ std::vector<attribute_info> Parser::parse_attributes(ConstantPool &constant_pool
                 eat_u1();
             }
         }
+        result.push_back(std::move(info));
     }
 
     return result;
