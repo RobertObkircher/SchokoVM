@@ -3,6 +3,7 @@
 #include "args.hpp"
 #include "classfile.hpp"
 #include "jar.hpp"
+#include "interpreter.hpp"
 
 int run(const Arguments &arguments) {
     std::vector<ClassFile> class_files;
@@ -49,9 +50,7 @@ int run(const Arguments &arguments) {
         return 5;
     }
 
-    // TODO actually execute java code...
-    std::cout << "Hello, world!\n";
-    return 0;
+    return interpret(class_files, index);
 }
 
 int main(int argc, char *argv[]) {

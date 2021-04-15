@@ -17,7 +17,7 @@ if (MSVC)
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
     add_compile_options(
             -Wall -Wextra -pedantic
-            -Wold-style-cast
+#            -Wold-style-cast
             -Wno-nullability-extension
             -fno-common
             -fsanitize=address
@@ -45,7 +45,7 @@ add_executable(SchokoVM
         src/parser.cpp src/parser.hpp
         src/args.cpp src/args.hpp
         src/jar.cpp src/jar.hpp
-        )
+        src/interpreter.cpp src/interpreter.hpp src/opcodes.hpp)
 if (libzip_FOUND)
     target_link_libraries(SchokoVM libzip::zip)
 else ()
@@ -57,9 +57,10 @@ endif ()
 # Note: using glob to create this list is not recommended
 #file(GLOB JAVA_TEST_SOURCES CONFIGURE_DEPENDS tests/*.java)
 set(JAVA_TEST_SOURCES
-        tests/Empty.java
-        tests/HelloWorld.java
-        tests/KarelTheRobot.java
+#        tests/Empty.java
+#        tests/HelloWorld.java
+#        tests/KarelTheRobot.java
+        tests/UnitArithmetic.java
         )
 
 set(JAVA_TEST_GENERATED_SOURCES

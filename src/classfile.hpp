@@ -4,6 +4,7 @@
 #include <vector>
 #include <variant>
 #include <cassert>
+#include <string>
 
 #include "types.hpp"
 
@@ -201,7 +202,7 @@ struct cp_info {
     > variant;
 };
 
-enum class FieldInfoAccessFlags {
+enum class FieldInfoAccessFlags : u2 {
     ACC_PUBLIC = 0x0001,
     ACC_PRIVATE = 0x0002,
     ACC_PROTECTED = 0x0004,
