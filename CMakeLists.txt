@@ -57,10 +57,11 @@ endif ()
 # Note: using glob to create this list is not recommended
 #file(GLOB JAVA_TEST_SOURCES CONFIGURE_DEPENDS tests/*.java)
 set(JAVA_TEST_SOURCES
-#        tests/Empty.java
+        tests/Empty.java
 #        tests/HelloWorld.java
 #        tests/KarelTheRobot.java
-        tests/UnitArithmetic.java
+        tests/UnitArithmeticInt.java
+        tests/UnitArithmeticOverflow.java
         )
 
 set(JAVA_TEST_GENERATED_SOURCES

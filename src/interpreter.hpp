@@ -19,6 +19,9 @@ struct Frame {
     std::unique_ptr<Frame> previous_frame;
 
     Frame(const ClassFile &clas, size_t locals_count, std::unique_ptr<Frame> previous_frame);
+
+    u8 stack_pop();
+    void stack_push(u8 v);
 };
 
 /**
