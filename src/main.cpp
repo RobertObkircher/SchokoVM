@@ -38,8 +38,7 @@ int run(const Arguments &arguments) {
     ssize_t index = -1;
     for (size_t i = 0; i < class_files.size(); ++i) {
         auto &item = class_files[i];
-        auto &string_info = item.constant_pool.get<CONSTANT_String_info>(item.this_class);
-        auto &name = item.constant_pool.get<CONSTANT_Utf8_info>(string_info.string_index).value;
+        auto &name = item.constant_pool.get<CONSTANT_Utf8_info>(item.this_class->name_index).value;
 
         if (name == arguments.mainclass) {
             index = static_cast<ssize_t>(i);

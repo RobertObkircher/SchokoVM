@@ -203,8 +203,8 @@ enum class FieldInfoAccessFlags {
 
 struct field_info {
     u2 access_flags;
-    u2 name_index;
-    u2 descriptor_index;
+    CONSTANT_Utf8_info *name_index;
+    CONSTANT_Utf8_info *descriptor_index;
     std::vector<attribute_info> attributes;
 };
 
@@ -225,8 +225,8 @@ enum class MethodInfoAccessFlags {
 
 struct method_info {
     u2 access_flags;
-    u2 name_index;
-    u2 descriptor_index;
+    CONSTANT_Utf8_info *name_index;
+    CONSTANT_Utf8_info *descriptor_index;
     std::vector<attribute_info> attributes;
 };
 
@@ -360,7 +360,7 @@ struct full_frame {
 #endif
 
 struct Exceptions_attribute {
-    std::vector<u2> exception_index_table;
+    std::vector<CONSTANT_Class_info *> exception_index_table;
 };
 
 struct InnerClasses_attribute {
@@ -382,11 +382,11 @@ struct Synthetic_attribute {
 };
 
 struct Signature_attribute {
-    u2 signature_index;
+    CONSTANT_Utf8_info *signature_index;
 };
 
 struct SourceFile_attribute {
-    u2 sourcefile_index;
+    CONSTANT_Utf8_info *sourcefile_index;
 };
 
 struct SourceDebugExtension_attribute {
@@ -577,7 +577,7 @@ struct AnnotationDefault_attribute {
 };
 
 struct BootstrapMethod {
-    u2 bootstrap_method_ref;
+    CONSTANT_MethodHandle_info *bootstrap_method_ref;
     std::vector<u2> bootstrap_arguments;
 };
 
@@ -644,11 +644,11 @@ struct ModuleMainClass_attribute {
 };
 
 struct NestHost_attribute {
-    u2 host_class_index;
+    CONSTANT_Class_info *host_class_index;
 };
 
 struct NestMembers_attribute {
-    std::vector<u2> classes;
+    std::vector<CONSTANT_Class_info *> classes;
 };
 
 struct Record_attribute {
@@ -665,7 +665,7 @@ struct record_component_info {
 
 struct attribute_info {
     // TODO: Do we even need to store these two fields?
-    u2 attribute_name_index;
+    CONSTANT_Utf8_info *attribute_name_index;
     u4 attribute_length;
     std::variant<
             ConstantValue_attribute,
@@ -688,7 +688,7 @@ struct ConstantPool {
     std::vector<cp_info> table;
 
     template<class T>
-    inline T const& get(u2 index) const {
+    inline T &get(u2 index) {
         return std::get<T>(table[index].variant);
     }
 
@@ -704,9 +704,10 @@ struct ClassFile {
     u2 major_version;
     ConstantPool constant_pool;
     u2 access_flags;
-    u2 this_class;
-    u2 super_class;
-    std::vector<u2> interfaces;
+    CONSTANT_Class_info *this_class;
+    // nullptr for class Object
+    CONSTANT_Class_info *super_class;
+    std::vector<CONSTANT_Class_info *> interfaces;
     std::vector<field_info> fields;
     std::vector<method_info> methods;
     std::vector<attribute_info> attributes;

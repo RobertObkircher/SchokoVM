@@ -37,31 +37,37 @@ ClassFile Parser::parse() {
     result.constant_pool = parse_constant_pool(result.major_version);
 
     result.access_flags = eat_u2();
-    result.this_class = eat_cp_index();
-    result.super_class = eat_cp_index();
+    result.this_class = &check_cp_range_and_type<CONSTANT_Class_info>(result.constant_pool, eat_u2());
+    u2 super_class = eat_u2();
+    if (super_class == 0) {
+        // class Object
+        result.super_class = nullptr;
+    } else {
+        result.super_class = &check_cp_range_and_type<CONSTANT_Class_info>(result.constant_pool, super_class);
+    }
 
     u2 interfaces_count = eat_u2();
     for (int i = 0; i < interfaces_count; ++i)
-        result.interfaces.push_back(eat_cp_index());
+        result.interfaces.push_back(&check_cp_range_and_type<CONSTANT_Class_info>(result.constant_pool, eat_u2()));
 
     u2 fields_count = eat_u2();
     for (int i = 0; i < fields_count; ++i) {
         field_info field_info;
         field_info.access_flags = eat_u2();
-        field_info.name_index = eat_cp_index();
-        field_info.descriptor_index = eat_cp_index();
+        field_info.name_index = &check_cp_range_and_type<CONSTANT_Utf8_info>(result.constant_pool, eat_u2());
+        field_info.descriptor_index = &check_cp_range_and_type<CONSTANT_Utf8_info>(result.constant_pool, eat_u2());
         field_info.attributes = parse_attributes(result.constant_pool);
-        result.fields.push_back(field_info);
+        result.fields.push_back(std::move(field_info));
     }
 
     u2 methods_count = eat_u2();
     for (int i = 0; i < methods_count; ++i) {
         method_info method_info;
         method_info.access_flags = eat_u2();
-        method_info.name_index = eat_cp_index();
-        method_info.descriptor_index = eat_cp_index();
+        method_info.name_index = &check_cp_range_and_type<CONSTANT_Utf8_info>(result.constant_pool, eat_u2());
+        method_info.descriptor_index = &check_cp_range_and_type<CONSTANT_Utf8_info>(result.constant_pool, eat_u2());
         method_info.attributes = parse_attributes(result.constant_pool);
-        result.methods.push_back(method_info);
+        result.methods.push_back(std::move(method_info));
     }
 
     result.attributes = parse_attributes(result.constant_pool);
@@ -72,15 +78,6 @@ ClassFile Parser::parse() {
         throw ParseError("Expected EOF but got " + std::to_string((int) unexpected));
 
     return result;
-}
-
-// TODO check the expected tag, not just the range and possibly get rid of the constant_pool_count member variable
-// Inside parse_constant_pool we would have to defer checking the tag.
-u2 Parser::eat_cp_index() {
-    u2 index = eat_u2();
-    if (index == 0 || index >= constant_pool_count)
-        throw ParseError("Invalid constant pool index");
-    return index;
 }
 
 std::string Parser::eat_utf8_string(u4 length) {
@@ -98,10 +95,16 @@ std::string Parser::eat_utf8_string(u4 length) {
 ConstantPool Parser::parse_constant_pool(u2 major_version) {
     ConstantPool result{};
 
-    constant_pool_count = eat_u2();
+    u2 constant_pool_count = eat_u2();
     result.table.reserve(constant_pool_count);
 
     result.table.push_back(cp_info{{CONSTANT_Invalid_info{}}});
+
+    auto eat_cp_index = [this, constant_pool_count]() {
+        u2 index = eat_u2();
+        check_cp_range(index, constant_pool_count);
+        return index;
+    };
 
     for (size_t cp_index = 1; cp_index < constant_pool_count; ++cp_index) {
         u1 tag = eat_u1();
@@ -257,7 +260,7 @@ ConstantPool Parser::parse_constant_pool(u2 major_version) {
         if (min_classfile_format > major_version) {
             throw ParseError("Constant pool entry did not exist in this classfile version");
         }
-        result.table.push_back(cpi);
+        result.table.emplace_back(cpi);
     }
 
     return result;
@@ -265,18 +268,17 @@ ConstantPool Parser::parse_constant_pool(u2 major_version) {
 
 // TODO we probably do not want to store attributes as an array of structs.
 // For example attributes that only go on fields should be stored there as a member variable.
-std::vector<attribute_info> Parser::parse_attributes(const ConstantPool &constant_pool) {
+std::vector<attribute_info> Parser::parse_attributes(ConstantPool &constant_pool) {
     std::vector<attribute_info> result;
 
     u2 attributes_count = eat_u2();
 
     for (size_t attribute_index = 0; attribute_index < attributes_count; ++attribute_index) {
         attribute_info info;
-        info.attribute_name_index = eat_cp_index();
+        info.attribute_name_index = &check_cp_range_and_type<CONSTANT_Utf8_info>(constant_pool, eat_u2());
         info.attribute_length = eat_u4();
 
-        std::string const &s = std::get<CONSTANT_Utf8_info>(
-                constant_pool.table[info.attribute_name_index].variant).value;
+        std::string const &s = info.attribute_name_index->value;
 
         if (s == "ConstantValue") {
             // TODO: sometimes this info must be silently ignored
@@ -286,14 +288,14 @@ std::vector<attribute_info> Parser::parse_attributes(const ConstantPool &constan
             }
 
             ConstantValue_attribute attribute{};
-            attribute.constantvalue_index = eat_cp_index();
+            attribute.constantvalue_index = eat_u2();
+            check_cp_range(attribute.constantvalue_index, constant_pool.table.size());
             auto const &variant = constant_pool.table[attribute.constantvalue_index].variant;
             if (std::holds_alternative<CONSTANT_Integer_info>(variant)
                 || std::holds_alternative<CONSTANT_Float_info>(variant)
                 || std::holds_alternative<CONSTANT_Long_info>(variant)
                 || std::holds_alternative<CONSTANT_Double_info>(variant)
                 || std::holds_alternative<CONSTANT_String_info>(variant)) {
-                break;
             } else {
                 throw ParseError("Unexpected type for constant pool entry of ConstantValue");
             }
@@ -328,17 +330,17 @@ std::vector<attribute_info> Parser::parse_attributes(const ConstantPool &constan
             u2 number_of_exceptions = eat_u2();
             attribute.exception_index_table.reserve(number_of_exceptions);
             for (size_t i = 0; i < number_of_exceptions; ++i) {
-                u2 index = eat_cp_index();
-                attribute.exception_index_table.push_back(index);
+                attribute.exception_index_table.push_back(
+                        &check_cp_range_and_type<CONSTANT_Class_info>(constant_pool, eat_u2()));
             }
             info.variant = attribute;
         } else if (s == "Signature") {
             Signature_attribute attribute{};
-            attribute.signature_index = eat_cp_index();
+            attribute.signature_index = &check_cp_range_and_type<CONSTANT_Utf8_info>(constant_pool, eat_u2());
             info.variant = attribute;
         } else if (s == "SourceFile") {
             SourceFile_attribute attribute{};
-            attribute.sourcefile_index = eat_cp_index();
+            attribute.sourcefile_index = &check_cp_range_and_type<CONSTANT_Utf8_info>(constant_pool, eat_u2());
             info.variant = attribute;
         } else if (s == "SourceDebugExtension") {
             SourceDebugExtension_attribute attribute;
@@ -366,14 +368,17 @@ std::vector<attribute_info> Parser::parse_attributes(const ConstantPool &constan
             }
             for (size_t i = 0; i < num_bootstrap_methods; ++i) {
                 BootstrapMethod method;
-                method.bootstrap_method_ref = eat_cp_index();
+                method.bootstrap_method_ref = &check_cp_range_and_type<CONSTANT_MethodHandle_info>(constant_pool,
+                                                                                                   eat_u2());
                 u2 num_bootstrap_arguments = eat_u2();
                 method.bootstrap_arguments.reserve(num_bootstrap_arguments);
                 for (size_t j = 0; j < num_bootstrap_arguments; ++j) {
-                    u2 index = eat_cp_index();
+                    u2 index = eat_u2();
+                    check_cp_range(index, constant_pool.table.size());
+                    // TODO check loadable
                     method.bootstrap_arguments.push_back(index);
                 }
-                attribute.bootstrap_methods.push_back(method);
+                attribute.bootstrap_methods.push_back(std::move(method));
             }
             info.variant = attribute;
         } else if (s == "MethodParameters") {
@@ -393,15 +398,14 @@ std::vector<attribute_info> Parser::parse_attributes(const ConstantPool &constan
             info.variant = attribute;
         } else if (s == "NestHost") {
             NestHost_attribute attribute{};
-            attribute.host_class_index = eat_cp_index();
+            attribute.host_class_index = &check_cp_range_and_type<CONSTANT_Class_info>(constant_pool, eat_u2());
             info.variant = attribute;
         } else if (s == "NestMembers") {
             NestMembers_attribute attribute;
             u2 number_of_classes = eat_u2();
             attribute.classes.reserve(number_of_classes);
             for (size_t i = 0; i < number_of_classes; ++i) {
-                u2 index = eat_cp_index();
-                attribute.classes.push_back(index);
+                attribute.classes.push_back(&check_cp_range_and_type<CONSTANT_Class_info>(constant_pool, eat_u2()));
             }
             info.variant = attribute;
         } else {
