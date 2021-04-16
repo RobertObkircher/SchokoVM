@@ -74,6 +74,8 @@ inline bool is_loadable(CpTag tag) {
 }
 
 // cp_info:
+struct CONSTANT_Utf8_info;
+struct CONSTANT_NameAndType_info;
 
 // not from the spec
 struct CONSTANT_Invalid_info {
@@ -81,25 +83,33 @@ struct CONSTANT_Invalid_info {
 
 struct CONSTANT_Class_info {
     u2 name_index;
+    CONSTANT_Utf8_info *name;
 };
 
 struct CONSTANT_Fieldref_info {
     u2 class_index;
     u2 name_and_type_index;
+    CONSTANT_Class_info *class_;
+    CONSTANT_NameAndType_info *name_and_type;
 };
 
 struct CONSTANT_Methodref_info {
     u2 class_index;
     u2 name_and_type_index;
+    CONSTANT_Class_info *class_;
+    CONSTANT_NameAndType_info *name_and_type;
 };
 
 struct CONSTANT_InterfaceMethodref_info {
     u2 class_index;
     u2 name_and_type_index;
+    CONSTANT_Class_info *class_;
+    CONSTANT_NameAndType_info *name_and_type;
 };
 
 struct CONSTANT_String_info {
     u2 string_index;
+    CONSTANT_Utf8_info *string;
 };
 
 struct CONSTANT_Integer_info {
@@ -121,6 +131,8 @@ struct CONSTANT_Double_info {
 struct CONSTANT_NameAndType_info {
     u2 name_index;
     u2 descriptor_index;
+    CONSTANT_Utf8_info *name;
+    CONSTANT_Utf8_info *descriptor;
 };
 
 struct CONSTANT_Utf8_info {

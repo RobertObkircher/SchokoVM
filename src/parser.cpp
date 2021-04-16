@@ -263,6 +263,27 @@ ConstantPool Parser::parse_constant_pool(u2 major_version) {
         result.table.emplace_back(cpi);
     }
 
+    for (auto &constant : result.table) {
+        // TODO maybe use std::visit?
+        if (auto it = std::get_if<CONSTANT_Class_info>(&constant.variant)) {
+            it->name = &result.get<CONSTANT_Utf8_info>(it->name_index);
+        } else if (auto it = std::get_if<CONSTANT_Fieldref_info>(&constant.variant)) {
+            it->class_ = &result.get<CONSTANT_Class_info>(it->class_index);
+            it->name_and_type = &result.get<CONSTANT_NameAndType_info>(it->name_and_type_index);
+        } else if (auto it = std::get_if<CONSTANT_Methodref_info>(&constant.variant)) {
+            it->class_ = &result.get<CONSTANT_Class_info>(it->class_index);
+            it->name_and_type = &result.get<CONSTANT_NameAndType_info>(it->name_and_type_index);
+        } else if (auto it = std::get_if<CONSTANT_InterfaceMethodref_info>(&constant.variant)) {
+            it->class_ = &result.get<CONSTANT_Class_info>(it->class_index);
+            it->name_and_type = &result.get<CONSTANT_NameAndType_info>(it->name_and_type_index);
+        } else if (auto it = std::get_if<CONSTANT_String_info>(&constant.variant)) {
+            it->string = &result.get<CONSTANT_Utf8_info>(it->string_index);
+        } else if (auto it = std::get_if<CONSTANT_NameAndType_info>(&constant.variant)) {
+            it->name = &result.get<CONSTANT_Utf8_info>(it->name_index);
+            it->descriptor = &result.get<CONSTANT_Utf8_info>(it->descriptor_index);
+        }
+    }
+
     return result;
 }
 
