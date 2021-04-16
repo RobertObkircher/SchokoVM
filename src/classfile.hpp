@@ -33,25 +33,6 @@ struct type_annotation;
 struct type_path;
 struct record_component_info;
 
-struct ConstantPool {
-    std::vector<cp_info> table;
-    std::vector<std::string> utf8_strings;
-};
-
-struct ClassFile {
-    u4 magic;
-    u2 minor_version;
-    u2 major_version;
-    ConstantPool constant_pool;
-    u2 access_flags;
-    u2 this_class;
-    u2 super_class;
-    std::vector<u2> interfaces;
-    std::vector<field_info> fields;
-    std::vector<method_info> methods;
-    std::vector<attribute_info> attributes;
-};
-
 enum CpTag : u1 {
     // Just a dummy value used in the constant pool for index 0 and after longs/doubles
     CONSTANT_Invalid = 0,
@@ -93,6 +74,10 @@ inline bool is_loadable(CpTag tag) {
 }
 
 // cp_info:
+
+// not from the spec
+struct CONSTANT_Invalid_info {
+};
 
 struct CONSTANT_Class_info {
     u2 name_index;
@@ -139,9 +124,7 @@ struct CONSTANT_NameAndType_info {
 };
 
 struct CONSTANT_Utf8_info {
-    // This is an index into the utf8_strings vector of ConstantPool so that we don't have to store a vector
-    // inside the cp_info union.
-    size_t index;
+    std::string value;
 };
 
 enum MethodHandleKind : u1 {
@@ -184,26 +167,26 @@ struct CONSTANT_Package_info {
 };
 
 struct cp_info {
-    CpTag tag;
-    union {
-        CONSTANT_Class_info class_info;
-        CONSTANT_Fieldref_info fieldref_info;
-        CONSTANT_Methodref_info methodref_info;
-        CONSTANT_InterfaceMethodref_info interface_methodref_info;
-        CONSTANT_String_info string_info;
-        CONSTANT_Integer_info integer_info;
-        CONSTANT_Float_info float_info;
-        CONSTANT_Long_info long_info;
-        CONSTANT_Double_info double_info;
-        CONSTANT_NameAndType_info name_and_type_info;
-        CONSTANT_Utf8_info utf_8_info;
-        CONSTANT_MethodHandle_info method_handle_info;
-        CONSTANT_MethodType_info method_type_info;
-        CONSTANT_Dynamic_info dynamic_info;
-        CONSTANT_InvokeDynamic_info invoke_dynamic_info;
-        CONSTANT_Module_info module_info;
-        CONSTANT_Package_info package_info;
-    } info;
+    std::variant<
+            CONSTANT_Invalid_info,
+            CONSTANT_Class_info,
+            CONSTANT_Fieldref_info,
+            CONSTANT_Methodref_info,
+            CONSTANT_InterfaceMethodref_info,
+            CONSTANT_String_info,
+            CONSTANT_Integer_info,
+            CONSTANT_Float_info,
+            CONSTANT_Long_info,
+            CONSTANT_Double_info,
+            CONSTANT_NameAndType_info,
+            CONSTANT_Utf8_info,
+            CONSTANT_MethodHandle_info,
+            CONSTANT_MethodType_info,
+            CONSTANT_Dynamic_info,
+            CONSTANT_InvokeDynamic_info,
+            CONSTANT_Module_info,
+            CONSTANT_Package_info
+    > variant;
 };
 
 enum class FieldInfoAccessFlags {
@@ -407,7 +390,7 @@ struct SourceFile_attribute {
 };
 
 struct SourceDebugExtension_attribute {
-        std::string debug_extension;
+    std::string debug_extension;
 };
 
 struct LineNumberTableEntry {
@@ -699,6 +682,34 @@ struct attribute_info {
             NestHost_attribute,
             NestMembers_attribute
     > variant;
+};
+
+struct ConstantPool {
+    std::vector<cp_info> table;
+
+    template<class T>
+    inline T const& get(u2 index) const {
+        return std::get<T>(table[index].variant);
+    }
+
+//    inline std::string const& get_string(u2 index) const {
+//        auto &string_info = get<CONSTANT_String_info>(index);
+//        return get<CONSTANT_Utf8_info>(string_info.string_index).value;
+//    }
+};
+
+struct ClassFile {
+    u4 magic;
+    u2 minor_version;
+    u2 major_version;
+    ConstantPool constant_pool;
+    u2 access_flags;
+    u2 this_class;
+    u2 super_class;
+    std::vector<u2> interfaces;
+    std::vector<field_info> fields;
+    std::vector<method_info> methods;
+    std::vector<attribute_info> attributes;
 };
 
 

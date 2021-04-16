@@ -18,7 +18,7 @@ struct ParseError : std::exception {
 class Parser {
     std::istream &in;
     u2 constant_pool_count;
-    u2 highest_parsed_bootstrap_method_attr_index;
+    int highest_parsed_bootstrap_method_attr_index = -1;
 
     inline u1 eat_u1() {
         // WARNING: >> and .get() are intended for text. They would filter out 0x0A characters...

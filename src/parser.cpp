@@ -101,115 +101,163 @@ ConstantPool Parser::parse_constant_pool(u2 major_version) {
     constant_pool_count = eat_u2();
     result.table.reserve(constant_pool_count);
 
-    result.table.push_back(cp_info{CONSTANT_Invalid, {}});
+    result.table.push_back(cp_info{{CONSTANT_Invalid_info{}}});
 
     for (size_t cp_index = 1; cp_index < constant_pool_count; ++cp_index) {
         u1 tag = eat_u1();
 
-        cp_info info{};
-        info.tag = static_cast<CpTag>(tag);
+        cp_info cpi{};
         u2 min_classfile_format = 45; // 45.3
         switch (tag) {
             case CONSTANT_Utf8: {
+                CONSTANT_Utf8_info info;
                 u2 length = eat_u2();
-                auto str = eat_utf8_string(length);
-                info.info.utf_8_info.index = result.utf8_strings.size();
-                result.utf8_strings.push_back(str);
+                info.value = eat_utf8_string(length);
+                cpi.variant = info;
                 break;
             }
-            case CONSTANT_Integer:
-                info.info.integer_info.bytes = eat_u4();
+            case CONSTANT_Integer: {
+                CONSTANT_Integer_info info{};
+                info.bytes = eat_u4();
+                cpi.variant = info;
                 break;
+            }
             case CONSTANT_Float: {
+                CONSTANT_Float_info info{};
                 u4 bytes = eat_u4();
-                static_assert(sizeof(info.info.float_info.value) == sizeof(bytes));
-                memcpy(&info.info.float_info.value, &bytes, sizeof(bytes));
+                static_assert(sizeof(info.value) == sizeof(bytes));
+                memcpy(&info.value, &bytes, sizeof(bytes));
+                cpi.variant = info;
                 break;
             }
             case CONSTANT_Long: {
+                CONSTANT_Long_info info{};
                 u4 high_bytes = eat_u4();
                 u4 low_bytes = eat_u4();
                 u8 bytes = (u8) high_bytes << 32 | low_bytes;
-                info.info.long_info.value = bytes;
-                result.table.push_back(info);
+                info.value = bytes;
+                result.table.push_back(cp_info{{info}});
                 ++cp_index;
-                result.table.push_back(cp_info{CONSTANT_Invalid, {}});
+                result.table.push_back(cp_info{{CONSTANT_Invalid_info{}}});
                 continue;
             }
             case CONSTANT_Double: {
+                CONSTANT_Double_info info{};
                 u4 high_bytes = eat_u4();
                 u4 low_bytes = eat_u4();
                 u8 bytes = (u8) high_bytes << 32 | low_bytes;
-                static_assert(sizeof(info.info.double_info.value) == sizeof(bytes));
-                memcpy(&info.info.double_info.value, &bytes, sizeof(bytes));
+                static_assert(sizeof(info.value) == sizeof(bytes));
+                memcpy(&info.value, &bytes, sizeof(bytes));
+                result.table.push_back(cp_info{{info}});
                 ++cp_index;
-                result.table.push_back(cp_info{CONSTANT_Invalid, {}});
+                result.table.push_back(cp_info{{CONSTANT_Invalid_info{}}});
                 continue;
             }
-            case CONSTANT_Class:
-                info.info.class_info.name_index = eat_cp_index();
+            case CONSTANT_Class: {
+                CONSTANT_Class_info info{};
+                info.name_index = eat_cp_index();
+                cpi.variant = info;
                 break;
-            case CONSTANT_String:
-                info.info.string_info.string_index = eat_cp_index();
+            }
+            case CONSTANT_String: {
+                CONSTANT_String_info info{};
+                info.string_index = eat_cp_index();
+                cpi.variant = info;
                 break;
-            case CONSTANT_Fieldref:
-                info.info.fieldref_info.class_index = eat_cp_index();
-                info.info.fieldref_info.name_and_type_index = eat_cp_index();
+            }
+            case CONSTANT_Fieldref: {
+                CONSTANT_Fieldref_info info{};
+                info.class_index = eat_cp_index();
+                info.name_and_type_index = eat_cp_index();
+                cpi.variant = info;
                 break;
-            case CONSTANT_Methodref:
-                info.info.methodref_info.class_index = eat_cp_index();
-                info.info.methodref_info.name_and_type_index = eat_cp_index();
+            }
+            case CONSTANT_Methodref: {
+                CONSTANT_Methodref_info info{};
+                info.class_index = eat_cp_index();
+                info.name_and_type_index = eat_cp_index();
+                cpi.variant = info;
                 break;
-            case CONSTANT_InterfaceMethodref:
-                info.info.interface_methodref_info.class_index = eat_cp_index();
-                info.info.interface_methodref_info.name_and_type_index = eat_cp_index();
+            }
+            case CONSTANT_InterfaceMethodref: {
+                CONSTANT_InterfaceMethodref_info info{};
+                info.class_index = eat_cp_index();
+                info.name_and_type_index = eat_cp_index();
+                cpi.variant = info;
                 break;
-            case CONSTANT_NameAndType:
-                info.info.name_and_type_info.name_index = eat_cp_index();
-                info.info.name_and_type_info.descriptor_index = eat_cp_index();
+            }
+            case CONSTANT_NameAndType: {
+                CONSTANT_NameAndType_info info{};
+                info.name_index = eat_cp_index();
+                info.descriptor_index = eat_cp_index();
+                cpi.variant = info;
                 break;
+            }
             case CONSTANT_MethodHandle: {
                 min_classfile_format = 51;
+
+                CONSTANT_MethodHandle_info info{};
                 u1 kind = eat_u1();
                 if (kind < 1 || kind > 9)
                     throw ParseError("Invalid method handle kind: " + std::to_string(kind));
-                info.info.method_handle_info.reference_kind = static_cast<MethodHandleKind>(kind);
-                info.info.method_handle_info.reference_index = eat_cp_index();
+                info.reference_kind = static_cast<MethodHandleKind>(kind);
+                info.reference_index = eat_cp_index();
+                cpi.variant = info;
                 break;
             }
-            case CONSTANT_MethodType:
+            case CONSTANT_MethodType: {
                 min_classfile_format = 51;
-                info.info.method_type_info.descriptor_index = eat_cp_index();
+
+                CONSTANT_MethodType_info info{};
+                info.descriptor_index = eat_cp_index();
+                cpi.variant = info;
                 break;
-            case CONSTANT_Dynamic:
+            }
+            case CONSTANT_Dynamic: {
                 min_classfile_format = 55;
-                info.info.dynamic_info.bootstrap_method_attr_index = eat_u2();
+
+                CONSTANT_Dynamic_info info{};
+                info.bootstrap_method_attr_index = eat_u2();
                 highest_parsed_bootstrap_method_attr_index = std::max(highest_parsed_bootstrap_method_attr_index,
-                                                                      info.info.dynamic_info.bootstrap_method_attr_index);
-                info.info.dynamic_info.name_and_type_index = eat_cp_index();
+                                                                      (int) info.bootstrap_method_attr_index);
+                info.name_and_type_index = eat_cp_index();
+                cpi.variant = info;
                 break;
-            case CONSTANT_InvokeDynamic:
+            }
+            case CONSTANT_InvokeDynamic: {
                 min_classfile_format = 51;
-                info.info.invoke_dynamic_info.bootstrap_method_attr_index = eat_u2();
+
+                CONSTANT_InvokeDynamic_info info{};
+                info.bootstrap_method_attr_index = eat_u2();
                 highest_parsed_bootstrap_method_attr_index = std::max(highest_parsed_bootstrap_method_attr_index,
-                                                                      info.info.invoke_dynamic_info.bootstrap_method_attr_index);
-                info.info.invoke_dynamic_info.name_and_type_index = eat_cp_index();
+                                                                      (int) info.bootstrap_method_attr_index);
+                info.name_and_type_index = eat_cp_index();
+                cpi.variant = info;
                 break;
-            case CONSTANT_Module:
+            }
+            case CONSTANT_Module: {
                 min_classfile_format = 53;
-                info.info.module_info.name_index = eat_cp_index();
+
+                CONSTANT_Module_info info{};
+                info.name_index = eat_cp_index();
+                cpi.variant = info;
                 break;
-            case CONSTANT_Package:
+            }
+            case CONSTANT_Package: {
                 min_classfile_format = 53;
-                info.info.package_info.name_index = eat_cp_index();
+
+                CONSTANT_Package_info info{};
+                info.name_index = eat_cp_index();
+                cpi.variant = info;
                 break;
+            }
             default:
                 throw ParseError("Unexpected constant pool tag: " + std::to_string(tag));
         }
         if (min_classfile_format > major_version) {
             throw ParseError("Constant pool entry did not exist in this classfile version");
         }
-        result.table.push_back(info);
+        result.table.push_back(cpi);
     }
 
     return result;
@@ -227,12 +275,8 @@ std::vector<attribute_info> Parser::parse_attributes(const ConstantPool &constan
         info.attribute_name_index = eat_cp_index();
         info.attribute_length = eat_u4();
 
-        cp_info cp = constant_pool.table[info.attribute_name_index];
-        // TODO do this in eat_cp_index or create a getter
-        if (cp.tag != CONSTANT_Utf8) {
-            throw ParseError("Expected a string constant");
-        }
-        const std::string &s = constant_pool.utf8_strings[cp.info.utf_8_info.index];
+        std::string const &s = std::get<CONSTANT_Utf8_info>(
+                constant_pool.table[info.attribute_name_index].variant).value;
 
         if (s == "ConstantValue") {
             // TODO: sometimes this info must be silently ignored
@@ -241,17 +285,17 @@ std::vector<attribute_info> Parser::parse_attributes(const ConstantPool &constan
                 throw ParseError("ConstantValue length must be 2, not " + std::to_string(info.attribute_length));
             }
 
-            ConstantValue_attribute attribute;
+            ConstantValue_attribute attribute{};
             attribute.constantvalue_index = eat_cp_index();
-            switch (constant_pool.table[attribute.constantvalue_index].tag) {
-                case CONSTANT_Integer:
-                case CONSTANT_Float:
-                case CONSTANT_Long:
-                case CONSTANT_Double:
-                case CONSTANT_String:
-                    break;
-                default:
-                    throw ParseError("Unexpected type for constant pool entry of ConstantValue");
+            auto const &variant = constant_pool.table[attribute.constantvalue_index].variant;
+            if (std::holds_alternative<CONSTANT_Integer_info>(variant)
+                || std::holds_alternative<CONSTANT_Float_info>(variant)
+                || std::holds_alternative<CONSTANT_Long_info>(variant)
+                || std::holds_alternative<CONSTANT_Double_info>(variant)
+                || std::holds_alternative<CONSTANT_String_info>(variant)) {
+                break;
+            } else {
+                throw ParseError("Unexpected type for constant pool entry of ConstantValue");
             }
             info.variant = attribute;
         } else if (s == "Code") {
@@ -317,6 +361,9 @@ std::vector<attribute_info> Parser::parse_attributes(const ConstantPool &constan
             BootstrapMethods_attribute attribute;
             u2 num_bootstrap_methods = eat_u2();
             attribute.bootstrap_methods.reserve(num_bootstrap_methods);
+            if (highest_parsed_bootstrap_method_attr_index >= num_bootstrap_methods) {
+                throw ParseError("Constant pool had an invalid bootstrap method attribute index");
+            }
             for (size_t i = 0; i < num_bootstrap_methods; ++i) {
                 BootstrapMethod method;
                 method.bootstrap_method_ref = eat_cp_index();
@@ -358,7 +405,6 @@ std::vector<attribute_info> Parser::parse_attributes(const ConstantPool &constan
             }
             info.variant = attribute;
         } else {
-            // if BootstrapMethods => check highest_parsed_bootstrap_method_attr_index
             for (size_t i = 0; i < info.attribute_length; ++i) {
                 eat_u1();
             }
