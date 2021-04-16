@@ -12,6 +12,10 @@ static const auto MAIN_DESCRIPTOR = "([Ljava/lang/String;)V";
 
 static ssize_t execute_instruction(Frame &frame, const std::vector<u1> &code, ssize_t pc);
 
+static ssize_t execute_comparison(const std::vector<u1> &code, ssize_t pc, bool condition);
+
+static ssize_t goto_(const std::vector<u1> &code, ssize_t pc);
+
 int interpret(const std::vector<ClassFile> &class_files, ssize_t main_class_index) {
     // 1. Find the main method
     const ClassFile &main = class_files[main_class_index];
@@ -125,13 +129,13 @@ static ssize_t execute_instruction(Frame &frame, const std::vector<u1> &code, ss
             frame.stack_push(frame.locals[local]);
             break;
         }
-//        case OpCodes::lload: {
-//            auto index = code[pc + 1];
-//            auto high = frame.locals[index];
-//            auto low = frame.locals[index + 1];
-//            frame.stack_push((high << 8) | low);
-//            break;
-//        }
+        case OpCodes::lload: {
+            auto index = code[pc + 1];
+            auto high = frame.locals[index];
+            auto low = frame.locals[index + 1];
+            frame.stack_push((high << 8) | low);
+            break;
+        }
 //        case OpCodes::dload:
 //        case OpCodes::aload:
         case OpCodes::iload_0:
@@ -152,6 +156,15 @@ static ssize_t execute_instruction(Frame &frame, const std::vector<u1> &code, ss
         }
 
             /* ======================= Stores ======================= */
+        case OpCodes::istore:
+            frame.locals[code[pc + 1]] = frame.stack_pop();
+            return pc + 2;
+        case OpCodes::lstore: {
+            auto value = frame.stack_pop();
+            frame.locals[code[pc + 1]] = (value >> 8) & 0xff;
+            frame.locals[code[pc + 1] + 1] = value & 0xff;
+            return pc + 2;
+        }
         case OpCodes::istore_0:
         case OpCodes::istore_1:
         case OpCodes::istore_2:
@@ -170,8 +183,8 @@ static ssize_t execute_instruction(Frame &frame, const std::vector<u1> &code, ss
 
             /* ======================= Math =======================*/
         case OpCodes::iadd: {
-            auto a = frame.stack_pop();
-            auto b = frame.stack_pop();
+            auto a = static_cast<s4>(frame.stack_pop());
+            auto b = static_cast<s4>(frame.stack_pop());
             // TODO make sure overflow occurs
             frame.stack_push(a + b);
             break;
@@ -183,8 +196,8 @@ static ssize_t execute_instruction(Frame &frame, const std::vector<u1> &code, ss
             break;
         }
         case OpCodes::isub: {
-            auto b = frame.stack_pop();
-            auto a = frame.stack_pop();
+            auto b = static_cast<s4>(frame.stack_pop());
+            auto a = static_cast<s4>(frame.stack_pop());
             frame.stack_push(a - b);
             break;
         }
@@ -204,8 +217,8 @@ static ssize_t execute_instruction(Frame &frame, const std::vector<u1> &code, ss
 
         case OpCodes::iinc: {
             auto local = code[pc + 1];
-            auto value = static_cast<s1>(code[pc + 2]);
-            // TODO ???
+            auto value_u = code[pc + 2];
+            auto value = reinterpret_cast<s1 &>(value_u);
             frame.locals[local] += value;
             return pc + 3;
         }
@@ -241,6 +254,49 @@ static ssize_t execute_instruction(Frame &frame, const std::vector<u1> &code, ss
             break;
         }
 
+            /* ======================= Comparisons ======================= */
+        case OpCodes::lcmp: {
+            auto b_u = frame.stack_pop();
+            auto a_u = frame.stack_pop();
+            const auto b = reinterpret_cast<s8 &>(b_u);
+            const auto a = reinterpret_cast<s8 &>(a_u);
+            frame.stack_push(std::clamp(a - b, -1LL, 1LL));
+            break;
+        }
+        case OpCodes::ifeq:
+            return execute_comparison(code, pc, frame.stack_pop() == 0);
+        case OpCodes::ifne:
+            return execute_comparison(code, pc, frame.stack_pop() != 0);
+        case OpCodes::iflt:
+            return execute_comparison(code, pc, frame.stack_pop() < 0);
+        case OpCodes::ifge:
+            return execute_comparison(code, pc, frame.stack_pop() >= 0);
+        case OpCodes::ifgt:
+            return execute_comparison(code, pc, frame.stack_pop() > 0);
+        case OpCodes::ifle:
+            return execute_comparison(code, pc, frame.stack_pop() <= 0);
+        case OpCodes::if_acmpeq:
+        case OpCodes::if_icmpeq:
+            return execute_comparison(code, pc, frame.stack_pop() == frame.stack_pop());
+        case OpCodes::if_acmpne:
+        case OpCodes::if_icmpne:
+            return execute_comparison(code, pc, frame.stack_pop() != frame.stack_pop());
+        case OpCodes::if_icmplt:
+            return execute_comparison(code, pc, frame.stack_pop() > frame.stack_pop());
+        case OpCodes::if_icmpge:
+            return execute_comparison(code, pc, frame.stack_pop() <= frame.stack_pop());
+        case OpCodes::if_icmpgt:
+            return execute_comparison(code, pc, frame.stack_pop() < frame.stack_pop());
+        case OpCodes::if_icmple:
+            return execute_comparison(code, pc, frame.stack_pop() >= frame.stack_pop());
+
+            /* ======================= Control =======================*/
+        case OpCodes::goto_:
+            return goto_(code, pc);
+        case OpCodes::return_:
+            return -1;
+
+
             /* ======================= References ======================= */
         case OpCodes::invokestatic: {
             auto method_index = static_cast<u2>(code[pc + 1] << 8) | static_cast<u2>(code[pc + 2]);
@@ -256,10 +312,6 @@ static ssize_t execute_instruction(Frame &frame, const std::vector<u1> &code, ss
             }
         }
 
-            /* ======================= Control =======================*/
-        case OpCodes::return_:
-            return -1;
-
         default:
             throw std::runtime_error(
                     "Unimplemented/unknown opcode " + std::to_string(code[pc]) + " at " + std::to_string(pc)
@@ -268,6 +320,22 @@ static ssize_t execute_instruction(Frame &frame, const std::vector<u1> &code, ss
 
     return pc + 1;
 }
+
+static ssize_t execute_comparison(const std::vector<u1> &code, ssize_t pc, bool condition) {
+    if (condition) {
+        return goto_(code, pc);
+    } else {
+        return pc + 3;
+    }
+}
+
+static ssize_t goto_(const std::vector<u1> &code, ssize_t pc) {
+    u2 offset_u = static_cast<u2>(code[pc + 1] << 8) | static_cast<u2>(code[pc + 2]);
+    const s2 offset = reinterpret_cast<s2 &>(offset_u);
+    // TODO test negative offset
+    return pc + offset;
+}
+
 
 Frame::Frame(const ClassFile &clas, size_t locals_count, std::unique_ptr<Frame> previous_frame)
         : clas(clas), previous_frame(std::move(previous_frame)) {

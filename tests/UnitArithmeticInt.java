@@ -5,6 +5,7 @@ public class UnitArithmeticInt {
         i += 2;
         i *= 4;
         i /= 12;
+        i -= 20;
         long l = 5;
         l += 3;
         l *= 2;

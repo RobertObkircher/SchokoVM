@@ -62,6 +62,7 @@ set(JAVA_TEST_SOURCES
 #        tests/KarelTheRobot.java
         tests/UnitArithmeticInt.java
         tests/UnitArithmeticOverflow.java
+        tests/UnitBoolean.java
         )
 
 set(JAVA_TEST_GENERATED_SOURCES
