@@ -1,6 +1,5 @@
 #include <istream>
 #include <optional>
-#include <streambuf>
 #include <vector>
 #include <zip.h>
 

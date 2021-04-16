@@ -33,25 +33,6 @@ struct type_annotation;
 struct type_path;
 struct record_component_info;
 
-struct ConstantPool {
-    std::vector<cp_info> table;
-    std::vector<std::string> utf8_strings;
-};
-
-struct ClassFile {
-    u4 magic;
-    u2 minor_version;
-    u2 major_version;
-    ConstantPool constant_pool;
-    u2 access_flags;
-    u2 this_class;
-    u2 super_class;
-    std::vector<u2> interfaces;
-    std::vector<field_info> fields;
-    std::vector<method_info> methods;
-    std::vector<attribute_info> attributes;
-};
-
 enum CpTag : u1 {
     // Just a dummy value used in the constant pool for index 0 and after longs/doubles
     CONSTANT_Invalid = 0,
@@ -93,28 +74,42 @@ inline bool is_loadable(CpTag tag) {
 }
 
 // cp_info:
+struct CONSTANT_Utf8_info;
+struct CONSTANT_NameAndType_info;
+
+// not from the spec
+struct CONSTANT_Invalid_info {
+};
 
 struct CONSTANT_Class_info {
     u2 name_index;
+    CONSTANT_Utf8_info *name;
 };
 
 struct CONSTANT_Fieldref_info {
     u2 class_index;
     u2 name_and_type_index;
+    CONSTANT_Class_info *class_;
+    CONSTANT_NameAndType_info *name_and_type;
 };
 
 struct CONSTANT_Methodref_info {
     u2 class_index;
     u2 name_and_type_index;
+    CONSTANT_Class_info *class_;
+    CONSTANT_NameAndType_info *name_and_type;
 };
 
 struct CONSTANT_InterfaceMethodref_info {
     u2 class_index;
     u2 name_and_type_index;
+    CONSTANT_Class_info *class_;
+    CONSTANT_NameAndType_info *name_and_type;
 };
 
 struct CONSTANT_String_info {
     u2 string_index;
+    CONSTANT_Utf8_info *string;
 };
 
 struct CONSTANT_Integer_info {
@@ -136,12 +131,12 @@ struct CONSTANT_Double_info {
 struct CONSTANT_NameAndType_info {
     u2 name_index;
     u2 descriptor_index;
+    CONSTANT_Utf8_info *name;
+    CONSTANT_Utf8_info *descriptor;
 };
 
 struct CONSTANT_Utf8_info {
-    // This is an index into the utf8_strings vector of ConstantPool so that we don't have to store a vector
-    // inside the cp_info union.
-    size_t index;
+    std::string value;
 };
 
 enum MethodHandleKind : u1 {
@@ -184,26 +179,26 @@ struct CONSTANT_Package_info {
 };
 
 struct cp_info {
-    CpTag tag;
-    union {
-        CONSTANT_Class_info class_info;
-        CONSTANT_Fieldref_info fieldref_info;
-        CONSTANT_Methodref_info methodref_info;
-        CONSTANT_InterfaceMethodref_info interface_methodref_info;
-        CONSTANT_String_info string_info;
-        CONSTANT_Integer_info integer_info;
-        CONSTANT_Float_info float_info;
-        CONSTANT_Long_info long_info;
-        CONSTANT_Double_info double_info;
-        CONSTANT_NameAndType_info name_and_type_info;
-        CONSTANT_Utf8_info utf_8_info;
-        CONSTANT_MethodHandle_info method_handle_info;
-        CONSTANT_MethodType_info method_type_info;
-        CONSTANT_Dynamic_info dynamic_info;
-        CONSTANT_InvokeDynamic_info invoke_dynamic_info;
-        CONSTANT_Module_info module_info;
-        CONSTANT_Package_info package_info;
-    } info;
+    std::variant<
+            CONSTANT_Invalid_info,
+            CONSTANT_Class_info,
+            CONSTANT_Fieldref_info,
+            CONSTANT_Methodref_info,
+            CONSTANT_InterfaceMethodref_info,
+            CONSTANT_String_info,
+            CONSTANT_Integer_info,
+            CONSTANT_Float_info,
+            CONSTANT_Long_info,
+            CONSTANT_Double_info,
+            CONSTANT_NameAndType_info,
+            CONSTANT_Utf8_info,
+            CONSTANT_MethodHandle_info,
+            CONSTANT_MethodType_info,
+            CONSTANT_Dynamic_info,
+            CONSTANT_InvokeDynamic_info,
+            CONSTANT_Module_info,
+            CONSTANT_Package_info
+    > variant;
 };
 
 enum class FieldInfoAccessFlags {
@@ -220,8 +215,8 @@ enum class FieldInfoAccessFlags {
 
 struct field_info {
     u2 access_flags;
-    u2 name_index;
-    u2 descriptor_index;
+    CONSTANT_Utf8_info *name_index;
+    CONSTANT_Utf8_info *descriptor_index;
     std::vector<attribute_info> attributes;
 };
 
@@ -242,8 +237,8 @@ enum class MethodInfoAccessFlags {
 
 struct method_info {
     u2 access_flags;
-    u2 name_index;
-    u2 descriptor_index;
+    CONSTANT_Utf8_info *name_index;
+    CONSTANT_Utf8_info *descriptor_index;
     std::vector<attribute_info> attributes;
 };
 
@@ -377,7 +372,7 @@ struct full_frame {
 #endif
 
 struct Exceptions_attribute {
-    std::vector<u2> exception_index_table;
+    std::vector<CONSTANT_Class_info *> exception_index_table;
 };
 
 struct InnerClasses_attribute {
@@ -399,15 +394,15 @@ struct Synthetic_attribute {
 };
 
 struct Signature_attribute {
-    u2 signature_index;
+    CONSTANT_Utf8_info *signature_index;
 };
 
 struct SourceFile_attribute {
-    u2 sourcefile_index;
+    CONSTANT_Utf8_info *sourcefile_index;
 };
 
 struct SourceDebugExtension_attribute {
-        std::string debug_extension;
+    std::string debug_extension;
 };
 
 struct LineNumberTableEntry {
@@ -594,7 +589,7 @@ struct AnnotationDefault_attribute {
 };
 
 struct BootstrapMethod {
-    u2 bootstrap_method_ref;
+    CONSTANT_MethodHandle_info *bootstrap_method_ref;
     std::vector<u2> bootstrap_arguments;
 };
 
@@ -661,11 +656,11 @@ struct ModuleMainClass_attribute {
 };
 
 struct NestHost_attribute {
-    u2 host_class_index;
+    CONSTANT_Class_info *host_class_index;
 };
 
 struct NestMembers_attribute {
-    std::vector<u2> classes;
+    std::vector<CONSTANT_Class_info *> classes;
 };
 
 struct Record_attribute {
@@ -682,7 +677,7 @@ struct record_component_info {
 
 struct attribute_info {
     // TODO: Do we even need to store these two fields?
-    u2 attribute_name_index;
+    CONSTANT_Utf8_info *attribute_name_index;
     u4 attribute_length;
     std::variant<
             ConstantValue_attribute,
@@ -699,6 +694,35 @@ struct attribute_info {
             NestHost_attribute,
             NestMembers_attribute
     > variant;
+};
+
+struct ConstantPool {
+    std::vector<cp_info> table;
+
+    template<class T>
+    inline T &get(u2 index) {
+        return std::get<T>(table[index].variant);
+    }
+
+//    inline std::string const& get_string(u2 index) const {
+//        auto &string_info = get<CONSTANT_String_info>(index);
+//        return get<CONSTANT_Utf8_info>(string_info.string_index).value;
+//    }
+};
+
+struct ClassFile {
+    u4 magic;
+    u2 minor_version;
+    u2 major_version;
+    ConstantPool constant_pool;
+    u2 access_flags;
+    CONSTANT_Class_info *this_class;
+    // nullptr for class Object
+    CONSTANT_Class_info *super_class;
+    std::vector<CONSTANT_Class_info *> interfaces;
+    std::vector<field_info> fields;
+    std::vector<method_info> methods;
+    std::vector<attribute_info> attributes;
 };
 
 

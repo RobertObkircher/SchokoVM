@@ -15,10 +15,23 @@ struct ParseError : std::exception {
     [[nodiscard]] const char *what() const noexcept override;
 };
 
+inline void check_cp_range(u2 index, size_t size) {
+    if (index == 0 || index >= size)
+        throw ParseError("Constant pool index out of range");
+}
+
+template<class T>
+inline T &check_cp_range_and_type(ConstantPool &pool, u2 index) {
+    check_cp_range(index, pool.table.size());
+    if (!std::holds_alternative<T>(pool.table[index].variant)) {
+        throw ParseError("Unexpected constant pool type");
+    }
+    return pool.get<T>(index);
+}
+
 class Parser {
     std::istream &in;
-    u2 constant_pool_count;
-    u2 highest_parsed_bootstrap_method_attr_index;
+    int highest_parsed_bootstrap_method_attr_index = -1;
 
     inline u1 eat_u1() {
         // WARNING: >> and .get() are intended for text. They would filter out 0x0A characters...
@@ -64,11 +77,9 @@ public:
 
     ConstantPool parse_constant_pool(u2 major_version);
 
-    u2 eat_cp_index();
-
     std::string eat_utf8_string(u4 length);
 
-    std::vector<attribute_info> parse_attributes(const ConstantPool &constant_pool);
+    std::vector<attribute_info> parse_attributes(ConstantPool &constant_pool);
 };
 
 #endif //SCHOKOVM_PARSER_HPP
