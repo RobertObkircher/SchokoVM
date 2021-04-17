@@ -5,6 +5,7 @@ project(SchokoVM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_CXX_EXTENSIONS False)
 
 find_package(Java 1.8 REQUIRED)
 include(UseJava)
@@ -46,14 +47,13 @@ add_executable(SchokoVM
         src/parser.cpp src/parser.hpp
         src/args.cpp src/args.hpp
         src/jar.cpp src/jar.hpp
-        src/interpreter.cpp src/interpreter.hpp src/opcodes.hpp)
+        src/interpreter.cpp src/interpreter.hpp src/opcodes.hpp src/future.hpp)
 if (libzip_FOUND)
     target_link_libraries(SchokoVM libzip::zip)
 else ()
     # hope that it's on the standard search paths
     target_link_libraries(SchokoVM zip)
 endif ()
-
 
 # Note: using glob to create this list is not recommended
 #file(GLOB JAVA_TEST_SOURCES CONFIGURE_DEPENDS tests/*.java)

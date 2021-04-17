@@ -6,12 +6,40 @@
 #include <stack>
 #include "classfile.hpp"
 
+struct JVMStackValue {
+    explicit JVMStackValue(u4 v) : value({.u4_ = v}) {}
+
+    explicit JVMStackValue(s4 v) : value({.s4_ = v}) {}
+
+    explicit JVMStackValue(u8 v) : value({.u8_ = v}) {}
+
+    explicit JVMStackValue(s8 v) : value({.s8_ = v}) {}
+
+    [[nodiscard]] inline const u4 &u4_() const noexcept { return value.u4_; }
+
+    [[nodiscard]] inline const s4 &s4_() const noexcept { return value.s4_; }
+
+    [[nodiscard]] inline const u8 &u8_() const noexcept { return value.u8_; }
+
+    [[nodiscard]] inline const s8 &s8_() const noexcept { return value.s8_; }
+
+private:
+    union {
+        u4 u4_;
+        s4 s4_;
+        u8 u8_;
+        s8 s8_;
+//        float float_;
+//        double double_;
+    } value;
+};
+
 /** https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-2.html#jvms-2.6 */
 struct Frame {
     const ClassFile &clas;
 
     std::vector<u4> locals;
-    std::stack<u8> stack;
+    std::vector<JVMStackValue> stack;
 
     // TODO the runtime access pool?
     // void *constant_pool;
@@ -19,10 +47,24 @@ struct Frame {
     /** the calling/previous frame */
     std::unique_ptr<Frame> previous_frame;
 
-    Frame(const ClassFile &clas, size_t locals_count, std::unique_ptr<Frame> previous_frame);
+    Frame(const ClassFile &clas, size_t locals_count, std::unique_ptr<Frame> previous_frame)
+            : clas(clas), previous_frame(std::move(previous_frame)) {
+        this->locals.resize(locals_count);
+    }
 
-    u8 stack_pop();
+    JVMStackValue stack_pop() {
+        auto v = this->stack.back();
+        this->stack.pop_back();
+        return v;
+    }
+
+    void stack_push(s4 v);
+
+    void stack_push(u4 v);
+
     void stack_push(u8 v);
+
+    void stack_push(s8 v);
 };
 
 /**

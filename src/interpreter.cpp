@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include "opcodes.hpp"
+#include "future.hpp"
 
 static const u2 MAIN_ACCESS_FLAGS = (static_cast<u2>(FieldInfoAccessFlags::ACC_PUBLIC) |
                                      static_cast<u2>(FieldInfoAccessFlags::ACC_STATIC));
@@ -52,7 +53,7 @@ int interpret(const std::vector<ClassFile> &class_files, size_t main_class_index
     if (stack.current_frame->stack.empty()) {
         return 0;
     } else {
-        return static_cast<int>(stack.current_frame->stack.top());
+        return stack.current_frame->stack_pop().s4_();
     }
 }
 
@@ -106,8 +107,8 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
             auto &entry = frame.clas.constant_pool.table[index];
             if (auto i = std::get_if<CONSTANT_Integer_info>(&entry.variant)) {
                 frame.stack_push(i->bytes);
-            } else if (auto f = std::get_if<CONSTANT_Float_info>(&entry.variant)) {
-                frame.stack_push(f->value);
+//            } else if (auto f = std::get_if<CONSTANT_Float_info>(&entry.variant)) {
+//                frame.stack_push(f->value);
             } else {
                 throw std::runtime_error("ldc refers to invalid/unimplemented type");
             }
@@ -115,12 +116,12 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         }
 //        case OpCodes::ldc_w:
         case OpCodes::ldc2_w: {
-            auto index = static_cast<u2>(code[pc + 1] << 8) | static_cast<u2>(code[pc + 2]);
+            size_t index = static_cast<u2>(code[pc + 1] << 8) | static_cast<u2>(code[pc + 2]);
             auto &entry = frame.clas.constant_pool.table[index];
             if (auto l = std::get_if<CONSTANT_Long_info>(&entry.variant)) {
                 frame.stack_push(l->value);
-            } else if (auto d = std::get_if<CONSTANT_Double_info>(&entry.variant)) {
-                frame.stack_push(d->value);
+//            } else if (auto d = std::get_if<CONSTANT_Double_info>(&entry.variant)) {
+//                frame.stack_push(d->value);
             } else {
                 throw std::runtime_error("ldc2_w refers to invalid/unimplemented type");
             }
@@ -138,7 +139,8 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
             auto index = code[pc + 1];
             auto high = frame.locals[index];
             auto low = frame.locals[index + 1];
-            frame.stack_push((high << 8) | low);
+            s8 value = (static_cast<s8>(high) << 32) | low;
+            frame.stack_push(value);
             break;
         }
 //        case OpCodes::dload:
@@ -153,7 +155,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::lload_1:
         case OpCodes::lload_2:
         case OpCodes::lload_3: {
-            auto index = code[pc] - static_cast<u1>(OpCodes::lload_0);
+            u1 index = code[pc] - static_cast<u1>(OpCodes::lload_0);
             auto high = frame.locals[index];
             auto low = frame.locals[index + 1];
             frame.stack_push((high << 8) | low);
@@ -162,10 +164,10 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
 
             /* ======================= Stores ======================= */
         case OpCodes::istore:
-            frame.locals[code[pc + 1]] = frame.stack_pop();
+            frame.locals[code[pc + 1]] = frame.stack_pop().u4_();
             return pc + 2;
         case OpCodes::lstore: {
-            auto value = frame.stack_pop();
+            auto value = frame.stack_pop().u8_();
             frame.locals[code[pc + 1]] = (value >> 8) & 0xff;
             frame.locals[code[pc + 1] + 1] = value & 0xff;
             return pc + 2;
@@ -174,64 +176,62 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::istore_1:
         case OpCodes::istore_2:
         case OpCodes::istore_3:
-            frame.locals[code[pc] - static_cast<u1>(OpCodes::istore_0)] = frame.stack_pop();
+            frame.locals[code[pc] - static_cast<u1>(OpCodes::istore_0)] = frame.stack_pop().u4_();
             break;
         case OpCodes::lstore_0:
         case OpCodes::lstore_1:
         case OpCodes::lstore_2:
         case OpCodes::lstore_3: {
-            auto value = frame.stack_pop();
-            frame.locals[code[pc] - static_cast<u1>(OpCodes::lstore_0)] = (value >> 8) & 0xff;
-            frame.locals[code[pc] - static_cast<u1>(OpCodes::lstore_0) + 1] = value & 0xff;
+            auto value = frame.stack_pop().u8_();
+            frame.locals[code[pc] - static_cast<u1>(OpCodes::lstore_0)] = (value >> 32) & 0xffff;
+            frame.locals[code[pc] - static_cast<u1>(OpCodes::lstore_0) + 1] = value & 0xffff;
             break;
         }
 
             /* ======================= Math =======================*/
         case OpCodes::iadd: {
-            auto a = static_cast<s4>(frame.stack_pop());
-            auto b = static_cast<s4>(frame.stack_pop());
-            // TODO make sure overflow occurs
+            auto a = frame.stack_pop().s4_();
+            auto b = frame.stack_pop().s4_();
             frame.stack_push(a + b);
             break;
         }
         case OpCodes::ladd: {
-            auto a = frame.stack_pop();
-            auto b = frame.stack_pop();
+            auto a = frame.stack_pop().s8_();
+            auto b = frame.stack_pop().s8_();
             frame.stack_push(a + b);
             break;
         }
         case OpCodes::isub: {
-            auto b = static_cast<s4>(frame.stack_pop());
-            auto a = static_cast<s4>(frame.stack_pop());
+            auto b = frame.stack_pop().s4_();
+            auto a = frame.stack_pop().s4_();
             frame.stack_push(a - b);
             break;
         }
         case OpCodes::imul: {
-            auto a = static_cast<s4>(frame.stack_pop());
-            auto b = static_cast<s4>(frame.stack_pop());
-            // TODO make sure overflow occurs
+            auto a = frame.stack_pop().s4_();
+            auto b = frame.stack_pop().s4_();
             frame.stack_push(a * b);
             break;
         }
         case OpCodes::lmul: {
-            auto a = static_cast<s4>(frame.stack_pop());
-            auto b = static_cast<s4>(frame.stack_pop());
+            auto a = frame.stack_pop().s4_();
+            auto b = frame.stack_pop().s4_();
             frame.stack_push(a * b);
             break;
         }
 
         case OpCodes::iinc: {
             auto local = code[pc + 1];
-            auto value_u = code[pc + 2];
-            auto value = reinterpret_cast<s1 &>(value_u);
+            // TODO is correctly turned into signed?
+            auto value = static_cast<u4>(code[pc + 2]);
             frame.locals[local] += value;
             return pc + 3;
         }
 
         case OpCodes::idiv: {
             // TODO ensure overflow/...
-            auto divisor = static_cast<s4>(frame.stack_pop());
-            auto dividend = static_cast<s4>(frame.stack_pop());
+            auto divisor = frame.stack_pop().s4_();
+            auto dividend = frame.stack_pop().s4_();
             if (divisor == 0) {
                 // TODO ArithmeticException
                 throw std::runtime_error("Division by 0");
@@ -241,8 +241,8 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
             break;
         }
         case OpCodes::ldiv: {
-            auto divisor = static_cast<s4>(frame.stack_pop());
-            auto dividend = static_cast<s4>(frame.stack_pop());
+            auto divisor = frame.stack_pop().s4_();
+            auto dividend = frame.stack_pop().s4_();
             if (divisor == 0) {
                 // TODO ArithmeticException
                 throw std::runtime_error("Division by 0");
@@ -254,46 +254,47 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
 
             /* ======================= Conversions ======================= */
         case OpCodes::l2i: {
-            auto value = static_cast<s4>(frame.stack_pop());
+            auto value = frame.stack_pop().s4_();
             frame.stack_push(value);
             break;
         }
 
             /* ======================= Comparisons ======================= */
         case OpCodes::lcmp: {
-            auto b_u = frame.stack_pop();
-            auto a_u = frame.stack_pop();
-            const auto b = reinterpret_cast<s8 &>(b_u);
-            const auto a = reinterpret_cast<s8 &>(a_u);
-            frame.stack_push(std::clamp(a - b, -1LL, 1LL));
+            auto b = frame.stack_pop().s8_();
+            auto a = frame.stack_pop().s8_();
+            s8 diff = a - b;
+            frame.stack_push(std::clamp(diff, -1LL, 1LL));
             break;
         }
         case OpCodes::ifeq:
-            return execute_comparison(code, pc, frame.stack_pop() == 0);
+            return execute_comparison(code, pc, frame.stack_pop().s4_() == 0);
         case OpCodes::ifne:
-            return execute_comparison(code, pc, frame.stack_pop() != 0);
+            return execute_comparison(code, pc, frame.stack_pop().s4_() != 0);
         case OpCodes::iflt:
-            return execute_comparison(code, pc, frame.stack_pop() < 0);
+            return execute_comparison(code, pc, frame.stack_pop().s4_() < 0);
         case OpCodes::ifge:
-            return execute_comparison(code, pc, frame.stack_pop() >= 0);
+            return execute_comparison(code, pc, frame.stack_pop().s4_() >= 0);
         case OpCodes::ifgt:
-            return execute_comparison(code, pc, frame.stack_pop() > 0);
+            return execute_comparison(code, pc, frame.stack_pop().s4_() > 0);
         case OpCodes::ifle:
-            return execute_comparison(code, pc, frame.stack_pop() <= 0);
-        case OpCodes::if_acmpeq:
+            return execute_comparison(code, pc, frame.stack_pop().s4_() <= 0);
         case OpCodes::if_icmpeq:
-            return execute_comparison(code, pc, frame.stack_pop() == frame.stack_pop());
-        case OpCodes::if_acmpne:
+            return execute_comparison(code, pc, frame.stack_pop().s4_() == frame.stack_pop().s4_());
         case OpCodes::if_icmpne:
-            return execute_comparison(code, pc, frame.stack_pop() != frame.stack_pop());
+            return execute_comparison(code, pc, frame.stack_pop().s4_() != frame.stack_pop().s4_());
         case OpCodes::if_icmplt:
-            return execute_comparison(code, pc, frame.stack_pop() > frame.stack_pop());
+            return execute_comparison(code, pc, frame.stack_pop().s4_() > frame.stack_pop().s4_());
         case OpCodes::if_icmpge:
-            return execute_comparison(code, pc, frame.stack_pop() <= frame.stack_pop());
+            return execute_comparison(code, pc, frame.stack_pop().s4_() <= frame.stack_pop().s4_());
         case OpCodes::if_icmpgt:
-            return execute_comparison(code, pc, frame.stack_pop() < frame.stack_pop());
+            return execute_comparison(code, pc, frame.stack_pop().s4_() < frame.stack_pop().s4_());
         case OpCodes::if_icmple:
-            return execute_comparison(code, pc, frame.stack_pop() >= frame.stack_pop());
+            return execute_comparison(code, pc, frame.stack_pop().s4_() >= frame.stack_pop().s4_());
+        case OpCodes::if_acmpeq:
+            return execute_comparison(code, pc, frame.stack_pop().u8_() == frame.stack_pop().u8_());
+        case OpCodes::if_acmpne:
+            return execute_comparison(code, pc, frame.stack_pop().u8_() != frame.stack_pop().u8_());
 
             /* ======================= Control =======================*/
         case OpCodes::goto_:
@@ -305,7 +306,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
 
             /* ======================= References ======================= */
         case OpCodes::invokestatic: {
-            auto method_index = static_cast<u2>(code[pc + 1] << 8) | static_cast<u2>(code[pc + 2]);
+            size_t method_index = static_cast<u2>(code[pc + 1] << 8) | static_cast<u2>(code[pc + 2]);
             // TODO this is really an index into the run-time constant pool
             auto method = std::get<CONSTANT_Methodref_info>(frame.clas.constant_pool.table[method_index].variant);
 
@@ -337,24 +338,8 @@ static size_t execute_comparison(const std::vector<u1> &code, size_t pc, bool co
 }
 
 static size_t goto_(const std::vector<u1> &code, size_t pc) {
-    u2 offset_u = static_cast<u2>(code[pc + 1] << 8) | static_cast<u2>(code[pc + 2]);
-    const s2 offset = reinterpret_cast<s2 &>(offset_u);
+    u2 offset_u = static_cast<u2>(static_cast<u2>(code[pc + 1]) << 8 | code[pc + 2]);
+    auto offset = future::bit_cast<s2>(offset_u);
     // TODO test negative offset
-    return pc + offset;
-}
-
-
-Frame::Frame(const ClassFile &clas, size_t locals_count, std::unique_ptr<Frame> previous_frame)
-        : clas(clas), previous_frame(std::move(previous_frame)) {
-    this->locals.resize(locals_count);
-}
-
-u8 Frame::stack_pop() {
-    auto v = static_cast<s4>(this->stack.top());
-    this->stack.pop();
-    return v;
-}
-
-void Frame::stack_push(u8 v) {
-    this->stack.push(v);
+    return static_cast<size_t>(static_cast<long>(pc) + offset);
 }
