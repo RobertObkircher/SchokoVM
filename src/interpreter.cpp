@@ -58,15 +58,15 @@ int interpret(const std::vector<ClassFile> &class_files, size_t main_class_index
 }
 
 static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, size_t pc, bool &shouldExit) {
-    auto opcode = static_cast<OpCodes>(code[pc]);
+    auto opcode = code[pc];
     // TODO implement remaining opcodes. The ones that are currently commented/missing out have no test coverage whatsoever
-    switch (opcode) {
+    switch (static_cast<OpCodes>(opcode)) {
         /* ======================= Constants ======================= */
         case OpCodes::nop:
             break;
 //        case OpCodes::aconst_null:
-//            // TODO what is NULL?
-//            frame.stack_push(nullptr);
+//            // "nullptr"
+//            frame.stack_push(0);
 //            break;
         case OpCodes::iconst_m1:
         case OpCodes::iconst_0:
@@ -75,21 +75,21 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::iconst_3:
         case OpCodes::iconst_4:
         case OpCodes::iconst_5:
-            frame.stack_push(code[pc] - static_cast<u1>(OpCodes::iconst_0));
+            frame.stack_push(opcode - static_cast<u1>(OpCodes::iconst_0));
             break;
 
         case OpCodes::lconst_0:
         case OpCodes::lconst_1:
-            frame.stack_push(code[pc] - static_cast<u1>(OpCodes::lconst_0));
+            frame.stack_push(opcode - static_cast<u1>(OpCodes::lconst_0));
             break;
         case OpCodes::fconst_0:
         case OpCodes::fconst_1:
         case OpCodes::fconst_2:
-            frame.stack_push(code[pc] - static_cast<u1>(OpCodes::fconst_0));
+            frame.stack_push(opcode - static_cast<u1>(OpCodes::fconst_0));
             break;
         case OpCodes::dconst_0:
         case OpCodes::dconst_1:
-            frame.stack_push(code[pc] - static_cast<u1>(OpCodes::dconst_0));
+            frame.stack_push(opcode - static_cast<u1>(OpCodes::dconst_0));
             break;
         case OpCodes::bipush: {
             auto value = static_cast<s4>(code[pc + 1]);
@@ -149,13 +149,13 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::iload_1:
         case OpCodes::iload_2:
         case OpCodes::iload_3:
-            frame.stack_push(frame.locals[code[pc] - static_cast<u1>(OpCodes::iload_0)]);
+            frame.stack_push(frame.locals[opcode - static_cast<u1>(OpCodes::iload_0)]);
             break;
         case OpCodes::lload_0:
         case OpCodes::lload_1:
         case OpCodes::lload_2:
         case OpCodes::lload_3: {
-            u1 index = code[pc] - static_cast<u1>(OpCodes::lload_0);
+            u1 index = opcode - static_cast<u1>(OpCodes::lload_0);
             auto high = frame.locals[index];
             auto low = frame.locals[index + 1];
             frame.stack_push((high << 8) | low);
@@ -176,15 +176,15 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::istore_1:
         case OpCodes::istore_2:
         case OpCodes::istore_3:
-            frame.locals[code[pc] - static_cast<u1>(OpCodes::istore_0)] = frame.stack_pop().u4_();
+            frame.locals[opcode - static_cast<u1>(OpCodes::istore_0)] = frame.stack_pop().u4_();
             break;
         case OpCodes::lstore_0:
         case OpCodes::lstore_1:
         case OpCodes::lstore_2:
         case OpCodes::lstore_3: {
             auto value = frame.stack_pop().u8_();
-            frame.locals[code[pc] - static_cast<u1>(OpCodes::lstore_0)] = (value >> 32) & 0xffff;
-            frame.locals[code[pc] - static_cast<u1>(OpCodes::lstore_0) + 1] = value & 0xffff;
+            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0)] = (value >> 32) & 0xffff;
+            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0) + 1] = value & 0xffff;
             break;
         }
 
@@ -322,7 +322,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
 
         default:
             throw std::runtime_error(
-                    "Unimplemented/unknown opcode " + std::to_string(code[pc]) + " at " + std::to_string(pc)
+                    "Unimplemented/unknown opcode " + std::to_string(opcode) + " at " + std::to_string(pc)
             );
     }
 
@@ -340,6 +340,5 @@ static size_t execute_comparison(const std::vector<u1> &code, size_t pc, bool co
 static size_t goto_(const std::vector<u1> &code, size_t pc) {
     u2 offset_u = static_cast<u2>(static_cast<u2>(code[pc + 1]) << 8 | code[pc + 2]);
     auto offset = future::bit_cast<s2>(offset_u);
-    // TODO test negative offset
     return static_cast<size_t>(static_cast<long>(pc) + offset);
 }
