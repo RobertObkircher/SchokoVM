@@ -132,13 +132,13 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
 //        case OpCodes::iload: {
         case OpCodes::fload: {
             auto local = code[pc + 1];
-            frame.stack_push(frame.locals[local].float_);
+            frame.stack_push(frame.locals[local].float_());
             break;
         }
         case OpCodes::lload: {
             auto index = code[pc + 1];
-            auto high = frame.locals[index].u4;
-            auto low = frame.locals[index + 1].u4;
+            auto high = frame.locals[index].u4();
+            auto low = frame.locals[index + 1].u4();
             s8 value = (static_cast<s8>(high) << 32) | low;
             frame.stack_push(value);
             break;
@@ -149,7 +149,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::iload_1:
         case OpCodes::iload_2:
         case OpCodes::iload_3: {
-            auto value = frame.locals[opcode - static_cast<u1>(OpCodes::iload_0)].u4;
+            auto value = frame.locals[opcode - static_cast<u1>(OpCodes::iload_0)].u4();
             frame.stack_push(value);
             break;
         }
@@ -158,35 +158,35 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::lload_2:
         case OpCodes::lload_3: {
             u1 index = opcode - static_cast<u1>(OpCodes::lload_0);
-            auto high = frame.locals[index].u4;
-            auto low = frame.locals[index + 1].u4;
+            auto high = frame.locals[index].u4();
+            auto low = frame.locals[index + 1].u4();
             frame.stack_push((static_cast<u8>(high) << 32) | low);
             break;
         }
 
             /* ======================= Stores ======================= */
         case OpCodes::istore:
-            frame.locals[code[pc + 1]].u4 = frame.stack_pop().u4();
+            frame.locals[code[pc + 1]].u4() = frame.stack_pop().u4();
             return pc + 2;
         case OpCodes::lstore: {
             auto value = frame.stack_pop().u8();
-            frame.locals[code[pc + 1]].u4 = (value >> 8) & 0xff;
-            frame.locals[code[pc + 1] + 1].u4 = value & 0xff;
+            frame.locals[code[pc + 1]].u4() = (value >> 8) & 0xff;
+            frame.locals[code[pc + 1] + 1].u4() = value & 0xff;
             return pc + 2;
         }
         case OpCodes::istore_0:
         case OpCodes::istore_1:
         case OpCodes::istore_2:
         case OpCodes::istore_3:
-            frame.locals[opcode - static_cast<u1>(OpCodes::istore_0)].u4 = frame.stack_pop().u4();
+            frame.locals[opcode - static_cast<u1>(OpCodes::istore_0)].u4() = frame.stack_pop().u4();
             break;
         case OpCodes::lstore_0:
         case OpCodes::lstore_1:
         case OpCodes::lstore_2:
         case OpCodes::lstore_3: {
             auto value = frame.stack_pop().u8();
-            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0)].u4 = (value >> 32) & 0xffff;
-            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0) + 1].u4 = value & 0xffff;
+            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0)].u4() = (value >> 32) & 0xffff;
+            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0) + 1].u4() = value & 0xffff;
             break;
         }
 
@@ -226,7 +226,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
             auto local = code[pc + 1];
             // TODO is correctly turned into signed?
             auto value = static_cast<s4>(static_cast<s2>(future::bit_cast<s1>(code[pc + 2])));
-            frame.locals[local].s4 += value;
+            frame.locals[local].s4() = frame.locals[local].s4() + value;
             return pc + 3;
         }
 

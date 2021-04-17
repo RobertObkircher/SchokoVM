@@ -6,16 +6,34 @@
 #include <stack>
 #include "classfile.hpp"
 
-union JVMLocalValue {
-    JVMLocalValue() : u4(0) {}
+struct JVMLocalValue {
+    JVMLocalValue() : u4_value(0) {}
 
-    explicit JVMLocalValue(::u4 v) : u4(v) {}
+    explicit JVMLocalValue(::u4 v) : u4_value(v) {}
 
-    explicit JVMLocalValue(::s4 v) : s4(v) {}
+    explicit JVMLocalValue(::s4 v) : s4_value(v) {}
 
-    ::u4 u4;
-    ::s4 s4;
-    float float_;
+    [[nodiscard]] inline float &float_() noexcept { return this->float_value; }
+
+    [[nodiscard]] inline const float &float_() const noexcept { return this->float_value; }
+
+    [[nodiscard]] inline ::u4 &u4() noexcept { return u4_value; }
+
+    [[nodiscard]] inline const ::u4 &u4() const noexcept { return u4_value; }
+
+    [[nodiscard]] inline ::s4 &s4() noexcept { return s4_value; }
+
+    [[nodiscard]] inline const ::s4 &s4() const noexcept { return s4_value; }
+
+//    // actual type instead of void
+//    [[nodiscard]] inline const void* &reference() const noexcept { return value.s4; }
+
+private:
+    union {
+        ::u4 u4_value;
+        ::s4 s4_value;
+        float float_value;
+    };
 };
 
 struct JVMStackValue {
