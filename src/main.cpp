@@ -50,7 +50,7 @@ int run(const Arguments &arguments) {
         return 5;
     }
 
-    return interpret(class_files, index);
+    return interpret(class_files, static_cast<size_t>(index));
 }
 
 int main(int argc, char *argv[]) {

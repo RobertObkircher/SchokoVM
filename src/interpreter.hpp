@@ -2,6 +2,7 @@
 #define SCHOKOVM_INTERPRETER_HPP
 
 #include <vector>
+#include <memory>
 #include <stack>
 #include "classfile.hpp"
 
@@ -12,7 +13,7 @@ struct Frame {
     std::vector<u4> locals;
     std::stack<u8> stack;
 
-    // TODO???
+    // TODO the runtime access pool?
     // void *constant_pool;
 
     /** the calling/previous frame */
@@ -25,6 +26,7 @@ struct Frame {
 };
 
 /**
+ * TODO ???
  * https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-2.html#jvms-2.5.4
  * https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.1
  */
@@ -41,6 +43,6 @@ struct Stack {
     std::unique_ptr<Frame> current_frame;
 };
 
-int interpret(const std::vector<ClassFile> &class_files, ssize_t main_class_index);
+int interpret(const std::vector<ClassFile> &class_files, size_t main_class_index);
 
 #endif //SCHOKOVM_INTERPRETER_HPP

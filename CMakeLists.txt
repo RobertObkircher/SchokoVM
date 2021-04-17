@@ -18,6 +18,7 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
     add_compile_options(
             -Wall -Wextra -pedantic
 #            -Wold-style-cast
+            -Wdouble-promotion -Wformat=2 -Wundef -fno-common -Wconversion
             -Wno-nullability-extension
             -fno-common
             -fsanitize=address

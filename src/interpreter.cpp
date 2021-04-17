@@ -1,8 +1,8 @@
 #include "interpreter.hpp"
 
 #include <algorithm>
-#include <string>
 #include <iostream>
+#include <string>
 #include "opcodes.hpp"
 
 static const u2 MAIN_ACCESS_FLAGS = (static_cast<u2>(FieldInfoAccessFlags::ACC_PUBLIC) |
@@ -10,13 +10,13 @@ static const u2 MAIN_ACCESS_FLAGS = (static_cast<u2>(FieldInfoAccessFlags::ACC_P
 static const auto MAIN_NAME = "main";
 static const auto MAIN_DESCRIPTOR = "([Ljava/lang/String;)V";
 
-static ssize_t execute_instruction(Frame &frame, const std::vector<u1> &code, ssize_t pc);
+static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, size_t pc, bool &shouldExit);
 
-static ssize_t execute_comparison(const std::vector<u1> &code, ssize_t pc, bool condition);
+static size_t execute_comparison(const std::vector<u1> &code, size_t pc, bool condition);
 
-static ssize_t goto_(const std::vector<u1> &code, ssize_t pc);
+static size_t goto_(const std::vector<u1> &code, size_t pc);
 
-int interpret(const std::vector<ClassFile> &class_files, ssize_t main_class_index) {
+int interpret(const std::vector<ClassFile> &class_files, size_t main_class_index) {
     // 1. Find the main method
     const ClassFile &main = class_files[main_class_index];
     auto main_method_iter = std::find_if(main.methods.begin(), main.methods.end(),
@@ -39,10 +39,14 @@ int interpret(const std::vector<ClassFile> &class_files, ssize_t main_class_inde
     std::unique_ptr<Frame> p(new Frame(main, code.max_locals, nullptr));
     stack.current_frame = std::move(p);
 
-    ssize_t pc = 0;
-    do {
-        pc = execute_instruction(*stack.current_frame, code.code, pc);
-    } while (pc >= 0);
+    size_t pc = 0;
+    bool shouldExit = false;
+    while (true) {
+        pc = execute_instruction(*stack.current_frame, code.code, pc, shouldExit);
+        if (shouldExit) {
+            break;
+        }
+    }
 
     // print exit code
     if (stack.current_frame->stack.empty()) {
@@ -52,15 +56,16 @@ int interpret(const std::vector<ClassFile> &class_files, ssize_t main_class_inde
     }
 }
 
-static ssize_t execute_instruction(Frame &frame, const std::vector<u1> &code, ssize_t pc) {
+static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, size_t pc, bool &shouldExit) {
     auto opcode = static_cast<OpCodes>(code[pc]);
+    // TODO implement remaining opcodes. The ones that are currently commented/missing out have no test coverage whatsoever
     switch (opcode) {
         /* ======================= Constants ======================= */
         case OpCodes::nop:
             break;
 //        case OpCodes::aconst_null:
 //            // TODO what is NULL?
-//            frame.stack_push(0);
+//            frame.stack_push(nullptr);
 //            break;
         case OpCodes::iconst_m1:
         case OpCodes::iconst_0:
@@ -294,7 +299,8 @@ static ssize_t execute_instruction(Frame &frame, const std::vector<u1> &code, ss
         case OpCodes::goto_:
             return goto_(code, pc);
         case OpCodes::return_:
-            return -1;
+            shouldExit = -1;
+            break;
 
 
             /* ======================= References ======================= */
@@ -306,7 +312,8 @@ static ssize_t execute_instruction(Frame &frame, const std::vector<u1> &code, ss
             // TODO this is hardcoded for now
             if (method.class_->name->value == "java/lang/System" && method.name_and_type->name->value == "exit" &&
                 method.name_and_type->descriptor->value == "(I)V") {
-                return -1;
+                shouldExit = true;
+                return pc + 3;
             } else {
                 throw std::runtime_error("Unimplemented invokestatic");
             }
@@ -321,7 +328,7 @@ static ssize_t execute_instruction(Frame &frame, const std::vector<u1> &code, ss
     return pc + 1;
 }
 
-static ssize_t execute_comparison(const std::vector<u1> &code, ssize_t pc, bool condition) {
+static size_t execute_comparison(const std::vector<u1> &code, size_t pc, bool condition) {
     if (condition) {
         return goto_(code, pc);
     } else {
@@ -329,7 +336,7 @@ static ssize_t execute_comparison(const std::vector<u1> &code, ssize_t pc, bool 
     }
 }
 
-static ssize_t goto_(const std::vector<u1> &code, ssize_t pc) {
+static size_t goto_(const std::vector<u1> &code, size_t pc) {
     u2 offset_u = static_cast<u2>(code[pc + 1] << 8) | static_cast<u2>(code[pc + 2]);
     const s2 offset = reinterpret_cast<s2 &>(offset_u);
     // TODO test negative offset
