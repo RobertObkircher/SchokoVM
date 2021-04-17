@@ -266,7 +266,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
             auto b = frame.stack_pop().s8();
             auto a = frame.stack_pop().s8();
             s8 diff = a - b;
-            frame.stack_push(std::clamp(diff, -1LL, 1LL));
+            frame.stack_push(std::clamp(diff, static_cast<s8>(-1), static_cast<s8>(1)));
             break;
         }
         case OpCodes::ifeq:
