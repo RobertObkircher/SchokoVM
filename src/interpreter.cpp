@@ -1,8 +1,9 @@
 #include "interpreter.hpp"
 
 #include <algorithm>
-#include <iostream>
+#include <limits>
 #include <string>
+#include <type_traits>
 #include "opcodes.hpp"
 #include "future.hpp"
 
@@ -16,6 +17,33 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
 static size_t execute_comparison(const std::vector<u1> &code, size_t pc, bool condition);
 
 static size_t goto_(const std::vector<u1> &code, size_t pc);
+
+template<typename T>
+static inline T add_overflow(T a, T b) {
+    // C++20 requires 2's complement for signed integers
+    return future::bit_cast<T>(
+            future::bit_cast<std::make_unsigned_t<T>>(a) + future::bit_cast<std::make_unsigned_t<T>>(b)
+    );
+}
+
+
+template<typename T>
+static inline T sub_overflow(T a, T b) {
+    // C++20 requires 2's complement for signed integers
+    if (b == std::numeric_limits<T>::min()) {
+        // the most negative number would overflow when changing the sign
+        return future::bit_cast<T>(
+                // a - (b + 1) = a - b - 1
+                future::bit_cast<std::make_unsigned_t<T>>(a) +
+                future::bit_cast<std::make_unsigned_t<T>>(-(b + 1)) +
+                future::bit_cast<std::make_unsigned_t<T>>(1)
+        );
+    } else {
+        return future::bit_cast<T>(
+                future::bit_cast<std::make_unsigned_t<T>>(a) + future::bit_cast<std::make_unsigned_t<T>>(-b)
+        );
+    }
+}
 
 int interpret(const std::vector<ClassFile> &class_files, size_t main_class_index) {
     // 1. Find the main method
@@ -129,7 +157,11 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         }
 
             /* ======================= Loads ======================= */
-//        case OpCodes::iload: {
+        case OpCodes::iload: {
+            auto local = code[pc + 1];
+            frame.stack_push(frame.locals[local].u4());
+            break;
+        }
         case OpCodes::fload: {
             auto local = code[pc + 1];
             frame.stack_push(frame.locals[local].float_());
@@ -194,31 +226,46 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::iadd: {
             auto a = frame.stack_pop().s4();
             auto b = frame.stack_pop().s4();
-            frame.stack_push(a + b);
+            frame.stack_push(add_overflow(a, b));
             break;
         }
         case OpCodes::ladd: {
             auto a = frame.stack_pop().s8();
             auto b = frame.stack_pop().s8();
-            frame.stack_push(a + b);
+            frame.stack_push(add_overflow(a, b));
             break;
         }
         case OpCodes::isub: {
             auto b = frame.stack_pop().s4();
             auto a = frame.stack_pop().s4();
-            frame.stack_push(a - b);
+            auto result = sub_overflow(a, b);
+            frame.stack_push(result);
             break;
         }
         case OpCodes::imul: {
             auto a = frame.stack_pop().s4();
             auto b = frame.stack_pop().s4();
-            frame.stack_push(a * b);
+            u4 a_abs = static_cast<u4>(std::abs(a));
+            u4 b_abs = static_cast<u4>(std::abs(b));
+            char minus = ((a < 0) ^ (b < 0)) ? -1 : 1;
+            auto result = static_cast<s4>(a_abs * b_abs);
+            // TODO:
+            // "If overflow occurs, then the sign of the result may not be the same
+            // as the sign of the mathematical multiplication of the two values."
+            frame.stack_push(minus * result);
             break;
         }
         case OpCodes::lmul: {
-            auto a = frame.stack_pop().s4();
-            auto b = frame.stack_pop().s4();
-            frame.stack_push(a * b);
+            auto a = frame.stack_pop().s8();
+            auto b = frame.stack_pop().s8();
+            u8 a_abs = static_cast<u8>(std::abs(a));
+            u8 b_abs = static_cast<u8>(std::abs(b));
+            char minus = ((a < 0) ^ (b < 0)) ? -1 : 1;
+            auto result = static_cast<s8>(a_abs * b_abs);
+            // TODO:
+            // "If overflow occurs, then the sign of the result may not be the same
+            // as the sign of the mathematical multiplication of the two values."
+            frame.stack_push(minus * result);
             break;
         }
 
@@ -226,7 +273,8 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
             auto local = code[pc + 1];
             // TODO is correctly turned into signed?
             auto value = static_cast<s4>(static_cast<s2>(future::bit_cast<s1>(code[pc + 2])));
-            frame.locals[local].s4() = frame.locals[local].s4() + value;
+            auto result = add_overflow(frame.locals[local].s4(), value);
+            frame.locals[local].s4() = result;
             return pc + 3;
         }
 
