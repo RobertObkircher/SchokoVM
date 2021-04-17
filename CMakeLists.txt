@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 find_package(Java 1.8 REQUIRED)
 include(UseJava)
 
-find_package(libzip REQUIRED)
+find_package(libzip)
 
 # https://cmake.org/cmake/help/latest/command/add_compile_options.html
 if (MSVC)
@@ -46,7 +46,13 @@ add_executable(SchokoVM
         src/args.cpp src/args.hpp
         src/jar.cpp src/jar.hpp
         )
-target_link_libraries(SchokoVM libzip::zip)
+if(libzip_FOUND)
+    target_link_libraries(SchokoVM libzip::zip)
+else()
+    # hope that it's on the standard search paths
+    target_link_libraries(SchokoVM zip)
+endif()
+
 
 # Note: using glob to create this list is not recommended
 #file(GLOB JAVA_TEST_SOURCES CONFIGURE_DEPENDS tests/*.java)
