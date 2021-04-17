@@ -7,44 +7,44 @@
 #include "classfile.hpp"
 
 union JVMLocalValue {
-    JVMLocalValue() : u4_(0) {}
+    JVMLocalValue() : u4(0) {}
 
-    explicit JVMLocalValue(u4 v) : u4_(v) {}
+    explicit JVMLocalValue(::u4 v) : u4(v) {}
 
-    explicit JVMLocalValue(s4 v) : s4_(v) {}
+    explicit JVMLocalValue(::s4 v) : s4(v) {}
 
-    u4 u4_;
-    s4 s4_;
+    ::u4 u4;
+    ::s4 s4;
     float float_;
 };
 
 struct JVMStackValue {
     explicit JVMStackValue(float v) : value({.float_ = v}) {}
 
-    explicit JVMStackValue(u4 v) : value({.u4_ = v}) {}
+    explicit JVMStackValue(::u4 v) : value({.u4 = v}) {}
 
-    explicit JVMStackValue(s4 v) : value({.s4_ = v}) {}
+    explicit JVMStackValue(::s4 v) : value({.s4 = v}) {}
 
-    explicit JVMStackValue(u8 v) : value({.u8_ = v}) {}
+    explicit JVMStackValue(::u8 v) : value({.u8 = v}) {}
 
-    explicit JVMStackValue(s8 v) : value({.s8_ = v}) {}
+    explicit JVMStackValue(::s8 v) : value({.s8 = v}) {}
 
     [[nodiscard]] inline const float &float_() const noexcept { return value.float_; }
 
-    [[nodiscard]] inline const u4 &u4_() const noexcept { return value.u4_; }
+    [[nodiscard]] inline const ::u4 &u4() const noexcept { return value.u4; }
 
-    [[nodiscard]] inline const s4 &s4_() const noexcept { return value.s4_; }
+    [[nodiscard]] inline const ::s4 &s4() const noexcept { return value.s4; }
 
-    [[nodiscard]] inline const u8 &u8_() const noexcept { return value.u8_; }
+    [[nodiscard]] inline const ::u8 &u8() const noexcept { return value.u8; }
 
-    [[nodiscard]] inline const s8 &s8_() const noexcept { return value.s8_; }
+    [[nodiscard]] inline const ::s8 &s8() const noexcept { return value.s8; }
 
 private:
     union {
-        u4 u4_;
-        s4 s4_;
-        u8 u8_;
-        s8 s8_;
+        ::u4 u4;
+        ::s4 s4;
+        ::u8 u8;
+        ::s8 s8;
         float float_;
 //        double double_;
     } value;
