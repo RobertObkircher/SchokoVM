@@ -6,7 +6,21 @@
 #include <stack>
 #include "classfile.hpp"
 
+union JVMLocalValue {
+    JVMLocalValue() : u4_(0) {}
+
+    explicit JVMLocalValue(u4 v) : u4_(v) {}
+
+    explicit JVMLocalValue(s4 v) : s4_(v) {}
+
+    u4 u4_;
+    s4 s4_;
+    float float_;
+};
+
 struct JVMStackValue {
+    explicit JVMStackValue(float v) : value({.float_ = v}) {}
+
     explicit JVMStackValue(u4 v) : value({.u4_ = v}) {}
 
     explicit JVMStackValue(s4 v) : value({.s4_ = v}) {}
@@ -14,6 +28,8 @@ struct JVMStackValue {
     explicit JVMStackValue(u8 v) : value({.u8_ = v}) {}
 
     explicit JVMStackValue(s8 v) : value({.s8_ = v}) {}
+
+    [[nodiscard]] inline const float &float_() const noexcept { return value.float_; }
 
     [[nodiscard]] inline const u4 &u4_() const noexcept { return value.u4_; }
 
@@ -29,7 +45,7 @@ private:
         s4 s4_;
         u8 u8_;
         s8 s8_;
-//        float float_;
+        float float_;
 //        double double_;
     } value;
 };
@@ -38,7 +54,7 @@ private:
 struct Frame {
     const ClassFile &clas;
 
-    std::vector<u4> locals;
+    std::vector<JVMLocalValue> locals;
     std::vector<JVMStackValue> stack;
 
     // TODO the runtime access pool?
@@ -58,13 +74,25 @@ struct Frame {
         return v;
     }
 
-    void stack_push(s4 v);
+    void stack_push(float v) {
+        this->stack.emplace_back(JVMStackValue(v));
+    }
 
-    void stack_push(u4 v);
+    void stack_push(s4 v) {
+        this->stack.emplace_back(JVMStackValue(v));
+    }
 
-    void stack_push(u8 v);
+    void stack_push(u4 v) {
+        this->stack.emplace_back(JVMStackValue(v));
+    }
 
-    void stack_push(s8 v);
+    void stack_push(u8 v) {
+        this->stack.emplace_back(JVMStackValue(v));
+    }
+
+    void stack_push(s8 v) {
+        this->stack.emplace_back(JVMStackValue(v));
+    }
 };
 
 /**
