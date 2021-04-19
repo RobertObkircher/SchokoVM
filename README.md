@@ -1,6 +1,8 @@
 # SchokoVM
 
-A Java Bytecode interpreter.
+A Java Bytecode interpreter. 
+
+[![Run tests](https://github.com/RobertObkircher/SchokoVM/actions/workflows/tests.yml/badge.svg)](https://github.com/RobertObkircher/SchokoVM/actions/workflows/tests.yml)
 
 # GDB
 
