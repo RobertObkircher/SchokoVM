@@ -22,6 +22,8 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
             -Wdouble-promotion -Wformat=2 -Wundef -fno-common -Wconversion
             -Wno-nullability-extension
             -fno-common
+            # Catch signed integer overflows
+            -ftrapv
             -fsanitize=address
     )
     add_link_options(-fsanitize=address)
