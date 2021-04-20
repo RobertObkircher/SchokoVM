@@ -81,9 +81,10 @@ struct Frame {
     /** the calling/previous frame */
     std::unique_ptr<Frame> previous_frame;
 
-    Frame(const ClassFile &clas, size_t locals_count, std::unique_ptr<Frame> previous_frame)
+    Frame(const ClassFile &clas, size_t locals_count, size_t stack_count, std::unique_ptr<Frame> previous_frame)
             : clas(clas), previous_frame(std::move(previous_frame)) {
         this->locals.resize(locals_count);
+        this->stack.reserve(stack_count);
     }
 
     JVMStackValue stack_pop() {

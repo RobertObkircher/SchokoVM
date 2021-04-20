@@ -1,7 +1,3 @@
-//
-// Created by Niklas Mischkulnig on 17.04.21.
-//
-
 #ifndef SCHOKOVM_FUTURE_HPP
 #define SCHOKOVM_FUTURE_HPP
 

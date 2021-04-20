@@ -37,7 +37,7 @@ int interpret(const std::vector<ClassFile> &class_files, size_t main_class_index
     const auto &code = std::get<Code_attribute>(main_method.attributes[0].variant);
 
     Stack stack;
-    std::unique_ptr<Frame> p(new Frame(main, code.max_locals, nullptr));
+    std::unique_ptr<Frame> p(new Frame(main, code.max_locals, code.max_stack, nullptr));
     stack.current_frame = std::move(p);
 
     size_t pc = 0;
