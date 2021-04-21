@@ -58,6 +58,10 @@ struct Frame {
         this->stack.emplace_back(Value(v));
     }
 
+    void stack_push(double v) {
+        this->stack.emplace_back(Value(v));
+    }
+
     void stack_push(s4 v) {
         this->stack.emplace_back(Value(v));
     }

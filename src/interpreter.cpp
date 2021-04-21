@@ -27,7 +27,6 @@ static inline T add_overflow(T a, T b) {
     );
 }
 
-
 template<typename T>
 static inline T sub_overflow(T a, T b) {
     // C++20 requires 2's complement for signed integers
@@ -37,11 +36,11 @@ static inline T sub_overflow(T a, T b) {
                 // a - (b + 1) = a - b - 1
                 future::bit_cast<std::make_unsigned_t<T>>(a) +
                 future::bit_cast<std::make_unsigned_t<T>>(-(b + 1)) +
-                future::bit_cast<std::make_unsigned_t<T>>(1)
+                1
         );
     } else {
         return future::bit_cast<T>(
-                future::bit_cast<std::make_unsigned_t<T>>(a) + future::bit_cast<std::make_unsigned_t<T>>(-b)
+                future::bit_cast<std::make_unsigned_t<T>>(a) - future::bit_cast<std::make_unsigned_t<T>>(b)
         );
     }
 }
@@ -128,16 +127,16 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
 
         case OpCodes::lconst_0:
         case OpCodes::lconst_1:
-            frame.stack_push(opcode - static_cast<u1>(OpCodes::lconst_0));
+            frame.stack_push(static_cast<s8>(opcode - static_cast<u1>(OpCodes::lconst_0)));
             break;
         case OpCodes::fconst_0:
         case OpCodes::fconst_1:
         case OpCodes::fconst_2:
-            frame.stack_push(opcode - static_cast<u1>(OpCodes::fconst_0));
+            frame.stack_push(static_cast<float>(opcode - static_cast<u1>(OpCodes::fconst_0)));
             break;
         case OpCodes::dconst_0:
         case OpCodes::dconst_1:
-            frame.stack_push(opcode - static_cast<u1>(OpCodes::dconst_0));
+            frame.stack_push(static_cast<double>(opcode - static_cast<u1>(OpCodes::dconst_0)));
             break;
         case OpCodes::bipush: {
             s4 value = static_cast<s4>(static_cast<s2>(future::bit_cast<s1>(code[pc + 1])));
@@ -180,20 +179,20 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::iload: {
             auto local = code[pc + 1];
             frame.stack_push(frame.locals[local].u4);
-            break;
+            return pc + 2;
         }
         case OpCodes::fload: {
             auto local = code[pc + 1];
             frame.stack_push(frame.locals[local].float_);
-            break;
+            return pc + 2;
         }
         case OpCodes::lload: {
             auto index = code[pc + 1];
             auto high = frame.locals[index].u4;
             auto low = frame.locals[index + 1].u4;
-            s8 value = (static_cast<s8>(high) << 32) | low;
+            u8 value = (static_cast<u8>(high) << 32) | static_cast<u8>(low);
             frame.stack_push(value);
-            break;
+            return pc + 2;
         }
 //        case OpCodes::dload:
 //        case OpCodes::aload:
@@ -222,8 +221,8 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
             return pc + 2;
         case OpCodes::lstore: {
             auto value = frame.stack_pop().u8;
-            frame.locals[code[pc + 1]].u4 = (value >> 8) & 0xff;
-            frame.locals[code[pc + 1] + 1].u4 = value & 0xff;
+            frame.locals[code[pc + 1]].u4 = (value >> 32) & 0xffffffff;
+            frame.locals[code[pc + 1] + 1].u4 = value & 0xffffffff;
             return pc + 2;
         }
         case OpCodes::istore_0:
@@ -237,8 +236,8 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::lstore_2:
         case OpCodes::lstore_3: {
             auto value = frame.stack_pop().u8;
-            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0)].u4 = (value >> 32) & 0xffff;
-            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0) + 1].u4 = value & 0xffff;
+            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0)].u4 = (value >> 32) & 0xffffffff;
+            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0) + 1].u4 = value & 0xffffffff;
             break;
         }
 
@@ -253,13 +252,21 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::ladd: {
             auto b = frame.stack_pop().s8;
             auto a = frame.stack_pop().s8;
-            frame.stack_push(add_overflow(a, b));
+            auto result = add_overflow(a, b);
+            frame.stack_push(result);
             break;
         }
         case OpCodes::isub: {
             auto b = frame.stack_pop().s4;
             auto a = frame.stack_pop().s4;
             auto result = sub_overflow(a, b);
+            frame.stack_push(result);
+            break;
+        }
+        case OpCodes::lsub: {
+            s8 b = frame.stack_pop().s8;
+            s8 a = frame.stack_pop().s8;
+            s8 result = sub_overflow(a, b);
             frame.stack_push(result);
             break;
         }
@@ -372,14 +379,17 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
             if (method.class_->name->value == "java/lang/System" && method.name_and_type->name->value == "exit" &&
                 method.name_and_type->descriptor->value == "(I)V") {
                 shouldExit = true;
-                return pc + 3;
             } else if (method.name_and_type->name->value == "println" &&
                        method.name_and_type->descriptor->value == "(I)V") {
                 std::cout << frame.stack_pop().s4 << "\n";
-                return pc + 3;
+            } else if (method.name_and_type->name->value == "println" &&
+                       method.name_and_type->descriptor->value == "(J)V") {
+                std::cout << frame.stack_pop().s8 << "\n";
             } else {
-                throw std::runtime_error("Unimplemented invokestatic");
+                throw std::runtime_error("Unimplemented invokestatic: " + method.name_and_type->name->value +
+                                         method.name_and_type->descriptor->value);
             }
+            return pc + 3;
         }
 
         default:

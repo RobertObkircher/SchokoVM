@@ -63,8 +63,6 @@ set(JAVA_TEST_SOURCES
         tests/Empty.java
 #        tests/HelloWorld.java
 #        tests/KarelTheRobot.java
-        tests/UnitArithmeticInt.java
-        tests/UnitArithmeticOverflow.java
         tests/UnitBoolean.java
         )
 
@@ -73,6 +71,10 @@ set(JAVA_TEST_GENERATED_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticIntSub.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticIntMul.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticIntDiv.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongAdd.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongSub.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongMul.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongDiv.java
         )
 
 set(TESTS_GENERATED ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated)
