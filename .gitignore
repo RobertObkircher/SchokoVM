@@ -4,5 +4,6 @@
 /cmake-build-release-coverage
 /Testing
 /tests-generated/out/
+/tests-generated/Generator.class
 
 /build

@@ -69,11 +69,19 @@ set(JAVA_TEST_GENERATED_SOURCES
         tests-generated/out/ArithmeticIntDiv.java
         )
 
+set(TESTS_GENERATED ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated)
+
+add_custom_command(
+        OUTPUT ${TESTS_GENERATED}/Generator.class
+        COMMAND ${Java_JAVAC_EXECUTABLE} ${TESTS_GENERATED}/Generator.java
+        DEPENDS ${TESTS_GENERATED}/Generator.java
+    )
+
 add_custom_command(
         OUTPUT ${JAVA_TEST_GENERATED_SOURCES}
-        COMMAND java ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/Generator.java ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out
-        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/Generator.java
-        )
+        COMMAND ${Java_JAVA_EXECUTABLE} -classpath ${TESTS_GENERATED}/ Generator ${TESTS_GENERATED}/out
+        DEPENDS ${TESTS_GENERATED}/Generator.class
+    )
 
 # https://cmake.org/cmake/help/latest/module/UseJava.html
 add_jar(tests ${JAVA_TEST_SOURCES} ${JAVA_TEST_GENERATED_SOURCES})
