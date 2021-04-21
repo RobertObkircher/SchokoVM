@@ -3,8 +3,10 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.function.Consumer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Random;
 import java.util.List;
 
@@ -13,7 +15,7 @@ public class Generator {
     public static final String END_MAIN =  "    }";
 
     public static void main(String[] args) {
-        Path path = Path.of(args[0]);
+        Path path = Paths.get(args[0]);
         path.toFile().mkdirs();
 
         // Split into 4 files so that it is easier to see if only one of them fails
@@ -36,7 +38,7 @@ public class Generator {
     }
 
     public static void generateArithmeticInt(PrintWriter w, String op1) {
-        ArrayList<Integer> numbers = new ArrayList<>(List.of(
+        List<Integer> numbers = new ArrayList<>(Arrays.asList(new Integer[]{
             0, -1, -2, 1, 2,
             2147483647, 2147483646,
             -2147483648, -2147483647,
@@ -44,7 +46,7 @@ public class Generator {
             322, -322,
             2314908, -2314908,
             231490893, -194322323
-        ));
+        }));
 
         Random random = new Random(32498); // fixed seed
         for (int i = 0; i < 20; ++i) {
