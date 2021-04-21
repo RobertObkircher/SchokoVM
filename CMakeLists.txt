@@ -62,8 +62,21 @@ set(JAVA_TEST_SOURCES
         tests/KarelTheRobot.java
         )
 
+set(JAVA_TEST_GENERATED_SOURCES
+        tests-generated/out/ArithmeticIntAdd.java
+        tests-generated/out/ArithmeticIntSub.java
+        tests-generated/out/ArithmeticIntMul.java
+        tests-generated/out/ArithmeticIntDiv.java
+        )
+
+add_custom_command(
+        OUTPUT ${JAVA_TEST_GENERATED_SOURCES}
+        COMMAND java ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/Generator.java ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/Generator.java
+        )
+
 # https://cmake.org/cmake/help/latest/module/UseJava.html
-add_jar(tests ${JAVA_TEST_SOURCES})
+add_jar(tests ${JAVA_TEST_SOURCES} ${JAVA_TEST_GENERATED_SOURCES})
 add_dependencies(SchokoVM tests)
 
 enable_testing()
@@ -74,6 +87,6 @@ function(do_test path)
     add_test(NAME ${name} COMMAND sh "${CMAKE_SOURCE_DIR}/compare.sh" ${Java_JAVA_EXECUTABLE} ${name})
 endfunction(do_test)
 
-foreach (source ${JAVA_TEST_SOURCES})
+foreach (source ${JAVA_TEST_SOURCES} ${JAVA_TEST_GENERATED_SOURCES})
     do_test(${source})
 endforeach ()

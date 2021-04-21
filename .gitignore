@@ -3,6 +3,6 @@
 /cmake-build-release
 /cmake-build-release-coverage
 /Testing
-/tests/*.class
+/tests-generated/out/
 
 /build
