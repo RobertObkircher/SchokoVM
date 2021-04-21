@@ -76,7 +76,6 @@ add_custom_command(
         COMMAND ${Java_JAVAC_EXECUTABLE} ${TESTS_GENERATED}/Generator.java
         COMMAND ${Java_JAVA_EXECUTABLE} -classpath ${TESTS_GENERATED}/ Generator ${TESTS_GENERATED}/out
         DEPENDS ${TESTS_GENERATED}/Generator.java
-        COMMAND ${Java_JAVAC_EXECUTABLE} ${TESTS_GENERATED}/Generator.java
         VERBATIM
 )
 
