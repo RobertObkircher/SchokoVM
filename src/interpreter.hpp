@@ -3,7 +3,6 @@
 
 #include <vector>
 #include <memory>
-#include <stack>
 #include "classfile.hpp"
 
 union Value {
@@ -79,14 +78,11 @@ struct Frame {
     }
 };
 
-/**
- * TODO ???
- * https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-2.html#jvms-2.5.4
- * https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.1
- */
-struct MethodArea {
-    // a map (class) -> (runtime constant pool, data...)
-};
+//struct MethodArea {
+//    // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-2.html#jvms-2.5.4
+//    // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.1
+//    //  a map (class) -> (runtime constant pool, data...)
+//};
 
 //struct Heap {
 //  would be needed for GC?

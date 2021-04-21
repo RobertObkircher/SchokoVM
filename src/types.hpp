@@ -13,4 +13,6 @@ typedef uint16_t u2;
 typedef uint32_t u4;
 typedef uint64_t u8;
 
+#define U4_BIT_MASK 0xffffffff
+
 #endif //SCHOKOVM_TYPES_HPP

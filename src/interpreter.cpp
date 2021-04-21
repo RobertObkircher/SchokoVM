@@ -60,7 +60,6 @@ static inline T div_overflow(T dividend, T divisor) {
         return dividend;
     }
     // TODO test rounding
-    // C++20 requires 2's complement for signed integers
     return dividend / divisor;
 }
 
@@ -148,7 +147,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
             frame.stack_push(static_cast<s4>(future::bit_cast<s2>(value)));
             return pc + 3;
         }
-// TODO the following actually read from the runtime constant pool
+// TODO the following instructions actually read from the runtime constant pool
         case OpCodes::ldc: {
             auto index = code[pc + 1];
             auto &entry = frame.clas.constant_pool.table[index];
@@ -221,8 +220,8 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
             return pc + 2;
         case OpCodes::lstore: {
             auto value = frame.stack_pop().u8;
-            frame.locals[code[pc + 1]].u4 = (value >> 32) & 0xffffffff;
-            frame.locals[code[pc + 1] + 1].u4 = value & 0xffffffff;
+            frame.locals[code[pc + 1]].u4 = (value >> 32) & U4_BIT_MASK;
+            frame.locals[code[pc + 1] + 1].u4 = value & U4_BIT_MASK;
             return pc + 2;
         }
         case OpCodes::istore_0:
@@ -236,8 +235,8 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::lstore_2:
         case OpCodes::lstore_3: {
             auto value = frame.stack_pop().u8;
-            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0)].u4 = (value >> 32) & 0xffffffff;
-            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0) + 1].u4 = value & 0xffffffff;
+            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0)].u4 = (value >> 32) & U4_BIT_MASK;
+            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0) + 1].u4 = value & U4_BIT_MASK;
             break;
         }
 
@@ -266,28 +265,24 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::lsub: {
             s8 b = frame.stack_pop().s8;
             s8 a = frame.stack_pop().s8;
-            s8 result = sub_overflow(a, b);
-            frame.stack_push(result);
+            frame.stack_push(sub_overflow(a, b));
             break;
         }
         case OpCodes::imul: {
             auto a = frame.stack_pop().s4;
             auto b = frame.stack_pop().s4;
-            auto result = mul_overflow(a, b);
-            frame.stack_push(result);
+            frame.stack_push(mul_overflow(a, b));
             break;
         }
         case OpCodes::lmul: {
             auto a = frame.stack_pop().s8;
             auto b = frame.stack_pop().s8;
-            auto result = mul_overflow(a, b);
-            frame.stack_push(result);
+            frame.stack_push(mul_overflow(a, b));
             break;
         }
 
         case OpCodes::iinc: {
             auto local = code[pc + 1];
-            // TODO is correctly turned into signed?
             auto value = static_cast<s4>(static_cast<s2>(future::bit_cast<s1>(code[pc + 2])));
             auto result = add_overflow(frame.locals[local].s4, value);
             frame.locals[local].s4 = result;
@@ -301,8 +296,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
                 // TODO ArithmeticException
                 throw std::runtime_error("Division by 0");
             }
-            auto result = div_overflow(dividend, divisor);
-            frame.stack_push(result);
+            frame.stack_push(div_overflow(dividend, divisor));
             break;
         }
         case OpCodes::ldiv: {
@@ -312,8 +306,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
                 // TODO ArithmeticException
                 throw std::runtime_error("Division by 0");
             }
-            auto result = div_overflow(dividend, divisor);
-            frame.stack_push(result);
+            frame.stack_push(div_overflow(dividend, divisor));
             break;
         }
 
@@ -356,10 +349,10 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
             return execute_comparison(code, pc, frame.stack_pop().s4 < frame.stack_pop().s4);
         case OpCodes::if_icmple:
             return execute_comparison(code, pc, frame.stack_pop().s4 >= frame.stack_pop().s4);
-        case OpCodes::if_acmpeq:
-            return execute_comparison(code, pc, frame.stack_pop().u8 == frame.stack_pop().u8);
-        case OpCodes::if_acmpne:
-            return execute_comparison(code, pc, frame.stack_pop().u8 != frame.stack_pop().u8);
+//        case OpCodes::if_acmpeq:
+//            return execute_comparison(code, pc, frame.stack_pop().u8 == frame.stack_pop().u8);
+//        case OpCodes::if_acmpne:
+//            return execute_comparison(code, pc, frame.stack_pop().u8 != frame.stack_pop().u8);
 
             /* ======================= Control =======================*/
         case OpCodes::goto_:
@@ -410,7 +403,7 @@ static size_t execute_comparison(const std::vector<u1> &code, size_t pc, bool co
 }
 
 static size_t goto_(const std::vector<u1> &code, size_t pc) {
-    u2 offset_u = static_cast<u2>(static_cast<u2>(code[pc + 1]) << 8 | code[pc + 2]);
+    u2 offset_u = static_cast<u2>(static_cast<u2>(code[pc + 1]) << 8 | static_cast<u2>(code[pc + 2]));
     auto offset = future::bit_cast<s2>(offset_u);
     return static_cast<size_t>(static_cast<long>(pc) + offset);
 }
