@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <limits>
 #include <string>
+#include <iostream>
 #include <type_traits>
 #include "opcodes.hpp"
 #include "future.hpp"
@@ -43,6 +44,25 @@ static inline T sub_overflow(T a, T b) {
                 future::bit_cast<std::make_unsigned_t<T>>(a) + future::bit_cast<std::make_unsigned_t<T>>(-b)
         );
     }
+}
+
+template<typename T>
+static inline T mul_overflow(T a, T b) {
+    // C++20 requires 2's complement for signed integers
+    auto a_u = static_cast<std::make_unsigned_t<T>>(a);
+    auto b_u = static_cast<std::make_unsigned_t<T>>(b);
+    auto result = static_cast<T>(a_u * b_u);
+    return result;
+}
+
+template<typename T>
+static inline T div_overflow(T dividend, T divisor) {
+    if (dividend == std::numeric_limits<T>::min() && divisor == -1) {
+        return dividend;
+    }
+    // TODO test rounding
+    // C++20 requires 2's complement for signed integers
+    return dividend / divisor;
 }
 
 int interpret(const std::vector<ClassFile> &class_files, size_t main_class_index) {
@@ -120,15 +140,15 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
             frame.stack_push(opcode - static_cast<u1>(OpCodes::dconst_0));
             break;
         case OpCodes::bipush: {
-            auto value = static_cast<s4>(code[pc + 1]);
+            s4 value = static_cast<s4>(static_cast<s2>(future::bit_cast<s1>(code[pc + 1])));
             frame.stack_push(value);
             return pc + 2;
         }
-//        case OpCodes::sipush: {
-//            auto value = static_cast<u2>(code[pc + 1] << 8) | static_cast<u2>(code[pc + 2]);
-//            frame.stack_push(value);
-//            return pc + 2;
-//        }
+        case OpCodes::sipush: {
+            u2 value = static_cast<u2>(code[pc + 1] << 8) | static_cast<u2>(code[pc + 2]);
+            frame.stack_push(static_cast<s4>(future::bit_cast<s2>(value)));
+            return pc + 3;
+        }
 // TODO the following actually read from the runtime constant pool
         case OpCodes::ldc: {
             auto index = code[pc + 1];
@@ -224,14 +244,15 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
 
             /* ======================= Math =======================*/
         case OpCodes::iadd: {
-            auto a = frame.stack_pop().s4();
             auto b = frame.stack_pop().s4();
-            frame.stack_push(add_overflow(a, b));
+            auto a = frame.stack_pop().s4();
+            auto result = add_overflow(a, b);
+            frame.stack_push(result);
             break;
         }
         case OpCodes::ladd: {
-            auto a = frame.stack_pop().s8();
             auto b = frame.stack_pop().s8();
+            auto a = frame.stack_pop().s8();
             frame.stack_push(add_overflow(a, b));
             break;
         }
@@ -245,27 +266,15 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::imul: {
             auto a = frame.stack_pop().s4();
             auto b = frame.stack_pop().s4();
-            u4 a_abs = static_cast<u4>(std::abs(a));
-            u4 b_abs = static_cast<u4>(std::abs(b));
-            char minus = ((a < 0) ^ (b < 0)) ? -1 : 1;
-            auto result = static_cast<s4>(a_abs * b_abs);
-            // TODO:
-            // "If overflow occurs, then the sign of the result may not be the same
-            // as the sign of the mathematical multiplication of the two values."
-            frame.stack_push(minus * result);
+            auto result = mul_overflow(a, b);
+            frame.stack_push(result);
             break;
         }
         case OpCodes::lmul: {
             auto a = frame.stack_pop().s8();
             auto b = frame.stack_pop().s8();
-            u8 a_abs = static_cast<u8>(std::abs(a));
-            u8 b_abs = static_cast<u8>(std::abs(b));
-            char minus = ((a < 0) ^ (b < 0)) ? -1 : 1;
-            auto result = static_cast<s8>(a_abs * b_abs);
-            // TODO:
-            // "If overflow occurs, then the sign of the result may not be the same
-            // as the sign of the mathematical multiplication of the two values."
-            frame.stack_push(minus * result);
+            auto result = mul_overflow(a, b);
+            frame.stack_push(result);
             break;
         }
 
@@ -279,26 +288,25 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         }
 
         case OpCodes::idiv: {
-            // TODO ensure overflow/...
             auto divisor = frame.stack_pop().s4();
             auto dividend = frame.stack_pop().s4();
             if (divisor == 0) {
                 // TODO ArithmeticException
                 throw std::runtime_error("Division by 0");
             }
-            // TODO test rounding
-            frame.stack_push(dividend / divisor);
+            auto result = div_overflow(dividend, divisor);
+            frame.stack_push(result);
             break;
         }
         case OpCodes::ldiv: {
-            auto divisor = frame.stack_pop().s4();
-            auto dividend = frame.stack_pop().s4();
+            auto divisor = frame.stack_pop().s8();
+            auto dividend = frame.stack_pop().s8();
             if (divisor == 0) {
                 // TODO ArithmeticException
                 throw std::runtime_error("Division by 0");
             }
-            // TODO test rounding
-            frame.stack_push(dividend / divisor);
+            auto result = div_overflow(dividend, divisor);
+            frame.stack_push(result);
             break;
         }
 
@@ -364,6 +372,10 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
             if (method.class_->name->value == "java/lang/System" && method.name_and_type->name->value == "exit" &&
                 method.name_and_type->descriptor->value == "(I)V") {
                 shouldExit = true;
+                return pc + 3;
+            } else if (method.name_and_type->name->value == "println" &&
+                       method.name_and_type->descriptor->value == "(I)V") {
+                std::cout << frame.stack_pop().s4() << "\n";
                 return pc + 3;
             } else {
                 throw std::runtime_error("Unimplemented invokestatic");

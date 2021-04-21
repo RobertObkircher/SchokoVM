@@ -53,7 +53,7 @@ public class Generator {
             numbers.add(random.nextInt());
         }
 
-        w.println("public static void printInt(int i) { System.out.println(i); } ");
+        w.println("public static void println(int i) { System.out.println(i); } ");
 
         w.println(BEGIN_MAIN);
 
@@ -68,7 +68,7 @@ public class Generator {
                 if (op != "/" || j != 0) {
                     w.println("        b = " + j + ";");
                     w.println("        c = a " + op + " b;");
-                    w.println("        printInt(c);");
+                    w.println("        println(c);");
                 }
             }
         }
