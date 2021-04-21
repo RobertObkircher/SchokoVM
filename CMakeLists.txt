@@ -46,12 +46,12 @@ add_executable(SchokoVM
         src/args.cpp src/args.hpp
         src/jar.cpp src/jar.hpp
         )
-if(libzip_FOUND)
+if (libzip_FOUND)
     target_link_libraries(SchokoVM libzip::zip)
-else()
+else ()
     # hope that it's on the standard search paths
     target_link_libraries(SchokoVM zip)
-endif()
+endif ()
 
 
 # Note: using glob to create this list is not recommended
@@ -63,25 +63,22 @@ set(JAVA_TEST_SOURCES
         )
 
 set(JAVA_TEST_GENERATED_SOURCES
-        tests-generated/out/ArithmeticIntAdd.java
-        tests-generated/out/ArithmeticIntSub.java
-        tests-generated/out/ArithmeticIntMul.java
-        tests-generated/out/ArithmeticIntDiv.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticIntAdd.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticIntSub.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticIntMul.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticIntDiv.java
         )
 
 set(TESTS_GENERATED ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated)
 
 add_custom_command(
-        OUTPUT ${TESTS_GENERATED}/Generator.class
+        OUTPUT ${JAVA_TEST_GENERATED_SOURCES} ${TESTS_GENERATED}/Generator.class
         COMMAND ${Java_JAVAC_EXECUTABLE} ${TESTS_GENERATED}/Generator.java
-        DEPENDS ${TESTS_GENERATED}/Generator.java
-    )
-
-add_custom_command(
-        OUTPUT ${JAVA_TEST_GENERATED_SOURCES}
         COMMAND ${Java_JAVA_EXECUTABLE} -classpath ${TESTS_GENERATED}/ Generator ${TESTS_GENERATED}/out
-        DEPENDS ${TESTS_GENERATED}/Generator.class
-    )
+        DEPENDS ${TESTS_GENERATED}/Generator.java
+        COMMAND ${Java_JAVAC_EXECUTABLE} ${TESTS_GENERATED}/Generator.java
+        VERBATIM
+)
 
 # https://cmake.org/cmake/help/latest/module/UseJava.html
 add_jar(tests ${JAVA_TEST_SOURCES} ${JAVA_TEST_GENERATED_SOURCES})
