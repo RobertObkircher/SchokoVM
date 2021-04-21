@@ -42,7 +42,7 @@ public class Generator {
         }
     }
 
-    public static void generateArithmeticInt(PrintWriter w, String op1) {
+    public static void generateArithmeticInt(PrintWriter w, String op) {
         List<Integer> numbers = new ArrayList<>(Arrays.asList(new Integer[]{
             0, -1, -2, 1, 2,
             2147483647, 2147483646,
@@ -65,7 +65,6 @@ public class Generator {
         // we use variables to make sure that javac doesn't fold literals
         w.println("        int a, b, c;");
 
-        for (String op : new String[] {"+", "-", "*", "/"}) {
         for (int i : numbers) {
             w.println("        a = " + i + "; //////////////////////////////");
             for (int j : numbers) {
@@ -77,11 +76,10 @@ public class Generator {
                 }
             }
         }
-        }
         w.println(END_MAIN);
     }
 
-    public static void generateArithmeticLong(PrintWriter w, String op1) {
+    public static void generateArithmeticLong(PrintWriter w, String op) {
             List<Long> numbers = new ArrayList<>(Arrays.asList(new Long[]{
                 0L, -1L, -2L, 1L, 2L,
                 9223372036854775807L, 9223372036854775806L,
@@ -93,7 +91,7 @@ public class Generator {
             }));
 
             Random random = new Random(23148); // fixed seed
-            for (int i = 0; i < 10; ++i) {
+            for (int i = 0; i < 20; ++i) {
                 numbers.add(random.nextLong());
             }
 
@@ -104,7 +102,6 @@ public class Generator {
             // we use variables to make sure that javac doesn't fold literals
             w.println("        long a, b, c;");
 
-            for (String op : new String[] {"+", "-", "*", "/"}) {
             for (long i : numbers) {
                 w.println("        a = " + i + "L; //////////////////////////////");
                 for (long j : numbers) {
@@ -115,7 +112,6 @@ public class Generator {
                         w.println("        println(c);");
                     }
                 }
-            }
             }
             w.println(END_MAIN);
         }
