@@ -1,6 +1,8 @@
 #ifndef SCHOKOVM_OPCODES_HPP
 #define SCHOKOVM_OPCODES_HPP
 
+#include "types.hpp"
+
 /** https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-7.html */
 enum class OpCodes : u1 {
     // Constants
