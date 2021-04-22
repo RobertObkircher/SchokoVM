@@ -3,26 +3,31 @@
 
 #include <vector>
 #include <memory>
+#include "future.hpp"
 #include "classfile.hpp"
 
 union Value {
-    Value() : u8(0) {}
+    Value() : s8(0) {}
 
-    explicit Value(::u4 v) : u4(v) {}
+    // NOLINTNEXTLINE
+    Value(::u4 v) : s4(future::bit_cast<::s4>(v)) {}
 
-    explicit Value(::s4 v) : s4(v) {}
+    // NOLINTNEXTLINE
+    Value(::s4 v) : s4(v) {}
 
-    explicit Value(::u8 v) : u8(v) {}
+    // NOLINTNEXTLINE
+    Value(::u8 v) : s8(future::bit_cast<::s8>(v)) {}
 
-    explicit Value(::s8 v) : s8(v) {}
+    // NOLINTNEXTLINE
+    Value(::s8 v) : s8(v) {}
 
-    explicit Value(float v) : float_(v) {}
+    // NOLINTNEXTLINE
+    Value(float v) : float_(v) {}
 
-    explicit Value(double v) : double_(v) {}
+    // NOLINTNEXTLINE
+    Value(double v) : double_(v) {}
 
-    ::u4 u4;
     ::s4 s4;
-    ::u8 u8;
     ::s8 s8;
     float float_;
     double double_;

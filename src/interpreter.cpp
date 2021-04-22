@@ -167,7 +167,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
             /* ======================= Loads ======================= */
         case OpCodes::iload: {
             auto local = code[pc + 1];
-            frame.stack_push(frame.locals[local].u4);
+            frame.stack_push(frame.locals[local].s4);
             return pc + 2;
         }
         case OpCodes::fload: {
@@ -176,11 +176,9 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
             return pc + 2;
         }
         case OpCodes::lload: {
+            // In a slight derivation from the spec, longs are stored in a single local
             auto index = code[pc + 1];
-            auto high = frame.locals[index].u4;
-            auto low = frame.locals[index + 1].u4;
-            u8 value = (static_cast<u8>(high) << 32) | static_cast<u8>(low);
-            frame.stack_push(value);
+            frame.stack_push(frame.locals[index].s8);
             return pc + 2;
         }
 //        case OpCodes::dload:
@@ -189,7 +187,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::iload_1:
         case OpCodes::iload_2:
         case OpCodes::iload_3: {
-            auto value = frame.locals[opcode - static_cast<u1>(OpCodes::iload_0)].u4;
+            auto value = frame.locals[opcode - static_cast<u1>(OpCodes::iload_0)].s4;
             frame.stack_push(value);
             break;
         }
@@ -197,36 +195,35 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::lload_1:
         case OpCodes::lload_2:
         case OpCodes::lload_3: {
+            // In a slight derivation from the spec, longs are stored in a single local
             u1 index = opcode - static_cast<u1>(OpCodes::lload_0);
-            auto high = frame.locals[index].u4;
-            auto low = frame.locals[index + 1].u4;
-            frame.stack_push((static_cast<u8>(high) << 32) | low);
+            frame.stack_push(frame.locals[index].s8);
             break;
         }
 
             /* ======================= Stores ======================= */
         case OpCodes::istore:
-            frame.locals[code[pc + 1]].u4 = frame.stack_pop().u4;
+            frame.locals[code[pc + 1]] = {frame.stack_pop().s4};
             return pc + 2;
         case OpCodes::lstore: {
-            auto value = frame.stack_pop().u8;
-            frame.locals[code[pc + 1]].u4 = (value >> 32) & U4_BIT_MASK;
-            frame.locals[code[pc + 1] + 1].u4 = value & U4_BIT_MASK;
+            // In a slight derivation from the spec, longs are stored in a single local
+            auto value = frame.stack_pop().s8;
+            frame.locals[code[pc + 1]] = {value};
             return pc + 2;
         }
         case OpCodes::istore_0:
         case OpCodes::istore_1:
         case OpCodes::istore_2:
         case OpCodes::istore_3:
-            frame.locals[opcode - static_cast<u1>(OpCodes::istore_0)].u4 = frame.stack_pop().u4;
+            frame.locals[opcode - static_cast<u1>(OpCodes::istore_0)] = {frame.stack_pop().s4};
             break;
         case OpCodes::lstore_0:
         case OpCodes::lstore_1:
         case OpCodes::lstore_2:
         case OpCodes::lstore_3: {
-            auto value = frame.stack_pop().u8;
-            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0)].u4 = (value >> 32) & U4_BIT_MASK;
-            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0) + 1].u4 = value & U4_BIT_MASK;
+            // In a slight derivation from the spec, longs are stored in a single local
+            auto value = frame.stack_pop().s8;
+            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0)] = {value};
             break;
         }
 
@@ -275,7 +272,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
             auto local = code[pc + 1];
             auto value = static_cast<s4>(static_cast<s2>(future::bit_cast<s1>(code[pc + 2])));
             auto result = add_overflow(frame.locals[local].s4, value);
-            frame.locals[local].s4 = result;
+            frame.locals[local] = {result};
             return pc + 3;
         }
 
@@ -302,7 +299,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
 
             /* ======================= Conversions ======================= */
         case OpCodes::l2i: {
-            auto value = frame.stack_pop().s4;
+            auto value = static_cast<s4>(frame.stack_pop().s8);
             frame.stack_push(value);
             break;
         }
@@ -340,9 +337,9 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::if_icmple:
             return execute_comparison(code, pc, frame.stack_pop().s4 >= frame.stack_pop().s4);
 //        case OpCodes::if_acmpeq:
-//            return execute_comparison(code, pc, frame.stack_pop().u8 == frame.stack_pop().u8);
+//            return execute_comparison(code, pc, frame.stack_pop().u8() == frame.stack_pop().u8());
 //        case OpCodes::if_acmpne:
-//            return execute_comparison(code, pc, frame.stack_pop().u8 != frame.stack_pop().u8);
+//            return execute_comparison(code, pc, frame.stack_pop().u8() != frame.stack_pop().u8());
 
             /* ======================= Control =======================*/
         case OpCodes::goto_:
