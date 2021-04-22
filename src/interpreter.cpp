@@ -135,7 +135,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
             return pc + 2;
         }
         case OpCodes::sipush: {
-            u2 value = static_cast<u2>(code[pc + 1] << 8) | static_cast<u2>(code[pc + 2]);
+            u2 value = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
             frame.stack_push(static_cast<s4>(future::bit_cast<s2>(value)));
             return pc + 3;
         }
@@ -154,7 +154,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         }
 //        case OpCodes::ldc_w:
         case OpCodes::ldc2_w: {
-            size_t index = static_cast<u2>(code[pc + 1] << 8) | static_cast<u2>(code[pc + 2]);
+            size_t index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
             auto &entry = frame.clas.constant_pool.table[index];
             if (auto l = std::get_if<CONSTANT_Long_info>(&entry.variant)) {
                 frame.stack_push(l->value);
@@ -198,7 +198,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::lload_2:
         case OpCodes::lload_3: {
             // In a slight derivation from the spec, longs are stored in a single local
-            u1 index = opcode - static_cast<u1>(OpCodes::lload_0);
+            u1 index = static_cast<u1>(opcode - static_cast<u1>(OpCodes::lload_0));
             frame.stack_push(frame.locals[index].s8);
             break;
         }
@@ -310,9 +310,9 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::lcmp: {
             auto b = frame.stack_pop().s8;
             auto a = frame.stack_pop().s8;
-            if(a > b) {
+            if (a > b) {
                 frame.stack_push(1);
-            } else if(a == b) {
+            } else if (a == b) {
                 frame.stack_push(0);
             } else {
                 frame.stack_push(-1);
@@ -358,7 +358,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
 
             /* ======================= References ======================= */
         case OpCodes::invokestatic: {
-            size_t method_index = static_cast<u2>(code[pc + 1] << 8) | static_cast<u2>(code[pc + 2]);
+            size_t method_index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
             // TODO this is really an index into the run-time constant pool
             auto method = std::get<CONSTANT_Methodref_info>(frame.clas.constant_pool.table[method_index].variant);
 
@@ -397,7 +397,7 @@ static size_t execute_comparison(const std::vector<u1> &code, size_t pc, bool co
 }
 
 static size_t goto_(const std::vector<u1> &code, size_t pc) {
-    u2 offset_u = static_cast<u2>(static_cast<u2>(code[pc + 1]) << 8 | static_cast<u2>(code[pc + 2]));
+    u2 offset_u = static_cast<u2>((code[pc + 1]) << 8 | (code[pc + 2]));
     auto offset = future::bit_cast<s2>(offset_u);
     return static_cast<size_t>(static_cast<long>(pc) + offset);
 }
