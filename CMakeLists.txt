@@ -74,6 +74,8 @@ set(JAVA_TEST_GENERATED_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongSub.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongMul.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongDiv.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ComparisonsInt.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ComparisonsLong.java
         )
 
 set(TESTS_GENERATED ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated)

@@ -72,6 +72,8 @@ int interpret(const std::vector<ClassFile> &class_files, size_t main_class_index
     // TODO find the code attribute properly
     const auto &code = std::get<Code_attribute>(main_method.attributes[0].variant);
 
+    // TODO throw `code too large` when appropriate
+
     Stack stack;
     std::unique_ptr<Frame> p(new Frame(main, code.max_locals, code.max_stack, nullptr));
     stack.current_frame = std::move(p);
@@ -308,8 +310,13 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
         case OpCodes::lcmp: {
             auto b = frame.stack_pop().s8;
             auto a = frame.stack_pop().s8;
-            s8 diff = a - b;
-            frame.stack_push(std::clamp(diff, static_cast<s8>(-1), static_cast<s8>(1)));
+            if(a > b) {
+                frame.stack_push(1);
+            } else if(a == b) {
+                frame.stack_push(0);
+            } else {
+                frame.stack_push(-1);
+            }
             break;
         }
         case OpCodes::ifeq:
