@@ -30,19 +30,9 @@ static inline T add_overflow(T a, T b) {
 template<typename T>
 static inline T sub_overflow(T a, T b) {
     // C++20 requires 2's complement for signed integers
-    if (b == std::numeric_limits<T>::min()) {
-        // the most negative number would overflow when changing the sign
-        return future::bit_cast<T>(
-                // a - (b + 1) = a - b - 1
-                future::bit_cast<std::make_unsigned_t<T>>(a) +
-                future::bit_cast<std::make_unsigned_t<T>>(-(b + 1)) +
-                1
-        );
-    } else {
-        return future::bit_cast<T>(
-                future::bit_cast<std::make_unsigned_t<T>>(a) - future::bit_cast<std::make_unsigned_t<T>>(b)
-        );
-    }
+    return future::bit_cast<T>(
+            future::bit_cast<std::make_unsigned_t<T>>(a) - future::bit_cast<std::make_unsigned_t<T>>(b)
+    );
 }
 
 template<typename T>
