@@ -23,6 +23,14 @@ public class Generator {
         generate(path, "ArithmeticIntSub", w -> generateArithmeticInt(w, "-"));
         generate(path, "ArithmeticIntMul", w -> generateArithmeticInt(w, "*"));
         generate(path, "ArithmeticIntDiv", w -> generateArithmeticInt(w, "/"));
+
+        generate(path, "ArithmeticLongAdd", w -> generateArithmeticLong(w, "+"));
+        generate(path, "ArithmeticLongSub", w -> generateArithmeticLong(w, "-"));
+        generate(path, "ArithmeticLongMul", w -> generateArithmeticLong(w, "*"));
+        generate(path, "ArithmeticLongDiv", w -> generateArithmeticLong(w, "/"));
+
+        generate(path, "ComparisonsInt", w -> generateComparisons(w, false));
+        generate(path, "ComparisonsLong", w -> generateComparisons(w, true));
     }
 
     public static void generate(Path directory, String name, Consumer<PrintWriter> generator) {
@@ -37,7 +45,7 @@ public class Generator {
         }
     }
 
-    public static void generateArithmeticInt(PrintWriter w, String op1) {
+    public static void generateArithmeticInt(PrintWriter w, String op) {
         List<Integer> numbers = new ArrayList<>(Arrays.asList(new Integer[]{
             0, -1, -2, 1, 2,
             2147483647, 2147483646,
@@ -53,14 +61,13 @@ public class Generator {
             numbers.add(random.nextInt());
         }
 
-        w.println("public static void printInt(int i) { System.out.println(i); } ");
+        w.println("public static void println(int i) { System.out.println(i); } ");
 
         w.println(BEGIN_MAIN);
 
         // we use variables to make sure that javac doesn't fold literals
         w.println("        int a, b, c;");
 
-        for (String op : new String[] {"+", "-", "*", "/"}) {
         for (int i : numbers) {
             w.println("        a = " + i + "; //////////////////////////////");
             for (int j : numbers) {
@@ -68,8 +75,97 @@ public class Generator {
                 if (op != "/" || j != 0) {
                     w.println("        b = " + j + ";");
                     w.println("        c = a " + op + " b;");
-                    w.println("        printInt(c);");
+                    w.println("        println(c);");
                 }
+            }
+        }
+        w.println(END_MAIN);
+    }
+
+    public static void generateArithmeticLong(PrintWriter w, String op) {
+        List<Long> numbers = new ArrayList<>(Arrays.asList(new Long[]{
+            0L, -1L, -2L, 1L, 2L,
+            9223372036854775807L, 9223372036854775806L,
+            -9223372036854775808L, -9223372036854775807L,
+            127L, -128L,
+            322L, -322L,
+            2314908L, -2314908L,
+            231490893L, -194322323L
+        }));
+
+        Random random = new Random(23148); // fixed seed
+        for (int i = 0; i < 20; ++i) {
+            numbers.add(random.nextLong());
+        }
+
+        w.println("public static void println(long i) { System.out.println(i); } ");
+
+        w.println(BEGIN_MAIN);
+
+        // we use variables to make sure that javac doesn't fold literals
+        w.println("        long a, b, c;");
+
+        for (long i : numbers) {
+            w.println("        a = " + i + "L; //////////////////////////////");
+            for (long j : numbers) {
+                // TODO emit a try catch ArithmeticException instead
+                if (op != "/" || j != 0) {
+                    w.println("        b = " + j + "L;");
+                    w.println("        c = a " + op + " b;");
+                    w.println("        println(c);");
+                }
+            }
+        }
+        w.println(END_MAIN);
+    }
+
+    public static void generateComparisons(PrintWriter w, boolean useLong) {
+        List<Long> numbers = new ArrayList<>(Arrays.asList(new Long[]{
+            0L, -1L, -2L, 1L, 2L,
+            127L, -128L,
+            322L, -322L,
+            2314908L, -2314908L,
+            231490893L, -194322323L
+        }));
+        if(useLong){
+            numbers.add(9223372036854775807L);
+            numbers.add(9223372036854775806L);
+            numbers.add(-9223372036854775808L);
+            numbers.add(-9223372036854775807L);
+        } else {
+            numbers.add(2147483647L);
+            numbers.add(2147483646L);
+            numbers.add(-2147483648L);
+            numbers.add(-2147483647L);
+        }
+
+        Random random = new Random(23148); // fixed seed
+        for (int i = 0; i < 5; ++i) {
+            numbers.add(useLong ? random.nextLong() : (long) random.nextInt());
+        }
+
+        w.println("public static void println(int i) { System.out.println(i); } ");
+
+        w.println(BEGIN_MAIN);
+
+        // we use variables to make sure that javac doesn't fold literals
+        if(useLong){
+            w.println("        long a, b, c;");
+        } else {
+            w.println("        int a, b, c;");
+        }
+
+        String longPostfix = useLong ? "L" : "";
+
+        for (String op : new String[] {"==", ">=", "<=", "<", ">", "!="}) {
+        for (long i : numbers) {
+            w.println("        a = " + i + longPostfix + "; //////////////////////////////");
+            for (long j : numbers) {
+                w.println("        b = " + j + longPostfix + ";");
+                w.println("        if(a " + op + " b)");
+                w.println("          println(0);");
+                w.println("        else");
+                w.println("          println(1);");
             }
         }
         }

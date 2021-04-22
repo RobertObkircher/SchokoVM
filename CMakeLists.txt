@@ -17,9 +17,12 @@ if (MSVC)
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
     add_compile_options(
             -Wall -Wextra -pedantic
-            -Wold-style-cast
+#            -Wold-style-cast
+            -Wdouble-promotion -Wformat=2 -Wundef -fno-common -Wconversion
             -Wno-nullability-extension
             -fno-common
+            # Catch signed integer overflows
+            -ftrapv
             -fsanitize=address
     )
     add_link_options(-fsanitize=address)
@@ -45,7 +48,7 @@ add_executable(SchokoVM
         src/parser.cpp src/parser.hpp
         src/args.cpp src/args.hpp
         src/jar.cpp src/jar.hpp
-        )
+        src/interpreter.cpp src/interpreter.hpp src/opcodes.hpp src/future.hpp)
 if (libzip_FOUND)
     target_link_libraries(SchokoVM libzip::zip)
 else ()
@@ -53,13 +56,13 @@ else ()
     target_link_libraries(SchokoVM zip)
 endif ()
 
-
 # Note: using glob to create this list is not recommended
 #file(GLOB JAVA_TEST_SOURCES CONFIGURE_DEPENDS tests/*.java)
 set(JAVA_TEST_SOURCES
         tests/Empty.java
-        tests/HelloWorld.java
-        tests/KarelTheRobot.java
+#        tests/HelloWorld.java
+#        tests/KarelTheRobot.java
+        tests/UnitBoolean.java
         )
 
 set(JAVA_TEST_GENERATED_SOURCES
@@ -67,6 +70,12 @@ set(JAVA_TEST_GENERATED_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticIntSub.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticIntMul.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticIntDiv.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongAdd.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongSub.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongMul.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongDiv.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ComparisonsInt.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ComparisonsLong.java
         )
 
 set(TESTS_GENERATED ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated)

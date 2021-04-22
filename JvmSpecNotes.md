@@ -1,3 +1,5 @@
+http://www.javaseiten.de/jvmisi.html#iload_1
+
 # Chapter 2: The Structure of the Java Virtual Machine 
 
 https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-2.html
