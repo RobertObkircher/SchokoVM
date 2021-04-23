@@ -62,11 +62,47 @@ ClassFile Parser::parse() {
 
     u2 methods_count = eat_u2();
     for (int i = 0; i < methods_count; ++i) {
-        method_info method_info;
+        method_info method_info{};
         method_info.access_flags = eat_u2();
         method_info.name_index = &check_cp_range_and_type<CONSTANT_Utf8_info>(result.constant_pool, eat_u2());
         method_info.descriptor_index = &check_cp_range_and_type<CONSTANT_Utf8_info>(result.constant_pool, eat_u2());
         method_info.attributes = parse_attributes(result.constant_pool);
+
+        // TODO find the code attribute properly
+        // TODO throw `code too large` when appropriate
+        assert(!method_info.attributes.empty());
+        method_info.code_attribute = &std::get<Code_attribute>(method_info.attributes[0].variant);
+
+        auto &descriptor = method_info.descriptor_index->value;
+        method_info.nargs = 0;
+        bool skip_class_name = false;
+        for (char c : descriptor) {
+            if (skip_class_name) {
+                if (c == ';') skip_class_name = false;
+                continue;
+            }
+            if (c == '(') continue;
+            if (c == ')') break;
+
+            if (c == '[') continue; // don't count array dimensions
+            ++method_info.nargs;
+            if (c == 'L') skip_class_name = true;
+            if (c == 'D' || c == 'J') {
+                method_info.argument_takes_two_local_variables[method_info.nargs - 1] = true;
+            }
+        }
+        size_t count = method_info.argument_takes_two_local_variables.count();
+        method_info.nargs_stack_slots = method_info.nargs + count;
+
+        // if it is the last one we do not have to move it
+        if (count > 1 || (count == 1 && !method_info.argument_takes_two_local_variables[method_info.nargs - 1]))
+            method_info.argument_takes_two_local_variables[255] = true;
+
+        method_info.minus_args_plus_result = -method_info.nargs;
+        if (descriptor[descriptor.size() - 1] != 'V')
+            method_info.minus_args_plus_result += 1;
+
+
         result.methods.push_back(std::move(method_info));
     }
 

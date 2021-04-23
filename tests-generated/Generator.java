@@ -31,6 +31,8 @@ public class Generator {
 
         generate(path, "ComparisonsInt", w -> generateComparisons(w, false));
         generate(path, "ComparisonsLong", w -> generateComparisons(w, true));
+
+        generate(path, "InvokeStaticPermutations", Generator::generateInvokeStaticPermutations);
     }
 
     public static void generate(Path directory, String name, Consumer<PrintWriter> generator) {
@@ -61,7 +63,7 @@ public class Generator {
             numbers.add(random.nextInt());
         }
 
-        w.println("public static void println(int i) { System.out.println(i); } ");
+        w.println("    public static void println(int i) { System.out.println(i); } ");
 
         w.println(BEGIN_MAIN);
 
@@ -98,7 +100,7 @@ public class Generator {
             numbers.add(random.nextLong());
         }
 
-        w.println("public static void println(long i) { System.out.println(i); } ");
+        w.println("    public static void println(long i) { System.out.println(i); } ");
 
         w.println(BEGIN_MAIN);
 
@@ -144,7 +146,7 @@ public class Generator {
             numbers.add(useLong ? random.nextLong() : (long) random.nextInt());
         }
 
-        w.println("public static void println(int i) { System.out.println(i); } ");
+        w.println("    public static void println(int i) { System.out.println(i); } ");
 
         w.println(BEGIN_MAIN);
 
@@ -170,5 +172,63 @@ public class Generator {
         }
         }
         w.println(END_MAIN);
+    }
+
+    static class Function {
+        String name;
+        boolean[] parameters;
+    }
+
+    public static void generateInvokeStaticPermutations(PrintWriter w) {
+        Random random = new Random(2943148); // fixed seed
+
+        w.println("    public static void println(int i) { System.out.println(i); } ");
+        w.println("    public static void println(long l) { System.out.println(l); } ");
+
+        ArrayList<Function> functions = new ArrayList<>();
+
+        int id = 0;
+
+        for (int count = 0; count < 5; ++count) {
+           for (int i = 0; i < (1 << count); ++i) {
+                Function f = new Function();
+                f.name = "f" + (id++);
+                f.parameters = new boolean[count];
+                for (int j = 0; j < count; ++j) {
+                    f.parameters[j] = (i & (1 << j)) != 0;
+                }
+                functions.add(f);
+           }
+        }
+
+        w.println(BEGIN_MAIN);
+        for (Function f : functions) {
+            w.print("        " + f.name + "(");
+            for (int i = 0; i < f.parameters.length; ++i) {
+                if (i > 0) w.print(", ");
+                if (f.parameters[i]) {
+                    w.print(random.nextLong());
+                    w.print("L");
+                } else {
+                    w.print(random.nextInt());
+                }
+            }
+            w.println(");");
+        }
+        w.println(END_MAIN);
+
+        for (Function f : functions) {
+            w.print("    static void " + f.name + "(");
+            for (int i = 0; i < f.parameters.length; ++i) {
+                if (i > 0) w.print(", ");
+                w.print(f.parameters[i] ? "long p" : "int p");
+                w.print(i);
+            }
+            w.println(") {");
+            for (int i = 0; i < f.parameters.length; ++i) {
+                w.println("        println(p" + i +");");
+            }
+            w.println("    }");
+        }
     }
 }

@@ -1,4 +1,5 @@
 #include <iostream>
+#include <unordered_map>
 
 #include "args.hpp"
 #include "classfile.hpp"
@@ -6,7 +7,7 @@
 #include "interpreter.hpp"
 
 int run(const Arguments &arguments) {
-    std::vector<ClassFile> class_files;
+    std::vector<ClassFile> class_files_list;
 
     auto classpath = arguments.classpath;
 
@@ -20,7 +21,7 @@ int run(const Arguments &arguments) {
         std::vector<char> buffer;
         buffer.resize(1024);
         const char *path = classpath.c_str();
-        auto error_message = read_entire_jar(path, buffer, class_files);
+        auto error_message = read_entire_jar(path, buffer, class_files_list);
         if (error_message) {
             std::cerr << "Could not read jar file " << path << " error: " << *error_message << "\n";
             return 23;
@@ -30,27 +31,29 @@ int run(const Arguments &arguments) {
 //    std::ifstream in{classpath, std::ios::in | std::ios::binary};
 //    if (in) {
 //        Parser parser{in};
-//        class_files.push_back(parser.parse());
+//        class_files_list.push_back(parser.parse());
 //    } else {
 //        std::cerr << "Failed to read file\n";
 //        return -2;
 //    }
 
-    ssize_t index = -1;
-    for (size_t i = 0; i < class_files.size(); ++i) {
-        auto &item = class_files[i];
-        auto &name = item.this_class->name->value;
-
-        if (name == arguments.mainclass) {
-            index = static_cast<ssize_t>(i);
+    std::unordered_map<std::string_view, ClassFile *> class_files;
+    for (auto &clazz : class_files_list) {
+        std::string_view name{clazz.this_class->name->value};
+        auto pair = class_files.insert({name, &clazz});
+        if (!pair.second) {
+            std::cerr << "The class '" << name << "' was found twice!\n";
+            return 84;
         }
     }
-    if (index == -1) {
+
+    auto main_class = class_files.find(arguments.mainclass);
+    if (main_class == class_files.end()) {
         std::cerr << "mainclass was not found!\n";
         return 5;
     }
 
-    return interpret(class_files, static_cast<size_t>(index));
+    return interpret(class_files, main_class->second);
 }
 
 int main(int argc, char *argv[]) {

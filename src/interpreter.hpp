@@ -1,8 +1,11 @@
 #ifndef SCHOKOVM_INTERPRETER_HPP
 #define SCHOKOVM_INTERPRETER_HPP
 
-#include <vector>
 #include <memory>
+#include <span>
+#include <unordered_map>
+#include <vector>
+
 #include "future.hpp"
 #include "classfile.hpp"
 
@@ -33,53 +36,51 @@ union Value {
     double double_;
 };
 
+struct Stack;
+
 /** https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-2.html#jvms-2.6 */
 struct Frame {
-    const ClassFile &clas;
+    ClassFile *clazz;
+    method_info *method;
+    std::vector<u1> *code;
 
-    std::vector<Value> locals;
-    std::vector<Value> stack;
+    // stack_memory indices (we cannot store pointers because the memory could move)
+    std::span<Value> locals;
+    std::span<Value> operands;
+    size_t first_operand_index;
+    size_t operands_count;
+    size_t previous_stack_memory_usage;
 
-    // TODO the runtime access pool?
-    // void *constant_pool;
+    size_t pc;
 
-    /** the calling/previous frame */
-    std::unique_ptr<Frame> previous_frame;
-
-    Frame(const ClassFile &clas, size_t locals_count, size_t stack_count, std::unique_ptr<Frame> previous_frame)
-            : clas(clas), previous_frame(std::move(previous_frame)) {
-        this->locals.resize(locals_count);
-        this->stack.reserve(stack_count);
-    }
+    Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top);
 
     Value stack_pop() {
-        auto v = this->stack.back();
-        this->stack.pop_back();
-        return v;
+        return operands[--operands_count];
     }
 
     void stack_push(float v) {
-        this->stack.emplace_back(Value(v));
+        operands[operands_count++] = Value(v);
     }
 
     void stack_push(double v) {
-        this->stack.emplace_back(Value(v));
+        operands[operands_count++] = Value(v);
     }
 
     void stack_push(s4 v) {
-        this->stack.emplace_back(Value(v));
+        operands[operands_count++] = Value(v);
     }
 
     void stack_push(u4 v) {
-        this->stack.emplace_back(Value(v));
+        operands[operands_count++] = Value(v);
     }
 
     void stack_push(u8 v) {
-        this->stack.emplace_back(Value(v));
+        operands[operands_count++] = Value(v);
     }
 
     void stack_push(s8 v) {
-        this->stack.emplace_back(Value(v));
+        operands[operands_count++] = Value(v);
     }
 };
 
@@ -95,9 +96,30 @@ struct Frame {
 
 /** https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-2.html#jvms-2.5.1 */
 struct Stack {
-    std::unique_ptr<Frame> current_frame;
+    // Local variables and the operand stack are stored like this:
+    //
+    //   |caller local variables| caller operand stack |
+    //   |  n     n+1     n+2   | n+3 | n+4  n+5   n+6 |  n+7  n+8  |  n+9    n+10  | n+11
+    //                                |   callee local variables    |callee operands|
+    //  Timeline:
+    //    1. The caller pushes arguments n+4,n+5,n+6               memory_used = n+7
+    //    2. Invoke: top of parent operand stack becomes locals    memory_used = n+11
+    //    3. Insert empty slots if there are longs/doubles
+    //    4. Run the child function
+    //    3. Return value is copied from n+9 to n+4                memory_used = n+7
+    //
+    // WARNING: This must never be resized because we create spans of the elements!
+    std::vector<Value> memory;
+    size_t memory_used = 0;
+
+    // In the interpreter we will keep the current frame in a local variable.
+    std::vector<Frame> frames;
 };
 
-int interpret(const std::vector<ClassFile> &class_files, size_t main_class_index);
+struct Thread {
+    Stack stack{};
+};
+
+int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, ClassFile *main);
 
 #endif //SCHOKOVM_INTERPRETER_HPP

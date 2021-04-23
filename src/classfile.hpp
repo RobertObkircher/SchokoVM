@@ -1,6 +1,7 @@
 #ifndef SCHOKOVM_CLASSFILE_HPP
 #define SCHOKOVM_CLASSFILE_HPP
 
+#include <bitset>
 #include <vector>
 #include <variant>
 #include <cassert>
@@ -33,6 +34,8 @@ struct annotation;
 struct type_annotation;
 struct type_path;
 struct record_component_info;
+struct Code_attribute;
+struct ClassFile;
 
 enum CpTag : u1 {
     // Just a dummy value used in the constant pool for index 0 and after longs/doubles
@@ -85,6 +88,7 @@ struct CONSTANT_Invalid_info {
 struct CONSTANT_Class_info {
     u2 name_index;
     CONSTANT_Utf8_info *name;
+    ClassFile *clazz;
 };
 
 struct CONSTANT_Fieldref_info {
@@ -241,6 +245,12 @@ struct method_info {
     CONSTANT_Utf8_info *name_index;
     CONSTANT_Utf8_info *descriptor_index;
     std::vector<attribute_info> attributes;
+    Code_attribute *code_attribute;
+    size_t nargs;
+    // there can only be 255 parameters. The last bit indicates if we need to move any arguments.
+    std::bitset<256> argument_takes_two_local_variables;
+    size_t nargs_stack_slots;
+    size_t minus_args_plus_result;
 };
 
 // attribute_info...
@@ -704,11 +714,6 @@ struct ConstantPool {
     inline T &get(u2 index) {
         return std::get<T>(table[index].variant);
     }
-
-//    inline std::string const& get_string(u2 index) const {
-//        auto &string_info = get<CONSTANT_String_info>(index);
-//        return get<CONSTANT_Utf8_info>(string_info.string_index).value;
-//    }
 };
 
 struct ClassFile {
