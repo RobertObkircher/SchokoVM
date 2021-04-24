@@ -420,6 +420,8 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame, size_t pc
                 thread.stack.frames.push_back(frame);
 
                 frame = {thread.stack, clazz, target_method, operand_stack_top};
+                if (thread.stack.memory_used > thread.stack.memory.size())
+                    throw std::runtime_error("stack overflow");
                 return 0;
             }
             return pc + 3;
