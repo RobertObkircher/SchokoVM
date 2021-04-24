@@ -105,15 +105,15 @@ struct Stack {
     //    1. The caller pushes arguments n+4,n+5,n+6               memory_used = n+7
     //    2. Invoke: top of parent operand stack becomes locals    memory_used = n+11
     //    3. Insert empty slots if there are longs/doubles
-    //    4. Run the child function
-    //    3. Return value is copied from n+9 to n+4                memory_used = n+7
+    //    4. Run the callee function
+    //    3. Copy the return value from n+9 to n+4                memory_used = n+7
     //
     // WARNING: This must never be resized because we create spans of the elements!
     std::vector<Value> memory;
     size_t memory_used = 0;
 
     // In the interpreter we will keep the current frame in a local variable.
-    std::vector<Frame> frames;
+    std::vector<Frame> parent_frames;
 };
 
 struct Thread {

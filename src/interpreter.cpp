@@ -13,7 +13,7 @@ static const u2 MAIN_ACCESS_FLAGS = (static_cast<u2>(FieldInfoAccessFlags::ACC_P
 static const auto MAIN_NAME = "main";
 static const auto MAIN_DESCRIPTOR = "([Ljava/lang/String;)V";
 
-static size_t execute_instruction(Thread &thread, Frame &frame, size_t pc,
+static size_t execute_instruction(Thread &thread, Frame &frame,
                                   std::unordered_map<std::string_view, ClassFile *> &class_files, bool &shouldExit);
 
 static size_t execute_comparison(const std::vector<u1> &code, size_t pc, bool condition);
@@ -77,7 +77,7 @@ int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, Cl
 
     bool shouldExit = false;
     while (!shouldExit) {
-        frame.pc = execute_instruction(thread, frame, frame.pc, class_files, shouldExit);
+        frame.pc = execute_instruction(thread, frame, class_files, shouldExit);
     }
 
     // print exit code
@@ -88,9 +88,10 @@ int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, Cl
     }
 }
 
-static inline size_t execute_instruction(Thread &thread, Frame &frame, size_t pc,
+static inline size_t execute_instruction(Thread &thread, Frame &frame,
                                          std::unordered_map<std::string_view, ClassFile *> &class_files,
                                          bool &shouldExit) {
+    size_t pc = frame.pc;
     std::vector<u1> &code = *frame.code;
     auto opcode = code[pc];
     // TODO implement remaining opcodes. The ones that are currently commented/missing out have no test coverage whatsoever
@@ -356,12 +357,12 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame, size_t pc
             frame.locals[0] = frame.stack_pop();
             // fallthrough
         case OpCodes::return_: {
-            if (thread.stack.frames.empty()) {
+            if (thread.stack.parent_frames.empty()) {
                 shouldExit = true;
             } else {
                 thread.stack.memory_used = frame.previous_stack_memory_usage;
-                frame = thread.stack.frames[thread.stack.frames.size() - 1];
-                thread.stack.frames.pop_back();
+                frame = thread.stack.parent_frames[thread.stack.parent_frames.size() - 1];
+                thread.stack.parent_frames.pop_back();
                 return frame.pc;
             }
             break;
@@ -417,7 +418,7 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame, size_t pc
                 frame.operands_count += target_method->minus_parameter_count_plus_return_count;
 
                 frame.pc += 3;
-                thread.stack.frames.push_back(frame);
+                thread.stack.parent_frames.push_back(frame);
 
                 frame = {thread.stack, clazz, target_method, operand_stack_top};
                 if (thread.stack.memory_used > thread.stack.memory.size())
