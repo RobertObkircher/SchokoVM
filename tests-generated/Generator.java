@@ -29,6 +29,16 @@ public class Generator {
         generate(path, "ArithmeticLongMul", w -> generateArithmeticLong(w, "*"));
         generate(path, "ArithmeticLongDiv", w -> generateArithmeticLong(w, "/"));
 
+        generate(path, "ArithmeticFloatAdd", w -> generateArithmeticFloating(w, "+", false));
+        generate(path, "ArithmeticFloatSub", w -> generateArithmeticFloating(w, "-", false));
+        generate(path, "ArithmeticFloatMul", w -> generateArithmeticFloating(w, "*", false));
+        generate(path, "ArithmeticFloatDiv", w -> generateArithmeticFloating(w, "/", false));
+
+        generate(path, "ArithmeticDoubleAdd", w -> generateArithmeticFloating(w, "+", true));
+        generate(path, "ArithmeticDoubleSub", w -> generateArithmeticFloating(w, "-", true));
+        generate(path, "ArithmeticDoubleMul", w -> generateArithmeticFloating(w, "*", true));
+        generate(path, "ArithmeticDoubleDiv", w -> generateArithmeticFloating(w, "/", true));
+
         generate(path, "ComparisonsInt", w -> generateComparisons(w, false));
         generate(path, "ComparisonsLong", w -> generateComparisons(w, true));
 
@@ -116,6 +126,55 @@ public class Generator {
                     w.println("        c = a " + op + " b;");
                     w.println("        println(c);");
                 }
+            }
+        }
+        w.println(END_MAIN);
+    }
+
+    public static void generateArithmeticFloating(PrintWriter w, String op, boolean useDouble) {
+        List<Double> numbers = new ArrayList<>(Arrays.asList(new Double[]{
+            0.0, -1.0, -2.0, 1.0, 2.0,
+            127.0, -128.0,
+            322.0, -322.0,
+            2314908.0, -2314908.0,
+            231490893.0, -194322323.0
+        }));
+        if(useDouble){
+            numbers.add(Double.MAX_VALUE);
+            numbers.add(Double.MAX_VALUE - 1);
+            numbers.add(Double.MIN_VALUE);
+            numbers.add(Double.MIN_VALUE + 1);
+        } else {
+            numbers.add((double) (Float.MAX_VALUE));
+            numbers.add((double) (Float.MAX_VALUE - 1));
+            numbers.add((double) (Float.MIN_VALUE));
+            numbers.add((double) (Float.MIN_VALUE + 1));
+        }
+
+        Random random = new Random(23148); // fixed seed
+        for (int i = 0; i < 5; ++i) {
+            numbers.add(useDouble ? random.nextDouble() : (double) random.nextFloat());
+        }
+
+        w.println("public static void println(double d) { System.out.println(d); } ");
+
+        w.println(BEGIN_MAIN);
+
+        // we use variables to make sure that javac doesn't fold literals
+        if(useDouble){
+            w.println("        double a, b, c;");
+        } else {
+            w.println("        float a, b, c;");
+        }
+
+        String doublePostfix = useDouble ? "" : "f";
+
+        for (double i : numbers) {
+            w.println("        a = " + i + doublePostfix + "; //////////////////////////////");
+            for (double j : numbers) {
+                w.println("        b = " + j + doublePostfix + ";");
+                w.println("        c = a " + op + " b;");
+                w.println("        println(c);");
             }
         }
         w.println(END_MAIN);

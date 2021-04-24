@@ -75,6 +75,14 @@ set(JAVA_TEST_GENERATED_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongSub.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongMul.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongDiv.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticFloatAdd.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticFloatSub.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticFloatMul.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticFloatDiv.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticDoubleAdd.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticDoubleSub.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticDoubleMul.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticDoubleDiv.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ComparisonsInt.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ComparisonsLong.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/InvokeStaticPermutations.java
