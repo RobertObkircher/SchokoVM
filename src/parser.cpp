@@ -74,7 +74,7 @@ ClassFile Parser::parse() {
         method_info.code_attribute = &std::get<Code_attribute>(method_info.attributes[0].variant);
 
         auto &descriptor = method_info.descriptor_index->value;
-        method_info.nargs = 0;
+        method_info.parameter_count = 0;
         bool skip_class_name = false;
         for (char c : descriptor) {
             if (skip_class_name) {
@@ -85,23 +85,22 @@ ClassFile Parser::parse() {
             if (c == ')') break;
 
             if (c == '[') continue; // don't count array dimensions
-            ++method_info.nargs;
+
             if (c == 'L') skip_class_name = true;
-            if (c == 'D' || c == 'J') {
-                method_info.argument_takes_two_local_variables[method_info.nargs - 1] = true;
-            }
+            if (c == 'D' || c == 'J')
+                method_info.argument_takes_two_local_variables[method_info.parameter_count] = true;
+            ++method_info.parameter_count;
         }
-        size_t count = method_info.argument_takes_two_local_variables.count();
-        method_info.nargs_stack_slots = method_info.nargs + count;
+        u1 count = static_cast<u1>(method_info.argument_takes_two_local_variables.count());
+        method_info.stack_slots_used_by_parameters = method_info.parameter_count + count;
 
         // if it is the last one we do not have to move it
-        if (count > 1 || (count == 1 && !method_info.argument_takes_two_local_variables[method_info.nargs - 1]))
-            method_info.argument_takes_two_local_variables[255] = true;
+        method_info.move_arguments = count > 1 || (count == 1 && !method_info.argument_takes_two_local_variables[
+                method_info.parameter_count - 1]);
 
-        method_info.minus_args_plus_result = -method_info.nargs;
+        method_info.minus_parameter_count_plus_return_count = -method_info.parameter_count;
         if (descriptor[descriptor.size() - 1] != 'V')
-            method_info.minus_args_plus_result += 1;
-
+            method_info.minus_parameter_count_plus_return_count += 1;
 
         result.methods.push_back(std::move(method_info));
     }

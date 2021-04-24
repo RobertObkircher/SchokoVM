@@ -414,7 +414,7 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame, size_t pc
                 method_info *target_method = &*method_iter;
 
                 size_t operand_stack_top = frame.first_operand_index + frame.operands_count;
-                frame.operands_count += target_method->minus_args_plus_result;
+                frame.operands_count += target_method->minus_parameter_count_plus_return_count;
 
                 frame.pc += 3;
                 thread.stack.frames.push_back(frame);
@@ -457,31 +457,28 @@ Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand
           operands_count(0),
           previous_stack_memory_usage(stack.memory_used),
           pc(0) {
-    //assert(method->code_attribute->max_locals >= method->nargs);
-    assert(stack.memory_used >= method->nargs);
-    assert(operand_stack_top >= method->nargs);
+    //assert(method->code_attribute->max_locals >= method->parameter_count);
+    assert(stack.memory_used >= method->parameter_count);
+    assert(operand_stack_top >= method->parameter_count);
 
-    size_t first_local_index = operand_stack_top - method->nargs;
+    size_t first_local_index = operand_stack_top - method->parameter_count;
     first_operand_index = first_local_index + method->code_attribute->max_locals;
     stack.memory_used = first_operand_index + method->code_attribute->max_stack;
 
     locals = {&stack.memory[first_local_index], method->code_attribute->max_locals};
     operands = {&stack.memory[first_operand_index], method->code_attribute->max_stack};
 
-    // if we need to move at least one argument
-    if (method->argument_takes_two_local_variables[255]) {
-        size_t target = method->nargs_stack_slots;
-        size_t source = method->nargs;
-        // we know there is at least one:
+    if (method->move_arguments) {
+        size_t target = method->stack_slots_used_by_parameters;
+        size_t source = method->parameter_count;
+        assert(target > source);
         do {
             --target;
             --source;
-
             if (method->argument_takes_two_local_variables[source]) {
                 --target;
                 if (source == target) break;
             }
-            assert(target > source);
             locals[target] = locals[source];
         } while (source != 0);
     }

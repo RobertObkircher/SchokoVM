@@ -246,11 +246,19 @@ struct method_info {
     CONSTANT_Utf8_info *descriptor_index;
     std::vector<attribute_info> attributes;
     Code_attribute *code_attribute;
-    size_t nargs;
-    // there can only be 255 parameters. The last bit indicates if we need to move any arguments.
-    std::bitset<256> argument_takes_two_local_variables;
-    size_t nargs_stack_slots;
-    size_t minus_args_plus_result;
+
+    // This is called nargs in the invoke* descriptions: https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-6.html#jvms-6.5.invokestatic
+    u1 parameter_count;
+    // Some parameters require 2 local variable slots
+    u2 stack_slots_used_by_parameters;
+
+    // true iff any of bits [0..253] is set. We do not need to move anything if it is only bit 254.
+    bool move_arguments;
+    // indicates if the nth argument requires two local variable slots (i.e. if it is a long/double)
+    std::bitset<255> argument_takes_two_local_variables;
+
+    // used to adjust the caller operand stack size
+    size_t minus_parameter_count_plus_return_count;
 };
 
 // attribute_info...
