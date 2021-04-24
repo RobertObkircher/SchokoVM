@@ -5,6 +5,7 @@
 #include <string>
 #include <iostream>
 #include <type_traits>
+#include <cmath>
 #include "opcodes.hpp"
 #include "future.hpp"
 
@@ -142,8 +143,8 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             auto &entry = frame.clazz->constant_pool.table[index];
             if (auto i = std::get_if<CONSTANT_Integer_info>(&entry.variant)) {
                 frame.stack_push(i->bytes);
-//            } else if (auto f = std::get_if<CONSTANT_Float_info>(&entry.variant)) {
-//                frame.stack_push(f->value);
+            } else if (auto f = std::get_if<CONSTANT_Float_info>(&entry.variant)) {
+                frame.stack_push(f->value);
             } else {
                 throw std::runtime_error("ldc refers to invalid/unimplemented type");
             }
@@ -155,8 +156,8 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             auto &entry = frame.clazz->constant_pool.table[index];
             if (auto l = std::get_if<CONSTANT_Long_info>(&entry.variant)) {
                 frame.stack_push(l->value);
-//            } else if (auto d = std::get_if<CONSTANT_Double_info>(&entry.variant)) {
-//                frame.stack_push(d->value);
+            } else if (auto d = std::get_if<CONSTANT_Double_info>(&entry.variant)) {
+                frame.stack_push(d->value);
             } else {
                 throw std::runtime_error("ldc2_w refers to invalid/unimplemented type");
             }
@@ -169,18 +170,23 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             frame.stack_push(frame.locals[local].s4);
             return pc + 2;
         }
-        case OpCodes::fload: {
-            auto local = code[pc + 1];
-            frame.stack_push(frame.locals[local].float_);
-            return pc + 2;
-        }
         case OpCodes::lload: {
             // In a slight derivation from the spec, longs are stored in a single local
             auto index = code[pc + 1];
             frame.stack_push(frame.locals[index].s8);
             return pc + 2;
         }
-//        case OpCodes::dload:
+        case OpCodes::fload: {
+            auto local = code[pc + 1];
+            frame.stack_push(frame.locals[local].float_);
+            return pc + 2;
+        }
+        case OpCodes::dload: {
+            // In a slight derivation from the spec, double are stored in a single local
+            auto index = code[pc + 1];
+            frame.stack_push(frame.locals[index].double_);
+            return pc + 2;
+        }
 //        case OpCodes::aload:
         case OpCodes::iload_0:
         case OpCodes::iload_1:
@@ -199,6 +205,23 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             frame.stack_push(frame.locals[index].s8);
             break;
         }
+        case OpCodes::fload_0:
+        case OpCodes::fload_1:
+        case OpCodes::fload_2:
+        case OpCodes::fload_3: {
+            auto value = frame.locals[opcode - static_cast<u1>(OpCodes::fload_0)].float_;
+            frame.stack_push(value);
+            break;
+        }
+        case OpCodes::dload_0:
+        case OpCodes::dload_1:
+        case OpCodes::dload_2:
+        case OpCodes::dload_3: {
+            // In a slight derivation from the spec, double are stored in a single local
+            u1 index = static_cast<u1>(opcode - static_cast<u1>(OpCodes::dload_0));
+            frame.stack_push(frame.locals[index].double_);
+            break;
+        }
 
             /* ======================= Stores ======================= */
         case OpCodes::istore:
@@ -207,6 +230,16 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
         case OpCodes::lstore: {
             // In a slight derivation from the spec, longs are stored in a single local
             auto value = frame.stack_pop().s8;
+            frame.locals[code[pc + 1]] = {value};
+            return pc + 2;
+        }
+        case OpCodes::fstore: {
+            frame.locals[code[pc + 1]] = {frame.stack_pop().float_};
+            return pc + 2;
+        }
+        case OpCodes::dstore: {
+            // In a slight derivation from the spec, doubles are stored in a single local
+            auto value = frame.stack_pop().double_;
             frame.locals[code[pc + 1]] = {value};
             return pc + 2;
         }
@@ -225,6 +258,20 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0)] = {value};
             break;
         }
+        case OpCodes::fstore_0:
+        case OpCodes::fstore_1:
+        case OpCodes::fstore_2:
+        case OpCodes::fstore_3:
+            frame.locals[opcode - static_cast<u1>(OpCodes::fstore_0)] = {frame.stack_pop().float_};
+            break;
+        case OpCodes::dstore_0:
+        case OpCodes::dstore_1:
+        case OpCodes::dstore_2:
+        case OpCodes::dstore_3: {
+            // In a slight derivation from the spec, double are stored in a single local
+            frame.locals[opcode - static_cast<u1>(OpCodes::dstore_0)] = {frame.stack_pop().double_};
+            break;
+        }
 
             /* ======================= Math =======================*/
         case OpCodes::iadd: {
@@ -241,6 +288,18 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             frame.stack_push(result);
             break;
         }
+        case OpCodes::fadd: {
+            auto b = frame.stack_pop().float_;
+            auto a = frame.stack_pop().float_;
+            frame.stack_push(a + b);
+            break;
+        }
+        case OpCodes::dadd: {
+            auto b = frame.stack_pop().double_;
+            auto a = frame.stack_pop().double_;
+            frame.stack_push(a + b);
+            break;
+        }
         case OpCodes::isub: {
             auto b = frame.stack_pop().s4;
             auto a = frame.stack_pop().s4;
@@ -252,6 +311,18 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             s8 b = frame.stack_pop().s8;
             s8 a = frame.stack_pop().s8;
             frame.stack_push(sub_overflow(a, b));
+            break;
+        }
+        case OpCodes::fsub: {
+            auto b = frame.stack_pop().float_;
+            auto a = frame.stack_pop().float_;
+            frame.stack_push(a - b);
+            break;
+        }
+        case OpCodes::dsub: {
+            auto b = frame.stack_pop().double_;
+            auto a = frame.stack_pop().double_;
+            frame.stack_push(a - b);
             break;
         }
         case OpCodes::imul: {
@@ -266,13 +337,17 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             frame.stack_push(mul_overflow(a, b));
             break;
         }
-
-        case OpCodes::iinc: {
-            auto local = code[pc + 1];
-            auto value = static_cast<s4>(static_cast<s2>(future::bit_cast<s1>(code[pc + 2])));
-            auto result = add_overflow(frame.locals[local].s4, value);
-            frame.locals[local] = {result};
-            return pc + 3;
+        case OpCodes::fmul: {
+            auto a = frame.stack_pop().float_;
+            auto b = frame.stack_pop().float_;
+            frame.stack_push(a * b);
+            break;
+        }
+        case OpCodes::dmul: {
+            auto a = frame.stack_pop().double_;
+            auto b = frame.stack_pop().double_;
+            frame.stack_push(a * b);
+            break;
         }
 
         case OpCodes::idiv: {
@@ -295,6 +370,34 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             frame.stack_push(div_overflow(dividend, divisor));
             break;
         }
+        case OpCodes::fdiv: {
+            auto divisor = frame.stack_pop().float_;
+            auto dividend = frame.stack_pop().float_;
+            if (divisor == 0) {
+                // TODO ArithmeticException
+                throw std::runtime_error("Division by 0");
+            }
+            frame.stack_push(dividend / divisor);
+            break;
+        }
+        case OpCodes::ddiv: {
+            auto divisor = frame.stack_pop().double_;
+            auto dividend = frame.stack_pop().double_;
+            if (divisor == 0) {
+                // TODO ArithmeticException
+                throw std::runtime_error("Division by 0");
+            }
+            frame.stack_push(dividend / divisor);
+            break;
+        }
+
+        case OpCodes::iinc: {
+            auto local = code[pc + 1];
+            auto value = static_cast<s4>(static_cast<s2>(future::bit_cast<s1>(code[pc + 2])));
+            auto result = add_overflow(frame.locals[local].s4, value);
+            frame.locals[local] = {result};
+            return pc + 3;
+        }
 
             /* ======================= Conversions ======================= */
         case OpCodes::l2i: {
@@ -313,6 +416,40 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
                 frame.stack_push(0);
             } else {
                 frame.stack_push(-1);
+            }
+            break;
+        }
+        case OpCodes::fcmpl:
+        case OpCodes::fcmpg: {
+            // TODO "value set conversion" ?
+            auto b = frame.stack_pop().float_;
+            auto a = frame.stack_pop().float_;
+            if (a > b) {
+                frame.stack_push(1);
+            } else if (a == b) {
+                frame.stack_push(0);
+            } else if (a < b) {
+                frame.stack_push(-1);
+            } else {
+                // at least one of a' or b' is NaN
+                frame.stack_push(static_cast<OpCodes>(opcode) == OpCodes::fcmpg ? -1 : 1);
+            }
+            break;
+        }
+        case OpCodes::dcmpl:
+        case OpCodes::dcmpg: {
+            // TODO "value set conversion" ?
+            auto b = frame.stack_pop().double_;
+            auto a = frame.stack_pop().double_;
+            if (a > b) {
+                frame.stack_push(1);
+            } else if (a == b) {
+                frame.stack_push(0);
+            } else if (a < b) {
+                frame.stack_push(-1);
+            } else {
+                // at least one of a' or b' is NaN
+                frame.stack_push(static_cast<OpCodes>(opcode) == OpCodes::dcmpl ? -1 : 1);
             }
             break;
         }
@@ -387,6 +524,16 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             } else if (method_ref.name_and_type->name->value == "println" &&
                        method_ref.name_and_type->descriptor->value == "(J)V") {
                 std::cout << frame.stack_pop().s8 << "\n";
+                return pc + 3;
+            } else if (method_ref.name_and_type->name->value == "println" &&
+                       method_ref.name_and_type->descriptor->value == "(F)V") {
+                // floatToIntBits
+                std::cout << future::bit_cast<s4>(frame.stack_pop().float_) << "\n";
+                return pc + 3;
+            } else if (method_ref.name_and_type->name->value == "println" &&
+                       method_ref.name_and_type->descriptor->value == "(D)V") {
+                // doubleToLongBits
+                std::cout << future::bit_cast<s8>(frame.stack_pop().double_) << "\n";
                 return pc + 3;
             }
 

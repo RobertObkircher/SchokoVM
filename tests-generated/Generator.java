@@ -156,7 +156,8 @@ public class Generator {
             numbers.add(useDouble ? random.nextDouble() : (double) random.nextFloat());
         }
 
-        w.println("public static void println(double d) { System.out.println(d); } ");
+        w.println("public static void println(double v) { System.out.println(Double.doubleToLongBits(v)); } ");
+        w.println("public static void println(float v) { System.out.println(Float.floatToIntBits(v)); } ");
 
         w.println(BEGIN_MAIN);
 
@@ -170,11 +171,14 @@ public class Generator {
         String doublePostfix = useDouble ? "" : "f";
 
         for (double i : numbers) {
-            w.println("        a = " + i + doublePostfix + "; //////////////////////////////");
+            w.println("        a = " + (useDouble ? i : ((float) i)) + doublePostfix + "; //////////////////////////////");
             for (double j : numbers) {
-                w.println("        b = " + j + doublePostfix + ";");
-                w.println("        c = a " + op + " b;");
-                w.println("        println(c);");
+                // TODO emit a try catch ArithmeticException instead
+                if (op != "/" || j != 0) {
+                    w.println("        b = " + (useDouble ? j : ((float) j)) + doublePostfix + ";");
+                    w.println("        c = a " + op + " b;");
+                    w.println("        println(c);");
+                }
             }
         }
         w.println(END_MAIN);
