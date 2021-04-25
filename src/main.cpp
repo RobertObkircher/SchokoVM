@@ -1,41 +1,55 @@
 #include <iostream>
+#include <filesystem>
 #include <unordered_map>
 
 #include "args.hpp"
 #include "classfile.hpp"
 #include "jar.hpp"
 #include "interpreter.hpp"
+#include "parser.hpp"
+
+std::vector<std::string> split(std::string const &string, char separator) {
+    std::vector<std::string> parts{};
+    size_t start = 0;
+    size_t end;
+    while ((end = string.find(separator, start)) != std::string::npos) {
+        parts.push_back(string.substr(start, end - start));
+        start = end + 1;
+    }
+    parts.push_back(string.substr(start));
+    return parts;
+}
 
 int run(const Arguments &arguments) {
     std::vector<ClassFile> class_files_list;
 
-    auto classpath = arguments.classpath;
-
-    // TODO split by : and read normal directories
-    if ((classpath.find(':') != std::string::npos || classpath.find(".jar") != classpath.length() - 4)) {
-        std::cerr << "unimplemented: the classpath must consist of a single jar file";
-        return -6;
-    }
-
     {
         std::vector<char> buffer;
         buffer.resize(1024);
-        const char *path = classpath.c_str();
-        auto error_message = read_entire_jar(path, buffer, class_files_list);
-        if (error_message) {
-            std::cerr << "Could not read jar file " << path << " error: " << *error_message << "\n";
-            return 23;
+
+        for (auto &path : split(arguments.classpath, ':')) {
+            if (path.ends_with(".jar") || path.ends_with(".zip")) {
+                auto error_message = read_entire_jar(path.c_str(), buffer, class_files_list);
+                if (error_message) {
+                    std::cerr << "Could not read jar file " << path << " error: " << *error_message << "\n";
+                    return 23;
+                }
+            } else {
+                for (const auto& directory_entry : std::filesystem::recursive_directory_iterator(path)) {
+                    if (directory_entry.is_regular_file() && directory_entry.path().extension() == ".class") {
+                        std::ifstream in{directory_entry.path(), std::ios::in | std::ios::binary};
+                        if (in) {
+                            Parser parser{in};
+                            class_files_list.push_back(parser.parse());
+                        } else {
+                            std::cerr << "Failed to read file\n";
+                            return -2;
+                        }
+                    }
+                }
+            }
         }
     }
-
-//    std::ifstream in{classpath, std::ios::in | std::ios::binary};
-//    if (in) {
-//        Parser parser{in};
-//        class_files_list.push_back(parser.parse());
-//    } else {
-//        std::cerr << "Failed to read file\n";
-//        return -2;
-//    }
 
     std::unordered_map<std::string_view, ClassFile *> class_files;
     for (auto &clazz : class_files_list) {

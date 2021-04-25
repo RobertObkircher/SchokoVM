@@ -68,10 +68,14 @@ ClassFile Parser::parse() {
         method_info.descriptor_index = &check_cp_range_and_type<CONSTANT_Utf8_info>(result.constant_pool, eat_u2());
         method_info.attributes = parse_attributes(result.constant_pool);
 
-        // TODO find the code attribute properly
-        // TODO throw `code too large` when appropriate
-        assert(!method_info.attributes.empty());
-        method_info.code_attribute = &std::get<Code_attribute>(method_info.attributes[0].variant);
+        for (auto &attribute : method_info.attributes) {
+            Code_attribute *code = std::get_if<Code_attribute>(&attribute.variant);
+            if (code) {
+                if (method_info.code_attribute)
+                    throw ParseError("Method has two code attributes!");
+                method_info.code_attribute = code;
+            }
+        }
 
         auto &descriptor = method_info.descriptor_index->value;
         method_info.parameter_count = 0;

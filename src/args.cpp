@@ -9,8 +9,10 @@ std::optional<Arguments> parse_args(int argc, char *argv[]) {
         }
         std::cerr << "Usage: " << argv[0] << " [options] <mainclass> [args...]\n"
                   << "  where the options are:\n"
-                  << "    --test <java> <outdir>      Compare against a reference java implementation. Files are stored in outdir.\n"
-                  << "    --class-path <classpath>    Where to search for classes. Default is the current directory.\n";
+                  << "    -cp <classpath>\n"
+                  << "    -classpath <classpath>\n"
+                  << "    --class-path <classpath>\n"
+                  << "        The <classpath> is a ':' separated list of directories, jar or zip files. The default is the current directory.\n";
         return std::optional<Arguments>{};
     };
 
