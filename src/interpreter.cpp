@@ -649,6 +649,10 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             /* ======================= Control =======================*/
         case OpCodes::goto_:
             return goto_(code, pc);
+        case OpCodes::jsr:
+        case OpCodes::ret:
+            abort();
+            break;
         case OpCodes::tableswitch: {
             size_t opcode_address = pc;
 
@@ -843,6 +847,13 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
                 return 0; // will be set on the new frame
             }
         }
+        case OpCodes::goto_w: {
+            s4 offset = static_cast<s4>((code[pc + 1] << 24) | (code[pc + 2] << 16) | (code[pc + 3] << 8) | code[pc + 4]);
+            return pc + static_cast<size_t>(static_cast<ssize_t>(offset));
+        }
+        case OpCodes::jsr_w:
+            abort();
+            break;
 
         default:
             throw std::runtime_error(

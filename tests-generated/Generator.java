@@ -58,6 +58,8 @@ public class Generator {
 
         generate(path, "Conversions", Generator::generateConversions);
 
+        generate(path, "Goto", Generator::generateGoto);
+
         generate(path, "InvokeStaticPermutations", Generator::generateInvokeStaticPermutations);
     }
 
@@ -373,6 +375,21 @@ public class Generator {
                 numbers.add(random.nextInt());
             }
         }
+    }
+
+    public static void generateGoto(PrintWriter w) {
+        w.println(BEGIN_MAIN);
+        w.println("        for (int i = 0; i < 10; ++i) println(i);");
+        w.println("        gotoW();");
+        w.println(END_MAIN);
+
+        w.println("    static void gotoW() {");
+        w.println("        int x;");
+        w.println("        for (int i = 0; i < 20; ++i) {"); // goto_w
+        for (int i = 0; i < 15000; ++i)
+            w.println("        x = 42;");
+        w.println("        }"); // goto_w
+        w.println("    }");
     }
 
     public static void generateConversions(PrintWriter w) {
