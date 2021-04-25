@@ -56,6 +56,8 @@ public class Generator {
         generate(path, "ComparisonsInt", w -> generateComparisons(w, Integer.class));
         generate(path, "ComparisonsLong", w -> generateComparisons(w, Long.class));
 
+        generate(path, "Conversions", Generator::generateConversions);
+
         generate(path, "InvokeStaticPermutations", Generator::generateInvokeStaticPermutations);
     }
 
@@ -68,6 +70,10 @@ public class Generator {
             w.println("    public static void println(long i) { System.out.println(i); } ");
             w.println("    public static void println(double v) { System.out.println(Double.doubleToLongBits(v)); } ");
             w.println("    public static void println(float v) { System.out.println(Float.floatToIntBits(v)); } ");
+            w.println("    public static void println(char c) { System.out.println((int) c); } ");
+            w.println("    public static void println(short s) { System.out.println(s); } ");
+            w.println("    public static void println(byte b) { System.out.println(b); } ");
+            w.println("    public static void println(boolean z) { System.out.println(z); } ");
             generator.accept(w);
             w.println("}");
         } catch (IOException e) {
@@ -367,5 +373,87 @@ public class Generator {
                 numbers.add(random.nextInt());
             }
         }
+    }
+
+    public static void generateConversions(PrintWriter w) {
+        Random random = new Random(2943148); // fixed seed
+
+        List<Object> ints = new ArrayList<>(Arrays.asList(new Integer[]{
+            0, -1, -2, 1, 2,
+            2147483647, 2147483646,
+            -2147483648, -2147483647,
+            127, -128,
+            128, -129,
+            322, -322,
+            2314908, -2314908,
+            231490893, -194322323
+        }));
+        addBoundaryValues(Integer.class, ints);
+        for (int i = 0; i < 10; ++i)
+            ints.add(random.nextInt());
+
+        List<Object> longs = new ArrayList<>(Arrays.asList(new Long[]{
+            0L, -1L, -2L, 1L, 2L,
+            9223372036854775807L, 9223372036854775806L,
+            -9223372036854775808L, -9223372036854775807L,
+            127L, -128L,
+            322L, -322L,
+            2314908L, -2314908L,
+            231490893L, -194322323L
+        }));
+        addBoundaryValues(Long.class, longs);
+        for (int i = 0; i < 10; ++i)
+            longs.add(random.nextLong());
+
+        List<Object> floats = new ArrayList<>(Arrays.asList(new Float[]{
+            0.0f, -1.0f, -2.0f, 1.0f, 2.0f,
+            0.1f, 0.9f, 1.1f,
+            -0.1f, -0.9f, -1.1f,
+            127.0f, -128.0f,
+            322.0f, -322.0f,
+            2314908.0f, -2314908.0f,
+            231490893.0f, -194322323.0f
+        }));
+        addBoundaryValues(Float.class, floats);
+        for (int i = 0; i < 10; ++i)
+            floats.add(random.nextFloat());
+
+        List<Object> doubles = new ArrayList<>(Arrays.asList(new Double[]{
+            0.0, -1.0, -2.0, 1.0, 2.0,
+            0.1, 0.9, 1.1,
+            -0.1, -0.9, -1.1,
+            127.0, -128.0,
+            322.0, -322.0,
+            2314908.0, -2314908.0,
+            231490893.0, -194322323.0
+        }));
+        addBoundaryValues(Double.class, doubles);
+        for (int i = 0; i < 10; ++i)
+            floats.add(random.nextDouble());
+
+        w.println(BEGIN_MAIN);
+        for (Object i : ints)
+            w.println("        checkint(" + toLiteral(Integer.class, i) + ");");
+        for (Object l : longs)
+            w.println("        checklong(" + toLiteral(Long.class, l) + ");");
+        for (Object f : floats)
+            w.println("        checkfloat(" + toLiteral(Float.class, f) + ");");
+        for (Object d : doubles)
+            w.println("        checkdouble(" + toLiteral(Double.class, d) + ");");
+        w.println(END_MAIN);
+
+        for (String type : new String[] {"int", "long", "float", "double" }) {
+            w.println("    public static void check" + type + "(" + type + " value) {");
+            w.println("        println((int) value);");
+            w.println("        println((long) value);");
+            w.println("        println((float) value);");
+            w.println("        println((double) value);");
+            w.println("        println((char) value);");
+            w.println("        println((short) value);");
+            w.println("        println((byte) value);");
+//             w.println("        println((boolean) value);"); makes no sense
+            w.println("    }");
+        }
+
     }
 }

@@ -55,6 +55,19 @@ static inline T div_overflow(T dividend, T divisor) {
     return dividend / divisor;
 }
 
+template<std::floating_point F, std::signed_integral I>
+static inline I floating_to_integer(F f) {
+    if (std::isnan(f)) {
+        return 0;
+    } else if (f > static_cast<F>(std::numeric_limits<I>::max())) {
+        return std::numeric_limits<I>::max();
+    } else if (f < static_cast<F>(std::numeric_limits<I>::min())) {
+        return std::numeric_limits<I>::min();
+    } else {
+        return static_cast<I>(f);
+    }
+}
+
 int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, ClassFile *main) {
     auto main_method_iter = std::find_if(main->methods.begin(), main->methods.end(),
                                          [](const method_info &m) {
@@ -510,11 +523,52 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
         }
 
             /* ======================= Conversions ======================= */
-        case OpCodes::l2i: {
-            auto value = static_cast<s4>(frame.stack_pop().s8);
-            frame.stack_push(value);
+        case OpCodes::i2l:
+            frame.stack_push(static_cast<s8>(frame.stack_pop().s4));
+            break;
+        case OpCodes::i2f:
+            frame.stack_push(static_cast<float>(frame.stack_pop().s4));
+            break;
+        case OpCodes::i2d:
+            frame.stack_push(static_cast<double>(frame.stack_pop().s4));
+            break;
+        case OpCodes::l2i:
+            frame.stack_push(static_cast<s4>(frame.stack_pop().s8));
+            break;
+        case OpCodes::l2f:
+            frame.stack_push(static_cast<float>(frame.stack_pop().s8));
+            break;
+        case OpCodes::l2d:
+            frame.stack_push(static_cast<double>(frame.stack_pop().s8));
+            break;
+        case OpCodes::f2i: {
+            frame.stack_push(floating_to_integer<float, s4>(frame.stack_pop().float_));
             break;
         }
+        case OpCodes::f2l:
+            frame.stack_push(floating_to_integer<float, s8>(frame.stack_pop().float_));
+            break;
+        case OpCodes::f2d:
+            frame.stack_push(static_cast<double>(frame.stack_pop().float_));
+            break;
+        case OpCodes::d2i:
+            frame.stack_push(floating_to_integer<double, s4>(frame.stack_pop().double_));
+            break;
+        case OpCodes::d2l:
+            frame.stack_push(floating_to_integer<double, s8>(frame.stack_pop().double_));
+            break;
+        case OpCodes::d2f:
+            frame.stack_push(static_cast<float>(frame.stack_pop().double_));
+            break;
+        case OpCodes::i2b:
+            frame.stack_push(static_cast<s4>(static_cast<s1>(frame.stack_pop().s4)));
+            break;
+        case OpCodes::i2c:
+            frame.stack_push(static_cast<s4>(static_cast<u2>(frame.stack_pop().s4)));
+            break;
+        case OpCodes::i2s:
+            frame.stack_push(static_cast<s4>(static_cast<s2>(frame.stack_pop().s4)));
+            break;
 
             /* ======================= Comparisons ======================= */
         case OpCodes::lcmp: {
@@ -656,6 +710,29 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
                     i = future::bit_cast<s8>(0x7ff8000000000000L);
                 }
                 std::cout << i << "\n";
+                return pc + 3;
+            } else if (method_ref.name_and_type->name->value == "println" &&
+                       method_ref.name_and_type->descriptor->value == "(C)V") {
+                std::cout << frame.stack_pop().s4 << "\n";
+                return pc + 3;
+            } else if (method_ref.name_and_type->name->value == "println" &&
+                       method_ref.name_and_type->descriptor->value == "(S)V") {
+                std::cout << frame.stack_pop().s4 << "\n";
+                return pc + 3;
+            } else if (method_ref.name_and_type->name->value == "println" &&
+                       method_ref.name_and_type->descriptor->value == "(B)V") {
+                std::cout << frame.stack_pop().s4 << "\n";
+                return pc + 3;
+            } else if (method_ref.name_and_type->name->value == "println" &&
+                       method_ref.name_and_type->descriptor->value == "(Z)V") {
+                auto value = frame.stack_pop().s4;
+                if (value == 1) {
+                    std::cout << "true\n";
+                } else if (value == 0) {
+                    std::cout << "false\n";
+                } else {
+                    abort();
+                }
                 return pc + 3;
             }
 

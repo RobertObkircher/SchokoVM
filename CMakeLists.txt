@@ -104,6 +104,7 @@ set(JAVA_TEST_GENERATED_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticDoubleNeg.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ComparisonsInt.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ComparisonsLong.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/Conversions.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/InvokeStaticPermutations.java
         )
 
