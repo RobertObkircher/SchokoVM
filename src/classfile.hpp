@@ -103,6 +103,7 @@ struct CONSTANT_Methodref_info {
     u2 name_and_type_index;
     CONSTANT_Class_info *class_;
     CONSTANT_NameAndType_info *name_and_type;
+    method_info *method;
 };
 
 struct CONSTANT_InterfaceMethodref_info {
@@ -225,7 +226,7 @@ struct field_info {
     std::vector<attribute_info> attributes;
 };
 
-enum class MethodInfoAccessFlags {
+enum class MethodInfoAccessFlags : u2 {
     ACC_PUBLIC = 0x0001,
     ACC_PRIVATE = 0x0002,
     ACC_PROTECTED = 0x0004,

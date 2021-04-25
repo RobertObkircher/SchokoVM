@@ -372,60 +372,72 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             /* ======================= References ======================= */
         case OpCodes::invokestatic: {
             size_t method_index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
-            // TODO this is really an index into the run-time constant pool
-            auto method = std::get<CONSTANT_Methodref_info>(frame.clazz->constant_pool.table[method_index].variant);
+            auto method_ref = std::get<CONSTANT_Methodref_info>(frame.clazz->constant_pool.table[method_index].variant);
 
             // TODO this is hardcoded for now
-            if (method.class_->name->value == "java/lang/System" && method.name_and_type->name->value == "exit" &&
-                method.name_and_type->descriptor->value == "(I)V") {
+            if (method_ref.class_->name->value == "java/lang/System" &&
+                method_ref.name_and_type->name->value == "exit" &&
+                method_ref.name_and_type->descriptor->value == "(I)V") {
                 shouldExit = true;
-            } else if (method.name_and_type->name->value == "println" &&
-                       method.name_and_type->descriptor->value == "(I)V") {
+                return pc;
+            } else if (method_ref.name_and_type->name->value == "println" &&
+                       method_ref.name_and_type->descriptor->value == "(I)V") {
                 std::cout << frame.stack_pop().s4 << "\n";
-            } else if (method.name_and_type->name->value == "println" &&
-                       method.name_and_type->descriptor->value == "(J)V") {
+                return pc + 3;
+            } else if (method_ref.name_and_type->name->value == "println" &&
+                       method_ref.name_and_type->descriptor->value == "(J)V") {
                 std::cout << frame.stack_pop().s8 << "\n";
-            } else {
-                if (method.class_->clazz == nullptr) {
-                    auto result = class_files.find(method.class_->name->value);
+                return pc + 3;
+            }
+
+            method_info *method = method_ref.method;
+            ClassFile *clazz = method_ref.class_->clazz;
+
+            if (method == nullptr) {
+                if (clazz == nullptr) {
+                    auto result = class_files.find(method_ref.class_->name->value);
                     if (result == class_files.end()) {
-                        throw std::runtime_error("class not found: '" + method.class_->name->value + "'");
+                        throw std::runtime_error("class not found: '" + method_ref.class_->name->value + "'");
                     }
-                    method.class_->clazz = result->second;
+                    method_ref.class_->clazz = clazz = result->second;
 
                     // TODO if clazz is not initialized: create a stackframe with the initializer but do not advance the pc of this frame
                 }
 
-                ClassFile *clazz = method.class_->clazz;
-
                 auto method_iter = std::find_if(clazz->methods.begin(), clazz->methods.end(),
-                                                [method](const method_info &m) {
-                                                    return m.name_index->value == method.name_and_type->name->value &&
+                                                [method_ref](const method_info &m) {
+                                                    return m.name_index->value ==
+                                                           method_ref.name_and_type->name->value &&
                                                            m.descriptor_index->value ==
-                                                           method.name_and_type->descriptor->value
+                                                           method_ref.name_and_type->descriptor->value
                                                         // TODO m.access_flags
                                                             ;
                                                 });
                 if (method_iter == std::end(clazz->methods)) {
-                    throw std::runtime_error("Couldn't find method: '" + method.name_and_type->name->value + "' " +
-                                             method.name_and_type->descriptor->value + " in class " +
-                                             method.class_->name->value);
+                    throw std::runtime_error(
+                            "Couldn't find method_ref: '" + method_ref.name_and_type->name->value + "' " +
+                            method_ref.name_and_type->descriptor->value + " in class " +
+                            method_ref.class_->name->value);
                 }
 
-                method_info *target_method = &*method_iter;
+                method_ref.method = method = &*method_iter;
+            }
 
+            if (method->access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_NATIVE)) {
+                abort();
+                return pc + 3;
+            } else {
                 size_t operand_stack_top = frame.first_operand_index + frame.operands_count;
-                frame.operands_count += target_method->minus_parameter_count_plus_return_count;
+                frame.operands_count += method->minus_parameter_count_plus_return_count;
 
                 frame.pc += 3;
                 thread.stack.parent_frames.push_back(frame);
 
-                frame = {thread.stack, clazz, target_method, operand_stack_top};
+                frame = {thread.stack, clazz, method, operand_stack_top};
                 if (thread.stack.memory_used > thread.stack.memory.size())
                     throw std::runtime_error("stack overflow");
-                return 0;
+                return 0; // will be set on the new frame
             }
-            return pc + 3;
         }
 
         default:
@@ -472,7 +484,7 @@ Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand
     if (method->move_arguments) {
         size_t target = method->stack_slots_used_by_parameters;
         size_t source = method->parameter_count;
-        assert(target > source);
+        assert(target > source); // move_arguments is false if they are equal
         do {
             --target;
             --source;
