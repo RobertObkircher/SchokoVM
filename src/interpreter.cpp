@@ -349,7 +349,6 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             frame.stack_push(a * b);
             break;
         }
-
         case OpCodes::idiv: {
             auto divisor = frame.stack_pop().s4;
             auto dividend = frame.stack_pop().s4;
@@ -388,6 +387,51 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
                 throw std::runtime_error("Division by 0");
             }
             frame.stack_push(dividend / divisor);
+            break;
+        }
+
+        case OpCodes::irem: {
+            auto divisor = frame.stack_pop().s4;
+            auto dividend = frame.stack_pop().s4;
+            if (divisor == 0) {
+                // TODO ArithmeticException
+                throw std::runtime_error("Division by 0");
+            }
+            auto result = dividend - mul_overflow(div_overflow(dividend, divisor), divisor);
+            frame.stack_push(result);
+            break;
+        }
+        case OpCodes::lrem: {
+            auto divisor = frame.stack_pop().s8;
+            auto dividend = frame.stack_pop().s8;
+            if (divisor == 0) {
+                // TODO ArithmeticException
+                throw std::runtime_error("Division by 0");
+            }
+            auto result = dividend - mul_overflow(div_overflow(dividend, divisor), divisor);
+            frame.stack_push(result);
+            break;
+        }
+        case OpCodes::frem: {
+            auto divisor = frame.stack_pop().float_;
+            auto dividend = frame.stack_pop().float_;
+            if (divisor == 0) {
+                // TODO ArithmeticException
+                throw std::runtime_error("Division by 0");
+            }
+            auto result = std::fmod(dividend, divisor);
+            frame.stack_push(result);
+            break;
+        }
+        case OpCodes::drem: {
+            auto divisor = frame.stack_pop().double_;
+            auto dividend = frame.stack_pop().double_;
+            if (divisor == 0) {
+                // TODO ArithmeticException
+                throw std::runtime_error("Division by 0");
+            }
+            auto result = std::fmod(dividend, divisor);
+            frame.stack_push(result);
             break;
         }
 

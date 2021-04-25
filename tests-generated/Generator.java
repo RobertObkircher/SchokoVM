@@ -23,21 +23,25 @@ public class Generator {
         generate(path, "ArithmeticIntSub", w -> generateArithmeticInt(w, "-"));
         generate(path, "ArithmeticIntMul", w -> generateArithmeticInt(w, "*"));
         generate(path, "ArithmeticIntDiv", w -> generateArithmeticInt(w, "/"));
+        generate(path, "ArithmeticIntRem", w -> generateArithmeticInt(w, "%"));
 
         generate(path, "ArithmeticLongAdd", w -> generateArithmeticLong(w, "+"));
         generate(path, "ArithmeticLongSub", w -> generateArithmeticLong(w, "-"));
         generate(path, "ArithmeticLongMul", w -> generateArithmeticLong(w, "*"));
         generate(path, "ArithmeticLongDiv", w -> generateArithmeticLong(w, "/"));
+        generate(path, "ArithmeticLongRem", w -> generateArithmeticLong(w, "%"));
 
         generate(path, "ArithmeticFloatAdd", w -> generateArithmeticFloating(w, "+", false));
         generate(path, "ArithmeticFloatSub", w -> generateArithmeticFloating(w, "-", false));
         generate(path, "ArithmeticFloatMul", w -> generateArithmeticFloating(w, "*", false));
         generate(path, "ArithmeticFloatDiv", w -> generateArithmeticFloating(w, "/", false));
+        generate(path, "ArithmeticFloatRem", w -> generateArithmeticFloating(w, "%", false));
 
         generate(path, "ArithmeticDoubleAdd", w -> generateArithmeticFloating(w, "+", true));
         generate(path, "ArithmeticDoubleSub", w -> generateArithmeticFloating(w, "-", true));
         generate(path, "ArithmeticDoubleMul", w -> generateArithmeticFloating(w, "*", true));
         generate(path, "ArithmeticDoubleDiv", w -> generateArithmeticFloating(w, "/", true));
+        generate(path, "ArithmeticDoubleRem", w -> generateArithmeticFloating(w, "%", true));
 
         generate(path, "ComparisonsInt", w -> generateComparisons(w, false));
         generate(path, "ComparisonsLong", w -> generateComparisons(w, true));
@@ -84,7 +88,7 @@ public class Generator {
             w.println("        a = " + i + "; //////////////////////////////");
             for (int j : numbers) {
                 // TODO emit a try catch ArithmeticException instead
-                if (op != "/" || j != 0) {
+                if (!((op == "/" || op == "%") && j == 0)) {
                     w.println("        b = " + j + ";");
                     w.println("        c = a " + op + " b;");
                     w.println("        println(c);");
@@ -121,7 +125,7 @@ public class Generator {
             w.println("        a = " + i + "L; //////////////////////////////");
             for (long j : numbers) {
                 // TODO emit a try catch ArithmeticException instead
-                if (op != "/" || j != 0) {
+                if (!((op == "/" || op == "%") && j == 0)) {
                     w.println("        b = " + j + "L;");
                     w.println("        c = a " + op + " b;");
                     w.println("        println(c);");
@@ -174,7 +178,7 @@ public class Generator {
             w.println("        a = " + (useDouble ? i : ((float) i)) + doublePostfix + "; //////////////////////////////");
             for (double j : numbers) {
                 // TODO emit a try catch ArithmeticException instead
-                if (op != "/" || j != 0) {
+                if (!((op == "/" || op == "%") && j == 0)) {
                     w.println("        b = " + (useDouble ? j : ((float) j)) + doublePostfix + ";");
                     w.println("        c = a " + op + " b;");
                     w.println("        println(c);");
