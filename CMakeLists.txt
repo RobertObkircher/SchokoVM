@@ -48,7 +48,11 @@ add_executable(SchokoVM
         src/parser.cpp src/parser.hpp
         src/args.cpp src/args.hpp
         src/jar.cpp src/jar.hpp
-        src/interpreter.cpp src/interpreter.hpp src/opcodes.hpp src/future.hpp)
+        src/interpreter.cpp src/interpreter.hpp
+        src/opcodes.hpp
+        src/future.hpp
+        )
+
 if (libzip_FOUND)
     target_link_libraries(SchokoVM libzip::zip)
 else ()
@@ -59,6 +63,7 @@ endif ()
 # Note: using glob to create this list is not recommended
 #file(GLOB JAVA_TEST_SOURCES CONFIGURE_DEPENDS tests/*.java)
 set(JAVA_TEST_SOURCES
+        tests/Bitwise.java
         tests/Empty.java
 #        tests/HelloWorld.java
         tests/InvokeStatic.java

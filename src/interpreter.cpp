@@ -483,6 +483,24 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             );
             break;
         }
+        case OpCodes::iand:
+            frame.stack_push(frame.stack_pop().s4 & frame.stack_pop().s4);
+            break;
+        case OpCodes::land:
+            frame.stack_push(frame.stack_pop().s8 & frame.stack_pop().s8);
+            break;
+        case OpCodes::ior:
+            frame.stack_push(frame.stack_pop().s4 | frame.stack_pop().s4);
+            break;
+        case OpCodes::lor:
+            frame.stack_push(frame.stack_pop().s8 | frame.stack_pop().s8);
+            break;
+        case OpCodes::ixor:
+            frame.stack_push(frame.stack_pop().s4 ^ frame.stack_pop().s4);
+            break;
+        case OpCodes::lxor:
+            frame.stack_push(frame.stack_pop().s8 ^ frame.stack_pop().s8);
+            break;
         case OpCodes::iinc: {
             auto local = code[pc + 1];
             auto value = static_cast<s4>(static_cast<s2>(future::bit_cast<s1>(code[pc + 2])));
