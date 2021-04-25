@@ -431,31 +431,31 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             break;
         }
         case OpCodes::ishl: {
-            auto shift = frame.stack_pop().s4;
+            auto shift = frame.stack_pop().s4 & 0x1F;
             auto value = frame.stack_pop().s4;
             frame.stack_push(value << shift);
             break;
         }
         case OpCodes::lshl: {
-            auto shift = frame.stack_pop().s4;
+            auto shift = frame.stack_pop().s4 & 0x3F;
             auto value = frame.stack_pop().s8;
             frame.stack_push(value << shift);
             break;
         }
         case OpCodes::ishr: {
-            auto shift = frame.stack_pop().s4;
+            auto shift = frame.stack_pop().s4 & 0x1F;
             auto value = frame.stack_pop().s4;
             frame.stack_push(value >> shift);
             break;
         }
         case OpCodes::lshr: {
-            auto shift = frame.stack_pop().s4;
+            auto shift = frame.stack_pop().s4 & 0x3F;
             auto value = frame.stack_pop().s8;
             frame.stack_push(value >> shift);
             break;
         }
         case OpCodes::iushr: {
-            auto shift = frame.stack_pop().s4;
+            auto shift = frame.stack_pop().s4 & 0x1F;
             auto value = frame.stack_pop().s4;
             // C++20 always performs arithmetic shifts, so the top bits need to be cleared out afterwards
             frame.stack_push((value >> shift) &
@@ -464,8 +464,9 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             break;
         }
         case OpCodes::lushr: {
-            auto shift = frame.stack_pop().s4;
+            auto shift = frame.stack_pop().s4 & 0x3F;
             auto value = frame.stack_pop().s8;
+            // C++20 always performs arithmetic shifts, so the top bits need to be cleared out afterwards
             frame.stack_push((value >> shift) &
                              (future::bit_cast<s8>(std::numeric_limits<u8>::max() >> static_cast<u8>(shift)))
             );
