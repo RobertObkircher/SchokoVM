@@ -158,14 +158,14 @@ public class Generator {
         w.println(BEGIN_MAIN);
 
         // we use variables to make sure that javac doesn't fold literals
-        w.println("        " + toPrimiteType(type) + " a, b, c;");
+        w.println("        " + toPrimitiveType(type) + " a, b, c;");
 
         for (Object i : numbers) {
-            w.println("        a = " + i + getLiteralPostfix(type) + "; //////////////////////////////");
+            w.println("        a = " + toLiteral(type, i) + "; //////////////////////////////");
             for (Object j : numbers) {
                 // TODO emit a try catch ArithmeticException instead
                 if (!((op == "/" || op == "%") && ((Number)j).doubleValue() == 0)) {
-                    w.println("        b = " + j + getLiteralPostfix(type) + ";");
+                    w.println("        b = " + toLiteral(type, j) + ";");
                     w.println("        c = a " + op + " b;");
                     w.println("        println(c);");
                 }
@@ -185,13 +185,13 @@ public class Generator {
         w.println(BEGIN_MAIN);
 
         // we use variables to make sure that javac doesn't fold literals
-        w.println("        " + toPrimiteType(type) + " a, b;");
+        w.println("        " + toPrimitiveType(type) + " a, b;");
 
         for (String op : new String[] {"==", ">=", "<=", "<", ">", "!="}) {
         for (Object i : numbers) {
-            w.println("        a = " + i + getLiteralPostfix(type) + "; //////////////////////////////");
+            w.println("        a = " + toLiteral(type, i) + "; //////////////////////////////");
             for (Object j : numbers) {
-                w.println("        b = " + j + getLiteralPostfix(type) + ";");
+                w.println("        b = " + toLiteral(type, j) + ";");
                 w.println("        if(a " + op + " b)");
                 w.println("          println(0);");
                 w.println("        else");
@@ -268,26 +268,51 @@ public class Generator {
         addBoundaryValues(type, numbers);
 
         w.println(BEGIN_MAIN);
-         w.println("        " + toPrimiteType(type) + " a;");
+         w.println("        " + toPrimitiveType(type) + " a;");
         for (Object i : numbers) {
-            w.println("        a = " + i + getLiteralPostfix(type) + ";");
+            w.println("        a = " + toLiteral(type, i) + ";");
             w.println("        println(-a);");
         }
         w.println(END_MAIN);
     }
 
-    public static String getLiteralPostfix(Class<?> type) {
+    public static String toLiteral(Class<?> type, Object i) {
         if(type == Float.class) {
-            return "f";
+            float f = ((Number) i).floatValue();
+            if(Float.isNaN(f)) {
+                return "(1.0f / 0.0f)";
+            } else if(Float.isInfinite(f)) {
+                if(f > 0) {
+                    return "(1.0f / 0.0f)";
+                } else {
+                    return "(-1.0f / 0.0f)";
+                }
+            } else {
+                return Float.toHexString(f) + "f";
+            }
         } else if(type == Double.class) {
-            return "d";
+            double d = ((Number) i).doubleValue();
+            if(Double.isNaN(d)) {
+                return "(1.0d / 0.0d)";
+            } else if(Double.isInfinite(d)) {
+                if(d > 0) {
+                    return "(1.0d / 0.0d)";
+                } else {
+                    return "(-1.0d / 0.0d)";
+                }
+            } else {
+                return Double.toHexString(d) + "d";
+            }
         } else if(type == Long.class) {
-            return "L";
+            long l = (long) i;
+            return l + "L";
+        } else if(type == Integer.class){
+            return i.toString();
         } else {
-            return "";
+            throw new RuntimeException("Unreachable");
         }
     }
-    public static String toPrimiteType(Class<?> type) {
+    public static String toPrimitiveType(Class<?> type) {
         if(type == Float.class) {
             return "float";
         } else if(type == Double.class) {
@@ -306,6 +331,10 @@ public class Generator {
             numbers.add(Float.MAX_VALUE - 1);
             numbers.add(Float.MIN_VALUE);
             numbers.add(Float.MIN_VALUE + 1);
+            numbers.add(Float.MIN_NORMAL);
+            numbers.add(Float.NEGATIVE_INFINITY);
+            numbers.add(Float.POSITIVE_INFINITY);
+            numbers.add(Float.NaN);
             for (int i = 0; i < 8; ++i) {
                 numbers.add(random.nextFloat());
             }
@@ -314,6 +343,10 @@ public class Generator {
             numbers.add(Double.MAX_VALUE - 1);
             numbers.add(Double.MIN_VALUE);
             numbers.add(Double.MIN_VALUE + 1);
+            numbers.add(Double.MIN_NORMAL);
+            numbers.add(Double.NEGATIVE_INFINITY);
+            numbers.add(Double.POSITIVE_INFINITY);
+            numbers.add(Double.NaN);
             for (int i = 0; i < 8; ++i) {
                 numbers.add(random.nextDouble());
             }

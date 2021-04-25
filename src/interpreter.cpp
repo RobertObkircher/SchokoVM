@@ -620,12 +620,24 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             } else if (method_ref.name_and_type->name->value == "println" &&
                        method_ref.name_and_type->descriptor->value == "(F)V") {
                 // floatToIntBits
-                std::cout << future::bit_cast<s4>(frame.stack_pop().float_) << "\n";
+                float f = frame.stack_pop().float_;
+                s4 i = future::bit_cast<s4>(f);
+                if (std::isnan(f)) {
+                    // canonical NaN
+                    i = future::bit_cast<s4>(0x7fc00000);
+                }
+                std::cout << i << "\n";
                 return pc + 3;
             } else if (method_ref.name_and_type->name->value == "println" &&
                        method_ref.name_and_type->descriptor->value == "(D)V") {
                 // doubleToLongBits
-                std::cout << future::bit_cast<s8>(frame.stack_pop().double_) << "\n";
+                double d = frame.stack_pop().double_;
+                s8 i = future::bit_cast<s8>(d);
+                if (std::isnan(d)) {
+                    // canonical NaN
+                    i = future::bit_cast<s8>(0x7ff8000000000000L);
+                }
+                std::cout << i << "\n";
                 return pc + 3;
             }
 
