@@ -13,7 +13,8 @@ static const u2 MAIN_ACCESS_FLAGS = (static_cast<u2>(FieldInfoAccessFlags::ACC_P
 static const auto MAIN_NAME = "main";
 static const auto MAIN_DESCRIPTOR = "([Ljava/lang/String;)V";
 
-static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, size_t pc, bool &shouldExit);
+static size_t execute_instruction(Thread &thread, Frame &frame,
+                                  std::unordered_map<std::string_view, ClassFile *> &class_files, bool &shouldExit);
 
 static size_t execute_comparison(const std::vector<u1> &code, size_t pc, bool condition);
 
@@ -53,49 +54,45 @@ static inline T div_overflow(T dividend, T divisor) {
     return dividend / divisor;
 }
 
-int interpret(const std::vector<ClassFile> &class_files, size_t main_class_index) {
-    // 1. Find the main method
-    const ClassFile &main = class_files[main_class_index];
-    auto main_method_iter = std::find_if(main.methods.begin(), main.methods.end(),
+int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, ClassFile *main) {
+    auto main_method_iter = std::find_if(main->methods.begin(), main->methods.end(),
                                          [](const method_info &m) {
                                              return m.name_index->value == MAIN_NAME &&
                                                     m.descriptor_index->value == MAIN_DESCRIPTOR &&
                                                     (m.access_flags & MAIN_ACCESS_FLAGS) == MAIN_ACCESS_FLAGS;
                                          }
     );
-    if (main_method_iter == std::end(main.methods)) {
+    if (main_method_iter == std::end(main->methods)) {
         throw std::runtime_error("Couldn't find main method");
     }
+    method_info *main_method = &*main_method_iter;
 
-    // 2. Actually start running the code
-    const auto &main_method = *main_method_iter;
-    // TODO find the code attribute properly
-    const auto &code = std::get<Code_attribute>(main_method.attributes[0].variant);
+    Thread thread;
+    thread.stack.memory.resize(1024 * 1024 / sizeof(Value)); // 1mb for now
 
-    // TODO throw `code too large` when appropriate
+    thread.stack.memory_used = 1;
+    thread.stack.memory[0] = Value(0); // TODO args[] for main
 
-    Stack stack;
-    std::unique_ptr<Frame> p(new Frame(main, code.max_locals, code.max_stack, nullptr));
-    stack.current_frame = std::move(p);
+    Frame frame{thread.stack, main, main_method, thread.stack.memory_used};
 
-    size_t pc = 0;
     bool shouldExit = false;
-    while (true) {
-        pc = execute_instruction(*stack.current_frame, code.code, pc, shouldExit);
-        if (shouldExit) {
-            break;
-        }
+    while (!shouldExit) {
+        frame.pc = execute_instruction(thread, frame, class_files, shouldExit);
     }
 
     // print exit code
-    if (stack.current_frame->stack.empty()) {
+    if (frame.operands_count == 0) {
         return 0;
     } else {
-        return stack.current_frame->stack_pop().s4;
+        return frame.stack_pop().s4;
     }
 }
 
-static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, size_t pc, bool &shouldExit) {
+static inline size_t execute_instruction(Thread &thread, Frame &frame,
+                                         std::unordered_map<std::string_view, ClassFile *> &class_files,
+                                         bool &shouldExit) {
+    size_t pc = frame.pc;
+    std::vector<u1> &code = *frame.code;
     auto opcode = code[pc];
     // TODO implement remaining opcodes. The ones that are currently commented/missing out have no test coverage whatsoever
     switch (static_cast<OpCodes>(opcode)) {
@@ -142,7 +139,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
 // TODO the following instructions actually read from the runtime constant pool
         case OpCodes::ldc: {
             auto index = code[pc + 1];
-            auto &entry = frame.clas.constant_pool.table[index];
+            auto &entry = frame.clazz->constant_pool.table[index];
             if (auto i = std::get_if<CONSTANT_Integer_info>(&entry.variant)) {
                 frame.stack_push(i->bytes);
 //            } else if (auto f = std::get_if<CONSTANT_Float_info>(&entry.variant)) {
@@ -155,7 +152,7 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
 //        case OpCodes::ldc_w:
         case OpCodes::ldc2_w: {
             size_t index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
-            auto &entry = frame.clas.constant_pool.table[index];
+            auto &entry = frame.clazz->constant_pool.table[index];
             if (auto l = std::get_if<CONSTANT_Long_info>(&entry.variant)) {
                 frame.stack_push(l->value);
 //            } else if (auto d = std::get_if<CONSTANT_Double_info>(&entry.variant)) {
@@ -351,32 +348,96 @@ static size_t execute_instruction(Frame &frame, const std::vector<u1> &code, siz
             /* ======================= Control =======================*/
         case OpCodes::goto_:
             return goto_(code, pc);
-        case OpCodes::return_:
-            shouldExit = -1;
+
+        case OpCodes::ireturn:
+        case OpCodes::lreturn:
+        case OpCodes::freturn:
+        case OpCodes::dreturn:
+        case OpCodes::areturn:
+            frame.locals[0] = frame.stack_pop();
+            // fallthrough
+        case OpCodes::return_: {
+            if (thread.stack.parent_frames.empty()) {
+                shouldExit = true;
+            } else {
+                thread.stack.memory_used = frame.previous_stack_memory_usage;
+                frame = thread.stack.parent_frames[thread.stack.parent_frames.size() - 1];
+                thread.stack.parent_frames.pop_back();
+                return frame.pc;
+            }
             break;
+        }
 
 
             /* ======================= References ======================= */
         case OpCodes::invokestatic: {
             size_t method_index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
-            // TODO this is really an index into the run-time constant pool
-            auto method = std::get<CONSTANT_Methodref_info>(frame.clas.constant_pool.table[method_index].variant);
+            auto method_ref = std::get<CONSTANT_Methodref_info>(frame.clazz->constant_pool.table[method_index].variant);
 
             // TODO this is hardcoded for now
-            if (method.class_->name->value == "java/lang/System" && method.name_and_type->name->value == "exit" &&
-                method.name_and_type->descriptor->value == "(I)V") {
+            if (method_ref.class_->name->value == "java/lang/System" &&
+                method_ref.name_and_type->name->value == "exit" &&
+                method_ref.name_and_type->descriptor->value == "(I)V") {
                 shouldExit = true;
-            } else if (method.name_and_type->name->value == "println" &&
-                       method.name_and_type->descriptor->value == "(I)V") {
+                return pc;
+            } else if (method_ref.name_and_type->name->value == "println" &&
+                       method_ref.name_and_type->descriptor->value == "(I)V") {
                 std::cout << frame.stack_pop().s4 << "\n";
-            } else if (method.name_and_type->name->value == "println" &&
-                       method.name_and_type->descriptor->value == "(J)V") {
+                return pc + 3;
+            } else if (method_ref.name_and_type->name->value == "println" &&
+                       method_ref.name_and_type->descriptor->value == "(J)V") {
                 std::cout << frame.stack_pop().s8 << "\n";
-            } else {
-                throw std::runtime_error("Unimplemented invokestatic: " + method.name_and_type->name->value +
-                                         method.name_and_type->descriptor->value);
+                return pc + 3;
             }
-            return pc + 3;
+
+            method_info *method = method_ref.method;
+            ClassFile *clazz = method_ref.class_->clazz;
+
+            if (method == nullptr) {
+                if (clazz == nullptr) {
+                    auto result = class_files.find(method_ref.class_->name->value);
+                    if (result == class_files.end()) {
+                        throw std::runtime_error("class not found: '" + method_ref.class_->name->value + "'");
+                    }
+                    method_ref.class_->clazz = clazz = result->second;
+
+                    // TODO if clazz is not initialized: create a stackframe with the initializer but do not advance the pc of this frame
+                }
+
+                auto method_iter = std::find_if(clazz->methods.begin(), clazz->methods.end(),
+                                                [method_ref](const method_info &m) {
+                                                    return m.name_index->value ==
+                                                           method_ref.name_and_type->name->value &&
+                                                           m.descriptor_index->value ==
+                                                           method_ref.name_and_type->descriptor->value
+                                                        // TODO m.access_flags
+                                                            ;
+                                                });
+                if (method_iter == std::end(clazz->methods)) {
+                    throw std::runtime_error(
+                            "Couldn't find method_ref: '" + method_ref.name_and_type->name->value + "' " +
+                            method_ref.name_and_type->descriptor->value + " in class " +
+                            method_ref.class_->name->value);
+                }
+
+                method_ref.method = method = &*method_iter;
+            }
+
+            if (method->access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_NATIVE)) {
+                abort();
+                return pc + 3;
+            } else {
+                size_t operand_stack_top = frame.first_operand_index + frame.operands_count;
+                frame.operands_count += method->minus_parameter_count_plus_return_count;
+
+                frame.pc += 3;
+                thread.stack.parent_frames.push_back(frame);
+
+                frame = {thread.stack, clazz, method, operand_stack_top};
+                if (thread.stack.memory_used > thread.stack.memory.size())
+                    throw std::runtime_error("stack overflow");
+                return 0; // will be set on the new frame
+            }
         }
 
         default:
@@ -400,4 +461,41 @@ static size_t goto_(const std::vector<u1> &code, size_t pc) {
     u2 offset_u = static_cast<u2>((code[pc + 1]) << 8 | (code[pc + 2]));
     auto offset = future::bit_cast<s2>(offset_u);
     return static_cast<size_t>(static_cast<long>(pc) + offset);
+}
+
+Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top)
+        : clazz(clazz),
+          method(method),
+          code(&method->code_attribute->code),
+          operands_count(0),
+          previous_stack_memory_usage(stack.memory_used),
+          pc(0) {
+    //assert(method->code_attribute->max_locals >= method->parameter_count);
+    assert(stack.memory_used >= method->parameter_count);
+    assert(operand_stack_top >= method->parameter_count);
+
+    size_t first_local_index = operand_stack_top - method->parameter_count;
+    first_operand_index = first_local_index + method->code_attribute->max_locals;
+    stack.memory_used = first_operand_index + method->code_attribute->max_stack;
+
+    locals = {&stack.memory[first_local_index], method->code_attribute->max_locals};
+    operands = {&stack.memory[first_operand_index], method->code_attribute->max_stack};
+
+    if (method->move_arguments) {
+        size_t target = method->stack_slots_used_by_parameters;
+        size_t source = method->parameter_count;
+        assert(target > source); // move_arguments is false if they are equal
+        do {
+            --target;
+            --source;
+            if (method->argument_takes_two_local_variables[source]) {
+                --target;
+                if (source == target) break;
+            }
+            locals[target] = locals[source];
+        } while (source != 0);
+    }
+
+    // TODO think about value set conversion
+    // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-2.html#jvms-2.8.3
 }

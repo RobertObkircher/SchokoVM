@@ -62,11 +62,50 @@ ClassFile Parser::parse() {
 
     u2 methods_count = eat_u2();
     for (int i = 0; i < methods_count; ++i) {
-        method_info method_info;
+        method_info method_info{};
         method_info.access_flags = eat_u2();
         method_info.name_index = &check_cp_range_and_type<CONSTANT_Utf8_info>(result.constant_pool, eat_u2());
         method_info.descriptor_index = &check_cp_range_and_type<CONSTANT_Utf8_info>(result.constant_pool, eat_u2());
         method_info.attributes = parse_attributes(result.constant_pool);
+
+        for (auto &attribute : method_info.attributes) {
+            Code_attribute *code = std::get_if<Code_attribute>(&attribute.variant);
+            if (code) {
+                if (method_info.code_attribute)
+                    throw ParseError("Method has two code attributes!");
+                method_info.code_attribute = code;
+            }
+        }
+
+        auto &descriptor = method_info.descriptor_index->value;
+        method_info.parameter_count = 0;
+        bool skip_class_name = false;
+        for (char c : descriptor) {
+            if (skip_class_name) {
+                if (c == ';') skip_class_name = false;
+                continue;
+            }
+            if (c == '(') continue;
+            if (c == ')') break;
+
+            if (c == '[') continue; // don't count array dimensions
+
+            if (c == 'L') skip_class_name = true;
+            if (c == 'D' || c == 'J')
+                method_info.argument_takes_two_local_variables[method_info.parameter_count] = true;
+            ++method_info.parameter_count;
+        }
+        u1 count = static_cast<u1>(method_info.argument_takes_two_local_variables.count());
+        method_info.stack_slots_used_by_parameters = method_info.parameter_count + count;
+
+        // if it is the last one we do not have to move it
+        method_info.move_arguments = count > 1 || (count == 1 && !method_info.argument_takes_two_local_variables[
+                method_info.parameter_count - 1]);
+
+        method_info.minus_parameter_count_plus_return_count = -method_info.parameter_count;
+        if (descriptor[descriptor.size() - 1] != 'V')
+            method_info.minus_parameter_count_plus_return_count += 1;
+
         result.methods.push_back(std::move(method_info));
     }
 

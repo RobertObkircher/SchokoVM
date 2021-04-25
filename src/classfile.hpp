@@ -1,6 +1,7 @@
 #ifndef SCHOKOVM_CLASSFILE_HPP
 #define SCHOKOVM_CLASSFILE_HPP
 
+#include <bitset>
 #include <vector>
 #include <variant>
 #include <cassert>
@@ -33,6 +34,8 @@ struct annotation;
 struct type_annotation;
 struct type_path;
 struct record_component_info;
+struct Code_attribute;
+struct ClassFile;
 
 enum CpTag : u1 {
     // Just a dummy value used in the constant pool for index 0 and after longs/doubles
@@ -85,6 +88,7 @@ struct CONSTANT_Invalid_info {
 struct CONSTANT_Class_info {
     u2 name_index;
     CONSTANT_Utf8_info *name;
+    ClassFile *clazz;
 };
 
 struct CONSTANT_Fieldref_info {
@@ -99,6 +103,7 @@ struct CONSTANT_Methodref_info {
     u2 name_and_type_index;
     CONSTANT_Class_info *class_;
     CONSTANT_NameAndType_info *name_and_type;
+    method_info *method;
 };
 
 struct CONSTANT_InterfaceMethodref_info {
@@ -221,7 +226,7 @@ struct field_info {
     std::vector<attribute_info> attributes;
 };
 
-enum class MethodInfoAccessFlags {
+enum class MethodInfoAccessFlags : u2 {
     ACC_PUBLIC = 0x0001,
     ACC_PRIVATE = 0x0002,
     ACC_PROTECTED = 0x0004,
@@ -241,6 +246,20 @@ struct method_info {
     CONSTANT_Utf8_info *name_index;
     CONSTANT_Utf8_info *descriptor_index;
     std::vector<attribute_info> attributes;
+    Code_attribute *code_attribute;
+
+    // This is called nargs in the invoke* descriptions: https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-6.html#jvms-6.5.invokestatic
+    u1 parameter_count;
+    // Some parameters require 2 local variable slots
+    u2 stack_slots_used_by_parameters;
+
+    // true iff any of bits [0..253] is set. We do not need to move anything if it is only bit 254.
+    bool move_arguments;
+    // indicates if the nth argument requires two local variable slots (i.e. if it is a long/double)
+    std::bitset<255> argument_takes_two_local_variables;
+
+    // used to adjust the caller operand stack size
+    size_t minus_parameter_count_plus_return_count;
 };
 
 // attribute_info...
@@ -704,11 +723,6 @@ struct ConstantPool {
     inline T &get(u2 index) {
         return std::get<T>(table[index].variant);
     }
-
-//    inline std::string const& get_string(u2 index) const {
-//        auto &string_info = get<CONSTANT_String_info>(index);
-//        return get<CONSTANT_Utf8_info>(string_info.string_index).value;
-//    }
 };
 
 struct ClassFile {

@@ -61,6 +61,7 @@ endif ()
 set(JAVA_TEST_SOURCES
         tests/Empty.java
 #        tests/HelloWorld.java
+        tests/InvokeStatic.java
 #        tests/KarelTheRobot.java
         tests/UnitBoolean.java
         )
@@ -76,6 +77,7 @@ set(JAVA_TEST_GENERATED_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongDiv.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ComparisonsInt.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ComparisonsLong.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/InvokeStaticPermutations.java
         )
 
 set(TESTS_GENERATED ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated)
