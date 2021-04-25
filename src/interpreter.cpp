@@ -165,26 +165,14 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
         }
 
             /* ======================= Loads ======================= */
-        case OpCodes::iload: {
-            auto local = code[pc + 1];
-            frame.stack_push(frame.locals[local].s4);
-            return pc + 2;
-        }
-        case OpCodes::lload: {
-            // In a slight derivation from the spec, longs are stored in a single local
-            auto index = code[pc + 1];
-            frame.stack_push(frame.locals[index].s8);
-            return pc + 2;
-        }
-        case OpCodes::fload: {
-            auto local = code[pc + 1];
-            frame.stack_push(frame.locals[local].float_);
-            return pc + 2;
-        }
+            // In a slight derivation from the spec, longs and doubles are stored in a single local
+        case OpCodes::iload:
+        case OpCodes::lload:
+        case OpCodes::fload:
         case OpCodes::dload: {
-            // In a slight derivation from the spec, double are stored in a single local
-            auto index = code[pc + 1];
-            frame.stack_push(frame.locals[index].double_);
+
+            auto local = code[pc + 1];
+            frame.stack_push(frame.locals[local]);
             return pc + 2;
         }
 //        case OpCodes::aload:
@@ -224,25 +212,13 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
         }
 
             /* ======================= Stores ======================= */
+            // In a slight derivation from the spec, longs and doubles are stored in a single local
         case OpCodes::istore:
-            frame.locals[code[pc + 1]] = {frame.stack_pop().s4};
+        case OpCodes::lstore:
+        case OpCodes::fstore:
+        case OpCodes::dstore:
+            frame.locals[code[pc + 1]] = frame.stack_pop();
             return pc + 2;
-        case OpCodes::lstore: {
-            // In a slight derivation from the spec, longs are stored in a single local
-            auto value = frame.stack_pop().s8;
-            frame.locals[code[pc + 1]] = {value};
-            return pc + 2;
-        }
-        case OpCodes::fstore: {
-            frame.locals[code[pc + 1]] = {frame.stack_pop().float_};
-            return pc + 2;
-        }
-        case OpCodes::dstore: {
-            // In a slight derivation from the spec, doubles are stored in a single local
-            auto value = frame.stack_pop().double_;
-            frame.locals[code[pc + 1]] = {value};
-            return pc + 2;
-        }
         case OpCodes::istore_0:
         case OpCodes::istore_1:
         case OpCodes::istore_2:
