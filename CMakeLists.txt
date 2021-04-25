@@ -68,6 +68,7 @@ set(JAVA_TEST_SOURCES
 #        tests/HelloWorld.java
         tests/InvokeStatic.java
 #        tests/KarelTheRobot.java
+        tests/Switch.java
         tests/UnitBoolean.java
         )
 

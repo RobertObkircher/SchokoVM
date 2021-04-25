@@ -649,6 +649,64 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             /* ======================= Control =======================*/
         case OpCodes::goto_:
             return goto_(code, pc);
+        case OpCodes::tableswitch: {
+            size_t opcode_address = pc;
+
+            // skip 0-3 bytes of padding
+            if ((pc % 4) != 0)
+                pc += 4 - pc % 4;
+
+            s4 default_ = static_cast<s4>((code[pc] << 24) | (code[pc + 1] << 16) | (code[pc + 2] << 8) | code[pc + 3]);
+            pc += 4;
+            s4 low = static_cast<s4>((code[pc] << 24) | (code[pc + 1] << 16) | (code[pc + 2] << 8) | code[pc + 3]);
+            pc += 4;
+            s4 high = static_cast<s4>((code[pc] << 24) | (code[pc + 1] << 16) | (code[pc + 2] << 8) | code[pc + 3]);
+            pc += 4;
+            assert(low <= high);
+
+//            s4 count  = high - low + 1;
+            s4 index = frame.stack_pop().s4;
+
+            s4 offset;
+            if (index < low || index > high) {
+                offset = default_;
+            } else {
+                pc += 4 * static_cast<u4>(index - low);
+                offset = static_cast<s4>((code[pc] << 24) | (code[pc + 1] << 16) | (code[pc + 2] << 8) | code[pc + 3]);
+            }
+
+            return opcode_address + static_cast<size_t>(static_cast<ssize_t>(offset));
+        }
+        case OpCodes::lookupswitch: {
+            size_t opcode_address = pc;
+
+            // skip 0-3 bytes of padding
+            if ((pc % 4) != 0)
+                pc += 4 - pc % 4;
+
+            s4 default_ = static_cast<s4>((code[pc] << 24) | (code[pc + 1] << 16) | (code[pc + 2] << 8) | code[pc + 3]);
+            pc += 4;
+            s4 npairs = static_cast<s4>((code[pc] << 24) | (code[pc + 1] << 16) | (code[pc + 2] << 8) | code[pc + 3]);
+            pc += 4;
+            assert(npairs >= 0);
+
+            s4 key = frame.stack_pop().s4;
+            s4 offset = default_;
+
+            for (s4 i = 0; i < npairs; ++i) {
+                s4 match = static_cast<s4>((code[pc] << 24) | (code[pc + 1] << 16) | (code[pc + 2] << 8) |
+                                           code[pc + 3]);
+                pc += 4;
+                if (key == match) {
+                    offset = static_cast<s4>((code[pc] << 24) | (code[pc + 1] << 16) | (code[pc + 2] << 8) |
+                                             code[pc + 3]);
+                    break;
+                }
+                pc += 4;
+            }
+
+            return opcode_address + static_cast<size_t>(static_cast<ssize_t>(offset));
+        }
 
         case OpCodes::ireturn:
         case OpCodes::lreturn:
