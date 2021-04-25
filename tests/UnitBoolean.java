@@ -25,6 +25,24 @@ public class UnitBoolean {
         if(l == 60) {
             b4 = true;
         }
-        System.exit((b1 && b2 && b3 && b4) ? 0 : 1);
+
+        boolean b5 = false;
+        float f = 1124.5f;
+        if(f > 50){
+            f += 40.0f;
+        }
+        if(f == 1164.5f) {
+            b5 = true;
+        }
+
+        boolean b6 = false;
+        double d = -1124.0;
+        if(d < 50){
+            d -= 20;
+        }
+        if(d != 60) {
+            b6 = true;
+        }
+        System.exit((b1 && b2 && b3 && !b4 && b5 && b6) ? 0 : 1);
     }
 }

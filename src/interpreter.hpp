@@ -82,6 +82,10 @@ struct Frame {
     void stack_push(s8 v) {
         operands[operands_count++] = Value(v);
     }
+
+    void stack_push(Value v) {
+        operands[operands_count++] = v;
+    }
 };
 
 //struct MethodArea {

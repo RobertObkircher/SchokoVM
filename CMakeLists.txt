@@ -71,10 +71,32 @@ set(JAVA_TEST_GENERATED_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticIntSub.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticIntMul.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticIntDiv.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticIntRem.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticIntNeg.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticIntShiftLeft.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticIntShiftRight.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticIntShiftRightU.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongAdd.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongSub.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongMul.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongDiv.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongRem.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongNeg.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongShiftLeft.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongShiftRight.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticLongShiftRightU.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticFloatAdd.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticFloatSub.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticFloatMul.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticFloatDiv.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticFloatRem.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticFloatNeg.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticDoubleAdd.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticDoubleSub.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticDoubleMul.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticDoubleDiv.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticDoubleRem.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ArithmeticDoubleNeg.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ComparisonsInt.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/ComparisonsLong.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/InvokeStaticPermutations.java

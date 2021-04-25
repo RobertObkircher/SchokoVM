@@ -23,14 +23,38 @@ public class Generator {
         generate(path, "ArithmeticIntSub", w -> generateArithmeticInt(w, "-"));
         generate(path, "ArithmeticIntMul", w -> generateArithmeticInt(w, "*"));
         generate(path, "ArithmeticIntDiv", w -> generateArithmeticInt(w, "/"));
+        generate(path, "ArithmeticIntRem", w -> generateArithmeticInt(w, "%"));
+        generate(path, "ArithmeticIntShiftLeft", w -> generateArithmeticInt(w, "<<"));
+        generate(path, "ArithmeticIntShiftRight", w -> generateArithmeticInt(w, ">>"));
+        generate(path, "ArithmeticIntShiftRightU", w -> generateArithmeticInt(w, ">>>"));
+        generate(path, "ArithmeticIntNeg", w -> generateArithmeticUnary(w, "-", Integer.class));
 
         generate(path, "ArithmeticLongAdd", w -> generateArithmeticLong(w, "+"));
         generate(path, "ArithmeticLongSub", w -> generateArithmeticLong(w, "-"));
         generate(path, "ArithmeticLongMul", w -> generateArithmeticLong(w, "*"));
         generate(path, "ArithmeticLongDiv", w -> generateArithmeticLong(w, "/"));
+        generate(path, "ArithmeticLongRem", w -> generateArithmeticLong(w, "%"));
+        generate(path, "ArithmeticLongShiftLeft", w -> generateArithmeticLong(w, "<<"));
+        generate(path, "ArithmeticLongShiftRight", w -> generateArithmeticLong(w, ">>"));
+        generate(path, "ArithmeticLongShiftRightU", w -> generateArithmeticLong(w, ">>>"));
+        generate(path, "ArithmeticLongNeg", w -> generateArithmeticUnary(w, "-", Long.class));
 
-        generate(path, "ComparisonsInt", w -> generateComparisons(w, false));
-        generate(path, "ComparisonsLong", w -> generateComparisons(w, true));
+        generate(path, "ArithmeticFloatAdd", w -> generateArithmeticFloating(w, "+", Float.class));
+        generate(path, "ArithmeticFloatSub", w -> generateArithmeticFloating(w, "-", Float.class));
+        generate(path, "ArithmeticFloatMul", w -> generateArithmeticFloating(w, "*", Float.class));
+        generate(path, "ArithmeticFloatDiv", w -> generateArithmeticFloating(w, "/", Float.class));
+        generate(path, "ArithmeticFloatRem", w -> generateArithmeticFloating(w, "%", Float.class));
+        generate(path, "ArithmeticFloatNeg", w -> generateArithmeticUnary(w, "-", Float.class));
+
+        generate(path, "ArithmeticDoubleAdd", w -> generateArithmeticFloating(w, "+", Double.class));
+        generate(path, "ArithmeticDoubleSub", w -> generateArithmeticFloating(w, "-", Double.class));
+        generate(path, "ArithmeticDoubleMul", w -> generateArithmeticFloating(w, "*", Double.class));
+        generate(path, "ArithmeticDoubleDiv", w -> generateArithmeticFloating(w, "/", Double.class));
+        generate(path, "ArithmeticDoubleRem", w -> generateArithmeticFloating(w, "%", Double.class));
+        generate(path, "ArithmeticDoubleNeg", w -> generateArithmeticUnary(w, "-", Double.class));
+
+        generate(path, "ComparisonsInt", w -> generateComparisons(w, Integer.class));
+        generate(path, "ComparisonsLong", w -> generateComparisons(w, Long.class));
 
         generate(path, "InvokeStaticPermutations", Generator::generateInvokeStaticPermutations);
     }
@@ -40,6 +64,10 @@ public class Generator {
              PrintWriter w = new PrintWriter(bw)
         ) {
             w.println("public class " + name + " {");
+            w.println("    public static void println(int i) { System.out.println(i); } ");
+            w.println("    public static void println(long i) { System.out.println(i); } ");
+            w.println("    public static void println(double v) { System.out.println(Double.doubleToLongBits(v)); } ");
+            w.println("    public static void println(float v) { System.out.println(Float.floatToIntBits(v)); } ");
             generator.accept(w);
             w.println("}");
         } catch (IOException e) {
@@ -63,8 +91,6 @@ public class Generator {
             numbers.add(random.nextInt());
         }
 
-        w.println("    public static void println(int i) { System.out.println(i); } ");
-
         w.println(BEGIN_MAIN);
 
         // we use variables to make sure that javac doesn't fold literals
@@ -74,7 +100,7 @@ public class Generator {
             w.println("        a = " + i + "; //////////////////////////////");
             for (int j : numbers) {
                 // TODO emit a try catch ArithmeticException instead
-                if (op != "/" || j != 0) {
+                if (!((op == "/" || op == "%") && j == 0)) {
                     w.println("        b = " + j + ";");
                     w.println("        c = a " + op + " b;");
                     w.println("        println(c);");
@@ -100,8 +126,6 @@ public class Generator {
             numbers.add(random.nextLong());
         }
 
-        w.println("    public static void println(long i) { System.out.println(i); } ");
-
         w.println(BEGIN_MAIN);
 
         // we use variables to make sure that javac doesn't fold literals
@@ -111,7 +135,7 @@ public class Generator {
             w.println("        a = " + i + "L; //////////////////////////////");
             for (long j : numbers) {
                 // TODO emit a try catch ArithmeticException instead
-                if (op != "/" || j != 0) {
+                if (!((op == "/" || op == "%") && j == 0)) {
                     w.println("        b = " + j + "L;");
                     w.println("        c = a " + op + " b;");
                     w.println("        println(c);");
@@ -121,49 +145,53 @@ public class Generator {
         w.println(END_MAIN);
     }
 
-    public static void generateComparisons(PrintWriter w, boolean useLong) {
-        List<Long> numbers = new ArrayList<>(Arrays.asList(new Long[]{
-            0L, -1L, -2L, 1L, 2L,
-            127L, -128L,
-            322L, -322L,
-            2314908L, -2314908L,
-            231490893L, -194322323L
+    public static void generateArithmeticFloating(PrintWriter w, String op, Class<?> type) {
+        List<Object> numbers = new ArrayList<>(Arrays.asList(new Object[]{
+            0.0, -1.0, -2.0, 1.0, 2.0,
+            127.0, -128.0,
+            322.0, -322.0,
+            2314908.0, -2314908.0,
+            231490893.0, -194322323.0
         }));
-        if(useLong){
-            numbers.add(9223372036854775807L);
-            numbers.add(9223372036854775806L);
-            numbers.add(-9223372036854775808L);
-            numbers.add(-9223372036854775807L);
-        } else {
-            numbers.add(2147483647L);
-            numbers.add(2147483646L);
-            numbers.add(-2147483648L);
-            numbers.add(-2147483647L);
-        }
-
-        Random random = new Random(23148); // fixed seed
-        for (int i = 0; i < 5; ++i) {
-            numbers.add(useLong ? random.nextLong() : (long) random.nextInt());
-        }
-
-        w.println("    public static void println(int i) { System.out.println(i); } ");
+        addBoundaryValues(type, numbers);
 
         w.println(BEGIN_MAIN);
 
         // we use variables to make sure that javac doesn't fold literals
-        if(useLong){
-            w.println("        long a, b, c;");
-        } else {
-            w.println("        int a, b, c;");
-        }
+        w.println("        " + toPrimitiveType(type) + " a, b, c;");
 
-        String longPostfix = useLong ? "L" : "";
+        for (Object i : numbers) {
+            w.println("        a = " + toLiteral(type, i) + "; //////////////////////////////");
+            for (Object j : numbers) {
+                // TODO emit a try catch ArithmeticException instead
+                if (!((op == "/" || op == "%") && ((Number)j).doubleValue() == 0)) {
+                    w.println("        b = " + toLiteral(type, j) + ";");
+                    w.println("        c = a " + op + " b;");
+                    w.println("        println(c);");
+                }
+            }
+        }
+        w.println(END_MAIN);
+    }
+
+    public static void generateComparisons(PrintWriter w, Class<?> type) {
+        List<Object> numbers = new ArrayList<>(Arrays.asList(new Object[]{
+            0L, -1L, -2L, 1L, 2L,
+            127L, -128L,
+            231490893L, -194322323L
+        }));
+        addBoundaryValues(type, numbers);
+
+        w.println(BEGIN_MAIN);
+
+        // we use variables to make sure that javac doesn't fold literals
+        w.println("        " + toPrimitiveType(type) + " a, b;");
 
         for (String op : new String[] {"==", ">=", "<=", "<", ">", "!="}) {
-        for (long i : numbers) {
-            w.println("        a = " + i + longPostfix + "; //////////////////////////////");
-            for (long j : numbers) {
-                w.println("        b = " + j + longPostfix + ";");
+        for (Object i : numbers) {
+            w.println("        a = " + toLiteral(type, i) + "; //////////////////////////////");
+            for (Object j : numbers) {
+                w.println("        b = " + toLiteral(type, j) + ";");
                 w.println("        if(a " + op + " b)");
                 w.println("          println(0);");
                 w.println("        else");
@@ -181,9 +209,6 @@ public class Generator {
 
     public static void generateInvokeStaticPermutations(PrintWriter w) {
         Random random = new Random(2943148); // fixed seed
-
-        w.println("    public static void println(int i) { System.out.println(i); } ");
-        w.println("    public static void println(long l) { System.out.println(l); } ");
 
         ArrayList<Function> functions = new ArrayList<>();
 
@@ -229,6 +254,118 @@ public class Generator {
                 w.println("        println(p" + i +");");
             }
             w.println("    }");
+        }
+    }
+
+    public static void generateArithmeticUnary(PrintWriter w, String operator, Class<?> type) {
+        List<Object> numbers = new ArrayList<>(Arrays.asList(new Object[]{
+            0L, -1L, -2L, 1L, 2L,
+            127L, -128L,
+            322L, -322L,
+            2314908L, -2314908L,
+            231490893L, -194322323L
+        }));
+        addBoundaryValues(type, numbers);
+
+        w.println(BEGIN_MAIN);
+         w.println("        " + toPrimitiveType(type) + " a;");
+        for (Object i : numbers) {
+            w.println("        a = " + toLiteral(type, i) + ";");
+            w.println("        println(-a);");
+        }
+        w.println(END_MAIN);
+    }
+
+    public static String toLiteral(Class<?> type, Object i) {
+        if(type == Float.class) {
+            float f = ((Number) i).floatValue();
+            if(Float.isNaN(f)) {
+                return "(1.0f / 0.0f)";
+            } else if(Float.isInfinite(f)) {
+                if(f > 0) {
+                    return "(1.0f / 0.0f)";
+                } else {
+                    return "(-1.0f / 0.0f)";
+                }
+            } else {
+                return Float.toHexString(f) + "f";
+            }
+        } else if(type == Double.class) {
+            double d = ((Number) i).doubleValue();
+            if(Double.isNaN(d)) {
+                return "(1.0d / 0.0d)";
+            } else if(Double.isInfinite(d)) {
+                if(d > 0) {
+                    return "(1.0d / 0.0d)";
+                } else {
+                    return "(-1.0d / 0.0d)";
+                }
+            } else {
+                return Double.toHexString(d) + "d";
+            }
+        } else if(type == Long.class) {
+            long l = (long) i;
+            return l + "L";
+        } else if(type == Integer.class){
+            return i.toString();
+        } else {
+            throw new RuntimeException("Unreachable");
+        }
+    }
+    public static String toPrimitiveType(Class<?> type) {
+        if(type == Float.class) {
+            return "float";
+        } else if(type == Double.class) {
+            return "double";
+        } else if(type == Long.class) {
+            return "long";
+        } else {
+            return "int";
+        }
+    }
+
+    public static void addBoundaryValues(Class<?> type, List<Object> numbers){
+        Random random = new Random(23148); // fixed seed
+        if(type == Float.class) {
+            numbers.add(Float.MAX_VALUE);
+            numbers.add(Float.MAX_VALUE - 1);
+            numbers.add(Float.MIN_VALUE);
+            numbers.add(Float.MIN_VALUE + 1);
+            numbers.add(Float.MIN_NORMAL);
+            numbers.add(Float.NEGATIVE_INFINITY);
+            numbers.add(Float.POSITIVE_INFINITY);
+            numbers.add(Float.NaN);
+            for (int i = 0; i < 8; ++i) {
+                numbers.add(random.nextFloat());
+            }
+        } else if(type == Double.class) {
+            numbers.add(Double.MAX_VALUE);
+            numbers.add(Double.MAX_VALUE - 1);
+            numbers.add(Double.MIN_VALUE);
+            numbers.add(Double.MIN_VALUE + 1);
+            numbers.add(Double.MIN_NORMAL);
+            numbers.add(Double.NEGATIVE_INFINITY);
+            numbers.add(Double.POSITIVE_INFINITY);
+            numbers.add(Double.NaN);
+            for (int i = 0; i < 8; ++i) {
+                numbers.add(random.nextDouble());
+            }
+        } else if(type == Long.class) {
+            numbers.add(Long.MAX_VALUE);
+            numbers.add(Long.MAX_VALUE - 1);
+            numbers.add(Long.MIN_VALUE);
+            numbers.add(Long.MIN_VALUE + 1);
+            for (int i = 0; i < 8; ++i) {
+                numbers.add(random.nextLong());
+            }
+        } else {
+            numbers.add(Integer.MAX_VALUE);
+            numbers.add(Integer.MAX_VALUE - 1);
+            numbers.add(Integer.MIN_VALUE);
+            numbers.add(Integer.MIN_VALUE + 1);
+            for (int i = 0; i < 8; ++i) {
+                numbers.add(random.nextInt());
+            }
         }
     }
 }
