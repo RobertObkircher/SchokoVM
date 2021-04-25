@@ -434,7 +434,67 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             frame.stack_push(result);
             break;
         }
-
+        case OpCodes::ineg: {
+            auto a = frame.stack_pop().s4;
+            frame.stack_push(sub_overflow(static_cast<s4>(0), a));
+            break;
+        }
+        case OpCodes::lneg: {
+            auto a = frame.stack_pop().s8;
+            frame.stack_push(sub_overflow(static_cast<s8>(0), a));
+            break;
+        }
+        case OpCodes::fneg: {
+            auto a = frame.stack_pop().float_;
+            frame.stack_push(-a);
+            break;
+        }
+        case OpCodes::dneg: {
+            auto a = frame.stack_pop().double_;
+            frame.stack_push(-a);
+            break;
+        }
+        case OpCodes::ishl: {
+            auto shift = frame.stack_pop().s4;
+            auto value = frame.stack_pop().s4;
+            frame.stack_push(value << shift);
+            break;
+        }
+        case OpCodes::lshl: {
+            auto shift = frame.stack_pop().s4;
+            auto value = frame.stack_pop().s8;
+            frame.stack_push(value << shift);
+            break;
+        }
+        case OpCodes::ishr: {
+            auto shift = frame.stack_pop().s4;
+            auto value = frame.stack_pop().s4;
+            frame.stack_push(value >> shift);
+            break;
+        }
+        case OpCodes::lshr: {
+            auto shift = frame.stack_pop().s4;
+            auto value = frame.stack_pop().s8;
+            frame.stack_push(value >> shift);
+            break;
+        }
+        case OpCodes::iushr: {
+            auto shift = frame.stack_pop().s4;
+            auto value = frame.stack_pop().s4;
+            // C++20 always performs arithmetic shifts, so the top bits need to be cleared out afterwards
+            frame.stack_push((value >> shift) &
+                             (future::bit_cast<s4>(std::numeric_limits<u4>::max() >> static_cast<u4>(shift)))
+            );
+            break;
+        }
+        case OpCodes::lushr: {
+            auto shift = frame.stack_pop().s4;
+            auto value = frame.stack_pop().s8;
+            frame.stack_push((value >> shift) &
+                             (future::bit_cast<s8>(std::numeric_limits<u8>::max() >> static_cast<u8>(shift)))
+            );
+            break;
+        }
         case OpCodes::iinc: {
             auto local = code[pc + 1];
             auto value = static_cast<s4>(static_cast<s2>(future::bit_cast<s1>(code[pc + 2])));
