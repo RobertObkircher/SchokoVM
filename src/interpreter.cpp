@@ -150,7 +150,18 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             }
             return pc + 2;
         }
-//        case OpCodes::ldc_w:
+        case OpCodes::ldc_w: {
+            size_t index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
+            auto &entry = frame.clazz->constant_pool.table[index];
+            if (auto i = std::get_if<CONSTANT_Integer_info>(&entry.variant)) {
+                frame.stack_push(i->bytes);
+            } else if (auto f = std::get_if<CONSTANT_Float_info>(&entry.variant)) {
+                frame.stack_push(f->value);
+            } else {
+                throw std::runtime_error("ldc_w refers to invalid/unimplemented type");
+            }
+            return pc + 3;
+        }
         case OpCodes::ldc2_w: {
             size_t index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
             auto &entry = frame.clazz->constant_pool.table[index];
