@@ -61,6 +61,8 @@ public class Generator {
         generate(path, "Goto", Generator::generateGoto);
 
         generate(path, "InvokeStaticPermutations", Generator::generateInvokeStaticPermutations);
+
+        generate(path, "Wide", Generator::generateWide);
     }
 
     public static void generate(Path directory, String name, Consumer<PrintWriter> generator) {
@@ -472,5 +474,35 @@ public class Generator {
             w.println("    }");
         }
 
+    }
+
+    public static void generateWide(PrintWriter w) {
+        w.println(BEGIN_MAIN);
+
+        // wide iinc (because of constant)
+        w.println("        int inc1 = 4;");
+        w.println("        inc1 -= 200;");
+        w.println("        println(inc1);");
+
+        for (int i = 0; i < 256; ++i)
+            w.println("        int dummy" + i + " = " + i + ";");
+
+        // wide stores
+        w.println("        int i = 111;");
+        w.println("        float f = 12.0f;");
+        w.println("        Object a = null;");
+        w.println("        double d = 94.0;");
+
+        // wide loads
+        w.println("        println(i);");
+        w.println("        println(f);");
+        w.println("        println(a == null ? 0 : 1);");
+        w.println("        println(d);");
+
+        // wide iinc (because of variable)
+        w.println("        i += 10;");
+        w.println("        println(i);");
+
+        w.println(END_MAIN);
     }
 }

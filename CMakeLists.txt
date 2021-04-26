@@ -110,6 +110,7 @@ set(JAVA_TEST_GENERATED_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/Conversions.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/Goto.java
         ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/InvokeStaticPermutations.java
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated/out/Wide.java
         )
 
 set(TESTS_GENERATED ${CMAKE_CURRENT_SOURCE_DIR}/tests-generated)

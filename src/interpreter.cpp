@@ -81,7 +81,7 @@ int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, Cl
     }
     method_info *main_method = &*main_method_iter;
 
-    Thread thread;
+    Thread thread{};
     thread.stack.memory.resize(1024 * 1024 / sizeof(Value)); // 1mb for now
 
     thread.stack.memory_used = 1;
@@ -731,8 +731,7 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             return goto_(code, pc);
         case OpCodes::jsr:
         case OpCodes::ret:
-            abort();
-            break;
+            throw std::runtime_error("jsr and ret are unsupported");
         case OpCodes::tableswitch: {
             size_t opcode_address = pc;
 
@@ -931,6 +930,57 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
                 return 0; // will be set on the new frame
             }
         }
+        case OpCodes::wide: {
+            u2 index = static_cast<u2>((code[pc + 2] << 8) | code[pc + 3]);
+            auto &local = frame.locals[index];
+
+            switch (static_cast<OpCodes>(code[pc + 1])) {
+                case OpCodes::iload:
+                    frame.push_s4(local.s4);
+                    break;
+                case OpCodes::lload:
+                    frame.push_s8(local.s8);
+                    break;
+                case OpCodes::fload:
+                    frame.push_f(local.float_);
+                    break;
+                case OpCodes::dload:
+                    frame.push_d(local.double_);
+                    break;
+                case OpCodes::aload:
+                    frame.push_a(local.reference);
+                    break;
+
+                case OpCodes::istore:
+                    local = frame.pop_s4();
+                    break;
+                case OpCodes::lstore:
+                    local = frame.pop_s8();
+                    break;
+                case OpCodes::fstore:
+                    local = frame.pop_f();
+                    break;
+                case OpCodes::dstore:
+                    local = frame.pop_d();
+                    break;
+                case OpCodes::astore:
+                    local = frame.pop_a();
+                    break;
+
+                case OpCodes::iinc: {
+                    s4 constant = future::bit_cast<s2>(static_cast<u2>((code[pc + 4] << 8) | code[pc + 5]));
+                    local.s4 += constant;
+                    return pc + 6;
+                }
+
+                case OpCodes::ret:
+                    throw std::runtime_error("jsr and ret are unsupported");
+                default:
+                    abort();
+            }
+            return pc + 4;
+        }
+
         case OpCodes::ifnull:
             return execute_comparison(code, pc, frame.pop_a() == nullptr);
         case OpCodes::ifnonnull:
@@ -941,8 +991,7 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             return pc + static_cast<size_t>(static_cast<ssize_t>(offset));
         }
         case OpCodes::jsr_w:
-            abort();
-            break;
+            throw std::runtime_error("jsr and ret are unsupported");
 
         default:
             throw std::runtime_error(

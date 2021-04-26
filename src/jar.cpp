@@ -1,4 +1,3 @@
-#include <istream>
 #include <optional>
 #include <vector>
 #include <zip.h>
