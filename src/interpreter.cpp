@@ -113,10 +113,9 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
         /* ======================= Constants ======================= */
         case OpCodes::nop:
             break;
-//        case OpCodes::aconst_null:
-//            // "nullptr"
-//            frame.stack_push(0);
-//            break;
+        case OpCodes::aconst_null:
+            frame.stack_push(nullptr);
+            break;
         case OpCodes::iconst_m1:
         case OpCodes::iconst_0:
         case OpCodes::iconst_1:
@@ -193,13 +192,12 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
         case OpCodes::iload:
         case OpCodes::lload:
         case OpCodes::fload:
-        case OpCodes::dload: {
-
+        case OpCodes::dload:
+        case OpCodes::aload: {
             auto local = code[pc + 1];
             frame.stack_push(frame.locals[local]);
             return pc + 2;
         }
-//        case OpCodes::aload:
         case OpCodes::iload_0:
         case OpCodes::iload_1:
         case OpCodes::iload_2:
@@ -234,6 +232,14 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             frame.stack_push(frame.locals[index].double_);
             break;
         }
+        case OpCodes::aload_0:
+        case OpCodes::aload_1:
+        case OpCodes::aload_2:
+        case OpCodes::aload_3: {
+            u1 index = static_cast<u1>(opcode - static_cast<u1>(OpCodes::aload_0));
+            frame.stack_push(frame.locals[index].reference);
+            break;
+        }
 
             /* ======================= Stores ======================= */
             // In a slight derivation from the spec, longs and doubles are stored in a single local
@@ -241,6 +247,7 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
         case OpCodes::lstore:
         case OpCodes::fstore:
         case OpCodes::dstore:
+        case OpCodes::astore:
             frame.locals[code[pc + 1]] = frame.stack_pop();
             return pc + 2;
         case OpCodes::istore_0:
@@ -270,6 +277,13 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
         case OpCodes::dstore_3: {
             // In a slight derivation from the spec, double are stored in a single local
             frame.locals[opcode - static_cast<u1>(OpCodes::dstore_0)] = {frame.stack_pop().double_};
+            break;
+        }
+        case OpCodes::astore_0:
+        case OpCodes::astore_1:
+        case OpCodes::astore_2:
+        case OpCodes::astore_3: {
+            frame.locals[opcode - static_cast<u1>(OpCodes::astore_0)] = {frame.stack_pop().reference};
             break;
         }
 
@@ -641,10 +655,10 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             return execute_comparison(code, pc, frame.stack_pop().s4 < frame.stack_pop().s4);
         case OpCodes::if_icmple:
             return execute_comparison(code, pc, frame.stack_pop().s4 >= frame.stack_pop().s4);
-//        case OpCodes::if_acmpeq:
-//            return execute_comparison(code, pc, frame.stack_pop().u8() == frame.stack_pop().u8());
-//        case OpCodes::if_acmpne:
-//            return execute_comparison(code, pc, frame.stack_pop().u8() != frame.stack_pop().u8());
+        case OpCodes::if_acmpeq:
+            return execute_comparison(code, pc, frame.stack_pop().reference == frame.stack_pop().reference);
+        case OpCodes::if_acmpne:
+            return execute_comparison(code, pc, frame.stack_pop().reference != frame.stack_pop().reference);
 
             /* ======================= Control =======================*/
         case OpCodes::goto_:
@@ -847,8 +861,13 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
                 return 0; // will be set on the new frame
             }
         }
+        case OpCodes::ifnull:
+            return execute_comparison(code, pc, frame.stack_pop().reference == nullptr);
+        case OpCodes::ifnonnull:
+            return execute_comparison(code, pc, frame.stack_pop().reference != nullptr);
         case OpCodes::goto_w: {
-            s4 offset = static_cast<s4>((code[pc + 1] << 24) | (code[pc + 2] << 16) | (code[pc + 3] << 8) | code[pc + 4]);
+            s4 offset = static_cast<s4>((code[pc + 1] << 24) | (code[pc + 2] << 16) | (code[pc + 3] << 8) |
+                                        code[pc + 4]);
             return pc + static_cast<size_t>(static_cast<ssize_t>(offset));
         }
         case OpCodes::jsr_w:

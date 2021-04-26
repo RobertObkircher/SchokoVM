@@ -8,6 +8,7 @@
 
 #include "future.hpp"
 #include "classfile.hpp"
+#include "object.hpp"
 
 union Value {
     Value() : s8(0) {}
@@ -30,10 +31,14 @@ union Value {
     // NOLINTNEXTLINE
     Value(double v) : double_(v) {}
 
+    // NOLINTNEXTLINE
+    Value(Object *v) : reference(v) {}
+
     ::s4 s4;
     ::s8 s8;
     float float_;
     double double_;
+    Object *reference;
 };
 
 struct Stack;
@@ -57,6 +62,10 @@ struct Frame {
 
     Value stack_pop() {
         return operands[--operands_count];
+    }
+
+    void stack_push(Object *v) {
+        operands[operands_count++] = Value(v);
     }
 
     void stack_push(float v) {

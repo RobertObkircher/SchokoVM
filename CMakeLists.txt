@@ -51,6 +51,7 @@ add_executable(SchokoVM
         src/interpreter.cpp src/interpreter.hpp
         src/opcodes.hpp
         src/future.hpp
+        src/object.cpp src/object.hpp
         )
 
 if (libzip_FOUND)
@@ -68,6 +69,7 @@ set(JAVA_TEST_SOURCES
 #        tests/HelloWorld.java
         tests/InvokeStatic.java
 #        tests/KarelTheRobot.java
+        tests/ReferenceComparisons.java
         tests/Switch.java
         tests/UnitBoolean.java
         )
