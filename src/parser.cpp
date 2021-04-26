@@ -5,6 +5,7 @@
 #include <vector>
 #include <cstring>
 #include "classfile.hpp"
+#include "future.hpp"
 
 ParseError::ParseError(std::string message) : message(std::move(message)) {}
 
@@ -78,7 +79,12 @@ ClassFile Parser::parse() {
         }
 
         auto &descriptor = method_info.descriptor_index->value;
+        if (descriptor.size() < 3)
+            throw ParseError("Invalid method descriptor");
+
         method_info.parameter_count = 0;
+        method_info.stack_slots_for_parameters = 0;
+
         bool skip_class_name = false;
         for (char c : descriptor) {
             if (skip_class_name) {
@@ -91,20 +97,18 @@ ClassFile Parser::parse() {
             if (c == '[') continue; // don't count array dimensions
 
             if (c == 'L') skip_class_name = true;
+
             if (c == 'D' || c == 'J')
-                method_info.argument_takes_two_local_variables[method_info.parameter_count] = true;
+                ++method_info.stack_slots_for_parameters;
+            ++method_info.stack_slots_for_parameters;
             ++method_info.parameter_count;
         }
-        u1 count = static_cast<u1>(method_info.argument_takes_two_local_variables.count());
-        method_info.stack_slots_used_by_parameters = method_info.parameter_count + count;
 
-        // if it is the last one we do not have to move it
-        method_info.move_arguments = count > 1 || (count == 1 && !method_info.argument_takes_two_local_variables[
-                method_info.parameter_count - 1]);
-
-        method_info.minus_parameter_count_plus_return_count = -method_info.parameter_count;
-        if (descriptor[descriptor.size() - 1] != 'V')
-            method_info.minus_parameter_count_plus_return_count += 1;
+        char return_type = descriptor[descriptor.size() - 1];
+        method_info.return_size = (return_type == 'V') ? method_info::Void
+                                                       : ((return_type == 'D' || return_type == 'J')
+                                                          ? method_info::Category2
+                                                          : method_info::Category1);
 
         result.methods.push_back(std::move(method_info));
     }
@@ -160,24 +164,19 @@ ConstantPool Parser::parse_constant_pool(u2 major_version) {
             }
             case CONSTANT_Integer: {
                 CONSTANT_Integer_info info{};
-                info.bytes = eat_u4();
+                info.value = eat_s4();
                 cpi.variant = info;
                 break;
             }
             case CONSTANT_Float: {
                 CONSTANT_Float_info info{};
-                u4 bytes = eat_u4();
-                static_assert(sizeof(info.value) == sizeof(bytes));
-                memcpy(&info.value, &bytes, sizeof(bytes));
+                info.value = eat_float();
                 cpi.variant = info;
                 break;
             }
             case CONSTANT_Long: {
                 CONSTANT_Long_info info{};
-                u4 high_bytes = eat_u4();
-                u4 low_bytes = eat_u4();
-                u8 bytes = (u8) high_bytes << 32 | low_bytes;
-                info.value = bytes;
+                info.value = eat_s8();
                 result.table.push_back(cp_info{{info}});
                 ++cp_index;
                 result.table.push_back(cp_info{{CONSTANT_Invalid_info{}}});
@@ -185,11 +184,7 @@ ConstantPool Parser::parse_constant_pool(u2 major_version) {
             }
             case CONSTANT_Double: {
                 CONSTANT_Double_info info{};
-                u4 high_bytes = eat_u4();
-                u4 low_bytes = eat_u4();
-                u8 bytes = (u8) high_bytes << 32 | low_bytes;
-                static_assert(sizeof(info.value) == sizeof(bytes));
-                memcpy(&info.value, &bytes, sizeof(bytes));
+                info.value = eat_double();
                 result.table.push_back(cp_info{{info}});
                 ++cp_index;
                 result.table.push_back(cp_info{{CONSTANT_Invalid_info{}}});

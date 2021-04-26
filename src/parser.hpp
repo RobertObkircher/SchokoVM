@@ -1,11 +1,12 @@
 #ifndef SCHOKOVM_PARSER_HPP
 #define SCHOKOVM_PARSER_HPP
 
-#include "fstream"
-#include "iostream"
-#include "optional"
+#include <fstream>
+#include <iostream>
+#include <optional>
 
 #include "classfile.hpp"
+#include "future.hpp"
 
 struct ParseError : std::exception {
     std::string message;
@@ -54,7 +55,6 @@ class Parser {
         return ((u4) bytes[0] << 24) | ((u4) bytes[1] << 16) | ((u4) bytes[2] << 8) | ((u4) bytes[3] << 0);
     }
 
-    // TODO remove eat_u8 and s? if we never use them
     inline u8 eat_u8() {
         u1 bytes[8];
         in.read((char *) bytes, 8);
@@ -62,13 +62,13 @@ class Parser {
                ((u8) bytes[4] << 24) | ((u8) bytes[5] << 16) | ((u8) bytes[6] << 8) | ((u8) bytes[7] << 0);
     }
 
-    inline s1 eat_s1() { return (s1) eat_u1(); }
+    inline s4 eat_s4() { return future::bit_cast<s4>(eat_u4()); }
 
-    inline s2 eat_s2() { return (s2) eat_u2(); }
+    inline s8 eat_s8() { return future::bit_cast<s8>(eat_u8()); }
 
-    inline s4 eat_s4() { return (s4) eat_u4(); }
+    inline float eat_float() { return future::bit_cast<float>(eat_u4()); }
 
-    inline s8 eat_s8() { return (s8) eat_u8(); }
+    inline double eat_double() { return future::bit_cast<double>(eat_u8()); }
 
 public:
     explicit Parser(std::istream &in);

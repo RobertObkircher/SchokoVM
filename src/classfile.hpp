@@ -119,7 +119,7 @@ struct CONSTANT_String_info {
 };
 
 struct CONSTANT_Integer_info {
-    u4 bytes;
+    s4 value;
 };
 
 struct CONSTANT_Float_info {
@@ -127,7 +127,7 @@ struct CONSTANT_Float_info {
 };
 
 struct CONSTANT_Long_info {
-    u8 value;
+    s8 value;
 };
 
 struct CONSTANT_Double_info {
@@ -251,15 +251,11 @@ struct method_info {
     // This is called nargs in the invoke* descriptions: https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-6.html#jvms-6.5.invokestatic
     u1 parameter_count;
     // Some parameters require 2 local variable slots
-    u2 stack_slots_used_by_parameters;
+    u2 stack_slots_for_parameters;
 
-    // true iff any of bits [0..253] is set. We do not need to move anything if it is only bit 254.
-    bool move_arguments;
-    // indicates if the nth argument requires two local variable slots (i.e. if it is a long/double)
-    std::bitset<255> argument_takes_two_local_variables;
-
-    // used to adjust the caller operand stack size
-    size_t minus_parameter_count_plus_return_count;
+    enum : u1 {
+        Void = 0, Category1 = 1, Category2 = 2
+    } return_size;
 };
 
 // attribute_info...
