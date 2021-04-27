@@ -489,12 +489,14 @@ public class Generator {
 
         // wide stores
         w.println("        int i = 111;");
+        w.println("        long l = 838292;");
         w.println("        float f = 12.0f;");
         w.println("        Object a = null;");
         w.println("        double d = 94.0;");
 
         // wide loads
         w.println("        println(i);");
+        w.println("        println(l);");
         w.println("        println(f);");
         w.println("        println(a == null ? 0 : 1);");
         w.println("        println(d);");
