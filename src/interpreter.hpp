@@ -8,32 +8,32 @@
 
 #include "future.hpp"
 #include "classfile.hpp"
+#include "object.hpp"
 
+// see Stack for documentation
 union Value {
+    // for dummy elements
     Value() : s8(0) {}
 
-    // NOLINTNEXTLINE
-    Value(::u4 v) : s4(future::bit_cast<::s4>(v)) {}
+    explicit Value(::u4 u4) : s4(future::bit_cast<::s4>(u4)) {}
 
-    // NOLINTNEXTLINE
-    Value(::s4 v) : s4(v) {}
+    explicit Value(::s4 s4) : s4(s4) {}
 
-    // NOLINTNEXTLINE
-    Value(::u8 v) : s8(future::bit_cast<::s8>(v)) {}
+    explicit Value(::u8 u8) : s8(future::bit_cast<::s8>(u8)) {}
 
-    // NOLINTNEXTLINE
-    Value(::s8 v) : s8(v) {}
+    explicit Value(::s8 s8) : s8(s8) {}
 
-    // NOLINTNEXTLINE
-    Value(float v) : float_(v) {}
+    explicit Value(float float_) : float_(float_) {}
 
-    // NOLINTNEXTLINE
-    Value(double v) : double_(v) {}
+    explicit Value(double double_) : double_(double_) {}
+
+    explicit Value(Object *reference) : reference(reference) {}
 
     ::s4 s4;
     ::s8 s8;
     float float_;
     double double_;
+    Object *reference;
 };
 
 struct Stack;
@@ -48,44 +48,55 @@ struct Frame {
     std::span<Value> locals;
     std::span<Value> operands;
     size_t first_operand_index;
-    size_t operands_count;
+    // >= number of operands
+    size_t operands_top;
     size_t previous_stack_memory_usage;
 
     size_t pc;
 
     Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top);
 
-    Value stack_pop() {
-        return operands[--operands_count];
+    inline Value pop() {
+        return operands[--operands_top];
     }
 
-    void stack_push(float v) {
-        operands[operands_count++] = Value(v);
+    inline Value pop2() {
+        operands_top -= 2;
+        return operands[operands_top];
     }
 
-    void stack_push(double v) {
-        operands[operands_count++] = Value(v);
+    inline void push(Value operand) {
+        operands[operands_top++] = operand;
     }
 
-    void stack_push(s4 v) {
-        operands[operands_count++] = Value(v);
+    inline void push2(Value operand) {
+        operands[operands_top] = operand;
+        operands_top += 2;
     }
 
-    void stack_push(u4 v) {
-        operands[operands_count++] = Value(v);
-    }
+    // category 1
 
-    void stack_push(u8 v) {
-        operands[operands_count++] = Value(v);
-    }
+    inline s4 pop_s4() { return pop().s4; }
 
-    void stack_push(s8 v) {
-        operands[operands_count++] = Value(v);
-    }
+    inline float pop_f() { return pop().float_; }
 
-    void stack_push(Value v) {
-        operands[operands_count++] = v;
-    }
+    inline Object *pop_a() { return pop().reference; }
+
+    inline void push_s4(::s4 s4) { push(Value(s4)); }
+
+    inline void push_f(float f) { push(Value(f)); }
+
+    inline void push_a(Object *reference) { push(Value(reference)); }
+
+    // category 2
+
+    inline s8 pop_s8() { return pop2().s8; }
+
+    inline double pop_d() { return pop2().double_; }
+
+    inline void push_s8(::s8 s8) { push2(Value(s8)); }
+
+    inline void push_d(double d) { push2(Value(d)); }
 };
 
 //struct MethodArea {
@@ -108,9 +119,31 @@ struct Stack {
     //  Timeline:
     //    1. The caller pushes arguments n+4,n+5,n+6               memory_used = n+7
     //    2. Invoke: top of parent operand stack becomes locals    memory_used = n+11
-    //    3. Insert empty slots if there are longs/doubles
-    //    4. Run the callee function
-    //    3. Copy the return value from n+9 to n+4                memory_used = n+7
+    //    3. Run the callee function
+    //    4. Copy the return value from n+9 to n+4                memory_used = n+7
+    //
+    //  Dummy values:
+    //    According to the jvm specification values of category 2 (long/double) always
+    //    take up two local variable slots, and untyped stack instructions such as
+    //    pop2 and dup2 rely on this assumption.
+    //
+    //    References only take up one slot though, which is not ideal on a 64 bit
+    //    architecture. For this reason we decided to represent each value as a
+    //    64 bit union. This also comes with the benefit, that we do not have to
+    //    split up category 2 values. However, it also means that we use more memory
+    //    per slot and that we have to keep empty slots with dummy values after
+    //    values of category 2.
+    //
+    //    When we tried to eliminate the empty slots on the operand stack we ran
+    //    into a problem: Some untyped stack instructions would have to know the
+    //    category of the value on the stack. For example pop2 either removes two
+    //    category 1 values or a single category 2 value. Another issue was, that
+    //    since we didn't want to recompute indices of the local variables we had
+    //    to use empty slots there, which made function calls more complicated,
+    //    because we had to move/copy the function arguments that came after a
+    //    category 2 value.
+    //
+    //    TLDR: All Values are 64 bit. The slot after longs and dobles is unused.
     //
     // WARNING: This must never be resized because we create spans of the elements!
     std::vector<Value> memory;
