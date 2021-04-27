@@ -235,50 +235,49 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
 
             /* ======================= Stores ======================= */
         case OpCodes::istore:
-            frame.locals[code[pc + 1]] = frame.pop_s4();
+            frame.locals[code[pc + 1]] = Value(frame.pop_s4());
             return pc + 2;
         case OpCodes::lstore:
-            frame.locals[code[pc + 1]] = frame.pop_s8();
+            frame.locals[code[pc + 1]] = Value(frame.pop_s8());
             return pc + 2;
         case OpCodes::fstore:
-            frame.locals[code[pc + 1]] = frame.pop_f();
+            frame.locals[code[pc + 1]] = Value(frame.pop_f());
             return pc + 2;
         case OpCodes::dstore:
-            frame.locals[code[pc + 1]] = frame.pop_d();
+            frame.locals[code[pc + 1]] = Value(frame.pop_d());
             return pc + 2;
         case OpCodes::astore:
-            frame.locals[code[pc + 1]] = frame.pop_a();
+            frame.locals[code[pc + 1]] = Value(frame.pop_a());
             return pc + 2;
         case OpCodes::istore_0:
         case OpCodes::istore_1:
         case OpCodes::istore_2:
         case OpCodes::istore_3:
-            frame.locals[opcode - static_cast<u1>(OpCodes::istore_0)] = frame.pop_s4();
+            frame.locals[opcode - static_cast<u1>(OpCodes::istore_0)] = Value(frame.pop_s4());
             break;
         case OpCodes::lstore_0:
         case OpCodes::lstore_1:
         case OpCodes::lstore_2:
-        case OpCodes::lstore_3: {
-            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0)] = frame.pop_s8();
+        case OpCodes::lstore_3:
+            frame.locals[opcode - static_cast<u1>(OpCodes::lstore_0)] = Value(frame.pop_s8());
             break;
-        }
         case OpCodes::fstore_0:
         case OpCodes::fstore_1:
         case OpCodes::fstore_2:
         case OpCodes::fstore_3:
-            frame.locals[opcode - static_cast<u1>(OpCodes::fstore_0)] = frame.pop_f();
+            frame.locals[opcode - static_cast<u1>(OpCodes::fstore_0)] = Value(frame.pop_f());
             break;
         case OpCodes::dstore_0:
         case OpCodes::dstore_1:
         case OpCodes::dstore_2:
         case OpCodes::dstore_3:
-            frame.locals[opcode - static_cast<u1>(OpCodes::dstore_0)] = frame.pop_d();
+            frame.locals[opcode - static_cast<u1>(OpCodes::dstore_0)] = Value(frame.pop_d());
             break;
         case OpCodes::astore_0:
         case OpCodes::astore_1:
         case OpCodes::astore_2:
         case OpCodes::astore_3:
-            frame.locals[opcode - static_cast<u1>(OpCodes::astore_0)] = frame.pop_a();
+            frame.locals[opcode - static_cast<u1>(OpCodes::astore_0)] = Value(frame.pop_a());
             break;
 
             /* ======================= Stack =======================*/
@@ -598,7 +597,7 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             auto local = code[pc + 1];
             auto value = static_cast<s4>(static_cast<s2>(future::bit_cast<s1>(code[pc + 2])));
             auto result = add_overflow(frame.locals[local].s4, value);
-            frame.locals[local] = {result};
+            frame.locals[local] = Value(result);
             return pc + 3;
         }
 
@@ -952,19 +951,19 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
                     break;
 
                 case OpCodes::istore:
-                    local = frame.pop_s4();
+                    local = Value(frame.pop_s4());
                     break;
                 case OpCodes::lstore:
-                    local = frame.pop_s8();
+                    local = Value(frame.pop_s8());
                     break;
                 case OpCodes::fstore:
-                    local = frame.pop_f();
+                    local = Value(frame.pop_f());
                     break;
                 case OpCodes::dstore:
-                    local = frame.pop_d();
+                    local = Value(frame.pop_d());
                     break;
                 case OpCodes::astore:
-                    local = frame.pop_a();
+                    local = Value(frame.pop_a());
                     break;
 
                 case OpCodes::iinc: {

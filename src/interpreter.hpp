@@ -12,28 +12,22 @@
 
 // see Stack for documentation
 union Value {
+    // for dummy elements
     Value() : s8(0) {}
 
-    // NOLINTNEXTLINE
-    Value(::u4 u4) : s4(future::bit_cast<::s4>(u4)) {}
+    explicit Value(::u4 u4) : s4(future::bit_cast<::s4>(u4)) {}
 
-    // NOLINTNEXTLINE
-    Value(::s4 s4) : s4(s4) {}
+    explicit Value(::s4 s4) : s4(s4) {}
 
-    // NOLINTNEXTLINE
-    Value(::u8 u8) : s8(future::bit_cast<::s8>(u8)) {}
+    explicit Value(::u8 u8) : s8(future::bit_cast<::s8>(u8)) {}
 
-    // NOLINTNEXTLINE
-    Value(::s8 s8) : s8(s8) {}
+    explicit Value(::s8 s8) : s8(s8) {}
 
-    // NOLINTNEXTLINE
-    Value(float float_) : float_(float_) {}
+    explicit Value(float float_) : float_(float_) {}
 
-    // NOLINTNEXTLINE
-    Value(double double_) : double_(double_) {}
+    explicit Value(double double_) : double_(double_) {}
 
-    // NOLINTNEXTLINE
-    Value(Object *reference) : reference(reference) {}
+    explicit Value(Object *reference) : reference(reference) {}
 
     ::s4 s4;
     ::s8 s8;
@@ -88,11 +82,11 @@ struct Frame {
 
     inline Object *pop_a() { return pop().reference; }
 
-    inline void push_s4(::s4 s4) { push(s4); }
+    inline void push_s4(::s4 s4) { push(Value(s4)); }
 
-    inline void push_f(float f) { push(f); }
+    inline void push_f(float f) { push(Value(f)); }
 
-    inline void push_a(Object *reference) { push(reference); }
+    inline void push_a(Object *reference) { push(Value(reference)); }
 
     // category 2
 
@@ -100,9 +94,9 @@ struct Frame {
 
     inline double pop_d() { return pop2().double_; }
 
-    inline void push_s8(::s8 s8) { push2(s8); }
+    inline void push_s8(::s8 s8) { push2(Value(s8)); }
 
-    inline void push_d(double d) { push2(d); }
+    inline void push_d(double d) { push2(Value(d)); }
 };
 
 //struct MethodArea {
