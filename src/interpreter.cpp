@@ -735,7 +735,7 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             size_t opcode_address = pc;
 
             // skip 0-3 bytes of padding
-            pc = ((pc - 1) & ~0b11) + 4;
+            pc = (pc + 3) & -4ul;
 
             s4 default_ = static_cast<s4>((code[pc] << 24) | (code[pc + 1] << 16) | (code[pc + 2] << 8) | code[pc + 3]);
             pc += 4;
@@ -762,7 +762,7 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             size_t opcode_address = pc;
 
             // skip 0-3 bytes of padding
-            pc = ((pc - 1) & ~0b11) + 4;
+            pc = (pc + 3) & -4ul;
 
             s4 default_ = static_cast<s4>((code[pc] << 24) | (code[pc + 1] << 16) | (code[pc + 2] << 8) | code[pc + 3]);
             pc += 4;
