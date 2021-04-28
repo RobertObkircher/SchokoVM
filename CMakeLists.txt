@@ -51,7 +51,7 @@ add_executable(SchokoVM
         src/interpreter.cpp src/interpreter.hpp
         src/opcodes.hpp
         src/future.hpp
-        src/object.cpp src/object.hpp
+        src/memory.cpp src/memory.hpp
         )
 
 if (libzip_FOUND)

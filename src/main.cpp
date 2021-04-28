@@ -8,6 +8,8 @@
 #include "interpreter.hpp"
 #include "parser.hpp"
 
+#include "memory.hpp"
+
 std::vector<std::string> split(std::string const &string, char separator) {
     std::vector<std::string> parts{};
     size_t start = 0;
@@ -35,7 +37,7 @@ int run(const Arguments &arguments) {
                     return 23;
                 }
             } else {
-                for (const auto& directory_entry : std::filesystem::recursive_directory_iterator(path)) {
+                for (const auto &directory_entry : std::filesystem::recursive_directory_iterator(path)) {
                     if (directory_entry.is_regular_file() && directory_entry.path().extension() == ".class") {
                         std::ifstream in{directory_entry.path(), std::ios::in | std::ios::binary};
                         if (in) {
@@ -66,6 +68,33 @@ int run(const Arguments &arguments) {
         std::cerr << "mainclass was not found!\n";
         return 5;
     }
+
+    {
+        Heap heap{};
+
+        auto a = heap.allocate_array<s4>(nullptr, 3);
+
+        s4 *data = a->data<s4>();
+        data[0] = 1;
+        data[1] = 2;
+        data[2] = 3;
+
+        std::cout << data[0] << " " << data[1] << " " << data[2] << "\n";
+
+
+        auto b = heap.allocate_instance(main_class->second);
+        auto *fields = a->data<Value>();
+        for (s4 i = 0; i < (s4) b->clazz->fields.size(); ++i) {
+            fields[i].s4 = i;
+        }
+        for (s4 i = 0; i < (s4) b->clazz->fields.size(); ++i) {
+            std::cout << fields[i].s4 << " ";
+        }
+        std::cout << "\n";
+    }
+
+    abort();
+
 
     return interpret(class_files, main_class->second);
 }
