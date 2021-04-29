@@ -74,7 +74,7 @@ int run(const Arguments &arguments) {
 
         auto a = heap.allocate_array<s4>(nullptr, 3);
 
-        s4 *data = a->data<s4>();
+        s4 *data = a.data<s4>();
         data[0] = 1;
         data[1] = 2;
         data[2] = 3;
@@ -83,11 +83,11 @@ int run(const Arguments &arguments) {
 
 
         auto b = heap.allocate_instance(main_class->second);
-        auto *fields = a->data<Value>();
-        for (s4 i = 0; i < (s4) b->clazz->fields.size(); ++i) {
+        auto *fields = a.data<Value>();
+        for (s4 i = 0; i < (s4) b.object()->clazz->fields.size(); ++i) {
             fields[i].s4 = i;
         }
-        for (s4 i = 0; i < (s4) b->clazz->fields.size(); ++i) {
+        for (s4 i = 0; i < (s4) b.object()->clazz->fields.size(); ++i) {
             std::cout << fields[i].s4 << " ";
         }
         std::cout << "\n";

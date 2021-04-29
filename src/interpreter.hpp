@@ -54,13 +54,13 @@ struct Frame {
 
     inline float pop_f() { return pop().float_; }
 
-    inline Object *pop_a() { return pop().reference; }
+    inline Reference pop_a() { return pop().reference; }
 
     inline void push_s4(::s4 s4) { push(Value(s4)); }
 
     inline void push_f(float f) { push(Value(f)); }
 
-    inline void push_a(Object *reference) { push(Value(reference)); }
+    inline void push_a(Reference reference) { push(Value(reference)); }
 
     // category 2
 
