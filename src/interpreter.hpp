@@ -8,41 +8,7 @@
 
 #include "future.hpp"
 #include "classfile.hpp"
-#include "object.hpp"
-
-struct Reference {
-    void *memory;
-
-    bool operator==(const Reference &rhs) const { return memory == rhs.memory; };
-};
-
-Reference const JAVA_NULL = Reference{nullptr};
-
-// see Stack for documentation
-union Value {
-    // for dummy elements
-    Value() : s8(0) {}
-
-    explicit Value(::u4 u4) : s4(future::bit_cast<::s4>(u4)) {}
-
-    explicit Value(::s4 s4) : s4(s4) {}
-
-    explicit Value(::u8 u8) : s8(future::bit_cast<::s8>(u8)) {}
-
-    explicit Value(::s8 s8) : s8(s8) {}
-
-    explicit Value(float float_) : float_(float_) {}
-
-    explicit Value(double double_) : double_(double_) {}
-
-    explicit Value(Reference reference) : reference(reference) {}
-
-    ::s4 s4;
-    ::s8 s8;
-    float float_;
-    double double_;
-    Reference reference;
-};
+#include "memory.hpp"
 
 struct Stack;
 
