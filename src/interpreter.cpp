@@ -14,12 +14,14 @@ static const u2 MAIN_ACCESS_FLAGS = (static_cast<u2>(FieldInfoAccessFlags::ACC_P
 static const auto MAIN_NAME = "main";
 static const auto MAIN_DESCRIPTOR = "([Ljava/lang/String;)V";
 
-static size_t execute_instruction(Thread &thread, Frame &frame,
+static size_t execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                                   std::unordered_map<std::string_view, ClassFile *> &class_files, bool &shouldExit);
 
 static size_t execute_comparison(const std::vector<u1> &code, size_t pc, bool condition);
 
 static size_t goto_(const std::vector<u1> &code, size_t pc);
+
+static ClassFile *resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CONSTANT_Class_info *class_info, Thread &thread, Frame &frame);
 
 template<typename T>
 static inline T add_overflow(T a, T b) {
@@ -81,6 +83,8 @@ int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, Cl
     }
     method_info *main_method = &*main_method_iter;
 
+    Heap heap{};
+
     Thread thread{};
     thread.stack.memory.resize(1024 * 1024 / sizeof(Value)); // 1mb for now
 
@@ -89,9 +93,12 @@ int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, Cl
 
     Frame frame{thread.stack, main, main_method, thread.stack.memory_used};
 
+    // push the class initializer if necessary
+    resolve_class(class_files, main->this_class, thread, frame);
+
     bool shouldExit = false;
     while (!shouldExit) {
-        frame.pc = execute_instruction(thread, frame, class_files, shouldExit);
+        frame.pc = execute_instruction(heap, thread, frame, class_files, shouldExit);
     }
 
     // print exit code
@@ -102,7 +109,7 @@ int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, Cl
     }
 }
 
-static inline size_t execute_instruction(Thread &thread, Frame &frame,
+static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                                          std::unordered_map<std::string_view, ClassFile *> &class_files,
                                          bool &shouldExit) {
     size_t pc = frame.pc;
@@ -813,8 +820,13 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
 
 
             /* ======================= References ======================= */
+        case OpCodes::invokespecial: {
+            u2 index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
+            // TODO implement invokespecial
+            return pc + 3;
+        }
         case OpCodes::invokestatic: {
-            size_t method_index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
+            u2 method_index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
             auto method_ref = std::get<CONSTANT_Methodref_info>(frame.clazz->constant_pool.table[method_index].variant);
 
             // TODO this is hardcoded for now
@@ -882,15 +894,9 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             ClassFile *clazz = method_ref.class_->clazz;
 
             if (method == nullptr) {
-                if (clazz == nullptr) {
-                    auto result = class_files.find(method_ref.class_->name->value);
-                    if (result == class_files.end()) {
-                        throw std::runtime_error("class not found: '" + method_ref.class_->name->value + "'");
-                    }
-                    method_ref.class_->clazz = clazz = result->second;
-
-                    // TODO if clazz is not initialized: create a stackframe with the initializer but do not advance the pc of this frame
-                }
+                clazz = resolve_class(class_files, method_ref.class_, thread, frame);
+                if (clazz == nullptr)
+                    return pc + 3; // run the initializer
 
                 auto method_iter = std::find_if(clazz->methods.begin(), clazz->methods.end(),
                                                 [method_ref](const method_info &m) {
@@ -926,6 +932,20 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
                     throw std::runtime_error("stack overflow");
                 return 0; // will be set on the new frame
             }
+        }
+        case OpCodes::new_: {
+            u2 index = static_cast<u2>((code[pc + 1]) << 8 | (code[pc + 2]));
+
+            auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
+            auto clazz = resolve_class(class_files, &class_info, thread, frame);
+            if (clazz == nullptr)
+                return pc + 3; // run the initializer
+
+            auto reference = heap.new_instance(clazz);
+            frame.push_a(reference);
+
+            // TODO: the next two instructions are probably dup+invokespecial. We could optimize for that pattern.
+            return pc + 3;
         }
         case OpCodes::wide: {
             u2 index = static_cast<u2>((code[pc + 2] << 8) | code[pc + 3]);
@@ -1011,6 +1031,25 @@ static size_t goto_(const std::vector<u1> &code, size_t pc) {
     u2 offset_u = static_cast<u2>((code[pc + 1]) << 8 | (code[pc + 2]));
     auto offset = future::bit_cast<s2>(offset_u);
     return static_cast<size_t>(static_cast<long>(pc) + offset);
+}
+
+static ClassFile *resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CONSTANT_Class_info *class_info, Thread &thread, Frame &frame) {
+    if (class_info->clazz == nullptr) {
+        auto &name = class_info->name->value;
+
+        auto result = class_files.find(name);
+        if (result == class_files.end()) {
+            throw std::runtime_error("class not found: '" + name + "'");
+        }
+
+        class_info->clazz = result->second;
+
+        // TODO if clazz is not initialized: create a stackframe with the initializer but do not advance the pc of the curretn frame
+        if (false) {
+            return nullptr;
+        }
+    }
+    return class_info->clazz;
 }
 
 Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top)
