@@ -1,11 +1,12 @@
 public class Fields {
-    static void println(byte    x) { System.out.println(x); }
-    static void println(short   x) { System.out.println(x); }
-    static void println(char    x) { System.out.println(x); }
-    static void println(int     x) { System.out.println(x); }
-    static void println(float   x) { System.out.println(x); }
-    static void println(long    x) { System.out.println(x); }
-    static void println(double  x) { System.out.println(x); }
+    public static void println(int i) { System.out.println(i); }
+    public static void println(long i) { System.out.println(i); }
+    public static void println(double v) { System.out.println(Double.doubleToLongBits(v)); }
+    public static void println(float v) { System.out.println(Float.floatToIntBits(v)); }
+    public static void println(char c) { System.out.println((int) c); }
+    public static void println(short s) { System.out.println(s); }
+    public static void println(byte b) { System.out.println(b); }
+    public static void println(boolean z) { System.out.println(z); }
 
     static class MyObject {
         byte b;
@@ -16,6 +17,33 @@ public class Fields {
         long l;
         double d;
         MyObject next;
+    }
+
+    static class MyStatic {
+        static byte b;
+        static short s;
+        static char c;
+        static int i;
+        static float f;
+        static long l;
+        static double d;
+        static MyObject next;
+
+        public static void print() {
+            println(b);
+            println(s);
+            println(c);
+            println(i);
+            println(f);
+            println(l);
+            println(d);
+
+            if (next != null) {
+                printMyObject(next);
+            } else {
+                println(3333333333333.333333);
+            }
+        }
     }
 
     public static void main(String[] args) {
@@ -47,6 +75,21 @@ public class Fields {
         // with changes
         printMyObject(object1);
         printMyObject(object2);
+
+        // initial static values
+        MyStatic.print();
+
+        MyStatic.b = 2;
+        MyStatic.s = 3;
+        MyStatic.c = 4;
+        MyStatic.i = 5;
+        MyStatic.f = 6f;
+        MyStatic.l = 7L;
+        MyStatic.d = 8.0;
+        MyStatic.next = object1;
+
+        // changed static values
+        MyStatic.print();
     }
 
     public static void printMyObject(MyObject o) {

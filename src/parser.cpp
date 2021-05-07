@@ -120,6 +120,21 @@ ClassFile Parser::parse() {
     if (!in.eof())
         throw ParseError("Expected EOF but got " + std::to_string((int) unexpected));
 
+    for (size_t i = 0; i < result.fields.size(); ++i) {
+        auto& field = result.fields[i];
+        if ((field.access_flags & static_cast<u2>(FieldInfoAccessFlags::ACC_STATIC)) == 0) {
+            // TODO after the superclass is resolved
+            field.index = result.declared_instance_field_count;
+            ++result.declared_instance_field_count;
+        } else {
+            field.index = i;
+        }
+        field.category = (field.descriptor_index->value == "D" || field.descriptor_index->value == "J") ? ValueCategory::C2 : ValueCategory::C1;
+    }
+    result.static_field_values.resize(result.fields.size() - result.declared_instance_field_count);
+    // TODO after the superclass is resolved
+    result.total_instance_field_count = result.declared_instance_field_count;
+
     return result;
 }
 

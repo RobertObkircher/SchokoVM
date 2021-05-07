@@ -3,10 +3,14 @@
 
 #include <cstddef>
 #include <memory>
+#include <cassert>
+#include <vector>
 
-#include "classfile.hpp"
 #include "future.hpp"
 #include "types.hpp"
+
+struct Object;
+struct ClassFile;
 
 template<class Header, class Element>
 consteval size_t offset_of_array_after_header() {
@@ -17,8 +21,6 @@ consteval size_t offset_of_array_after_header() {
     return result;
 }
 
-struct Object;
-
 struct Reference {
     void *memory;
 
@@ -28,16 +30,24 @@ struct Reference {
         return static_cast<Object *>(memory);
     }
 
+    template<typename Element>
+    inline Element *element_at_offset(size_t offset) {
+        return static_cast<Element *>(static_cast<void *>((static_cast<char *>(memory) + offset)));
+    }
+
     // For instances Element=Value
     // For arrays Element=s1,s2,s4,s8,Object*
     template<typename Element>
     inline Element *data() {
-        char *pointer = static_cast<char *>(memory) + offset_of_array_after_header<Object, Element>();
-        return static_cast<Element *>(static_cast<void *>(pointer));
+        return element_at_offset<Element>(offset_of_array_after_header<Object, Element>());
     }
 };
 
 Reference const JAVA_NULL = Reference{nullptr};
+
+enum class ValueCategory {
+    C1, C2
+};
 
 // see interpreter Stack for documentation
 union Value {
@@ -84,17 +94,18 @@ struct Heap {
 
     std::vector<std::unique_ptr<void, OperatorDeleter>> allocations;
 
-    Reference new_instance(ClassFile *clazz) {
-        return allocate_array<Value>(clazz, (s4) clazz->fields.size());
-    }
+    Reference new_instance(ClassFile *clazz);
 
     template<class Element>
     Reference allocate_array(ClassFile *clazz, s4 size) {
         assert(size >= 0);
 
-        const size_t offset = offset_of_array_after_header<Object, Element>();;
-        std::unique_ptr<void, OperatorDeleter> pointer(
-                operator new(offset + static_cast<size_t>(size) * sizeof(Element)));
+        size_t const offset = offset_of_array_after_header<Object, Element>();;
+        size_t memory_size = offset + static_cast<size_t>(size) * sizeof(Element);
+        std::unique_ptr<void, OperatorDeleter> pointer(operator new(memory_size));
+
+        // TODO is this good enough to initialize all primitive java fields?
+        memset(pointer.get(), 0, memory_size);
 
         Reference reference{pointer.get()};
         auto *object = reference.object();
