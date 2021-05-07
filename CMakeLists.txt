@@ -67,6 +67,7 @@ set(JAVA_TEST_SOURCES
         tests/Bitwise.java
         tests/Empty.java
 #        tests/HelloWorld.java
+        tests/Fields.java
         tests/InvokeStatic.java
 #        tests/KarelTheRobot.java
         tests/ReferenceComparisons.java
