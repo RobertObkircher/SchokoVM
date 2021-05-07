@@ -231,7 +231,6 @@ struct field_info {
     CONSTANT_Utf8_info *descriptor_index;
     std::vector<attribute_info> attributes;
 
-    // TODO initialize after loading super class
     size_t index;
     ValueCategory category;
 };
@@ -748,6 +747,8 @@ struct ClassFile {
     size_t declared_instance_field_count;
     size_t total_instance_field_count;
     std::vector<Value> static_field_values;
+
+    bool resolved;
 };
 
 

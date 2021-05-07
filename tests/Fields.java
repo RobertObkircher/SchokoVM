@@ -8,7 +8,8 @@ public class Fields {
     public static void println(byte b) { System.out.println(b); }
     public static void println(boolean z) { System.out.println(z); }
 
-    static class MyObject {
+    static class MyObject implements MyInterface {
+        boolean bool;
         byte b;
         short s;
         char c;
@@ -19,7 +20,18 @@ public class Fields {
         MyObject next;
     }
 
+    public interface MyInterface {
+        int erface = 0;
+        double interfaceDouble = 0.0;
+    }
+
+    static class MyObjectChild extends MyObject {
+        boolean child1;
+        int child2;
+    }
+
     static class MyStatic {
+        static boolean bool;
         static byte b;
         static short s;
         static char c;
@@ -30,6 +42,7 @@ public class Fields {
         static MyObject next;
 
         public static void print() {
+            println(bool);
             println(b);
             println(s);
             println(c);
@@ -76,6 +89,13 @@ public class Fields {
         printMyObject(object1);
         printMyObject(object2);
 
+        // fields in child class
+        MyObjectChild object3 = new MyObjectChild();
+        printMyObjectChild(object3);
+        object3.child1 = true;
+        object3.child2 = 42;
+        printMyObjectChild(object3);
+
         // initial static values
         MyStatic.print();
 
@@ -90,6 +110,22 @@ public class Fields {
 
         // changed static values
         MyStatic.print();
+
+        // interface constants
+        println(object1.erface);
+        println(object1.interfaceDouble);
+        println(MyObject.erface);
+        println(MyObject.interfaceDouble);
+        println(object2.erface);
+        println(object2.interfaceDouble);
+        println(MyObjectChild.erface);
+        println(MyObjectChild.interfaceDouble);
+    }
+
+    public static void printMyObjectChild(MyObjectChild o) {
+        println(o.child1);
+        println(o.child2);
+        printMyObject(o);
     }
 
     public static void printMyObject(MyObject o) {

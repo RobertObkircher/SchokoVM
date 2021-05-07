@@ -23,7 +23,7 @@ static size_t goto_(const std::vector<u1> &code, size_t pc);
 
 enum class Resolved {
     OK,
-    PUSHED_INITIALIZER,
+    PUSHED_INITIALIZERS,
     NOT_FOUND,
 };
 
@@ -103,7 +103,7 @@ int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, Cl
 
     // push the class initializer if necessary
     Resolved resolved = resolve_class(class_files, main->this_class, thread, frame);
-    assert(resolved == Resolved::OK || resolved == Resolved::PUSHED_INITIALIZER);
+    assert(resolved == Resolved::OK || resolved == Resolved::PUSHED_INITIALIZERS);
 
     bool shouldExit = false;
     while (!shouldExit) {
@@ -862,7 +862,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                 }
                 assert(field.resolved);
 
-                if (resolved == Resolved::PUSHED_INITIALIZER)
+                if (resolved == Resolved::PUSHED_INITIALIZERS)
                     return 0;
             }
 
@@ -911,7 +911,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
         }
         case OpCodes::invokespecial: {
             u2 index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
-            (void)index;
+            (void) index;
             frame.pop_a(); // this arguemnt for constructor
             // TODO implement invokespecial
             return pc + 3;
@@ -986,7 +986,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
 
             if (method == nullptr) {
                 Resolved resolved = resolve_class(class_files, method_ref.class_, thread, frame);
-                if (resolved == Resolved::PUSHED_INITIALIZER)
+                if (resolved == Resolved::PUSHED_INITIALIZERS)
                     return 0;
                 if (resolved == Resolved::NOT_FOUND)
                     throw std::runtime_error("class not found: '" + method_ref.class_->name->value + "'");
@@ -1034,7 +1034,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
 
             auto resolved = resolve_class(class_files, &class_info, thread, frame);
-            if (resolved == Resolved::PUSHED_INITIALIZER)
+            if (resolved == Resolved::PUSHED_INITIALIZERS)
                 return 0;
             if (resolved == Resolved::NOT_FOUND)
                 throw std::runtime_error("class not found: '" + class_info.name->value + "'");
@@ -1139,18 +1139,74 @@ resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CO
     if (class_info->clazz == nullptr) {
         auto &name = class_info->name->value;
 
+        // see https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.3.5
+        // and https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.4.3.1
+
+        // TODO we also need to deal with array classes here. They also load the class for the elements.
+
         auto result = class_files.find(name);
         if (result == class_files.end())
             return Resolved::NOT_FOUND;
+        ClassFile *clazz = result->second;
 
-        class_info->clazz = result->second;
-
-        // TODO if clazz is not initialized: create a stackframe with the initializer but do not advance the pc of the curretn frame
-        if (false) {
-            (void)thread;
-            (void)frame;
-            return Resolved::PUSHED_INITIALIZER;
+        if (clazz->resolved) {
+            class_info->clazz = clazz;
+            return Resolved::OK;
         }
+
+        bool pushed_initializers = false;
+        size_t parent_instance_field_count = 0;
+        if (clazz->super_class->name->value != "java/lang/Object") {
+            switch (resolve_class(class_files, clazz->super_class, thread, frame)) {
+                case Resolved::OK:
+                    break;
+                case Resolved::PUSHED_INITIALIZERS:
+                    pushed_initializers = true;
+                    break;
+                case Resolved::NOT_FOUND:
+                    return Resolved::NOT_FOUND;
+            }
+            parent_instance_field_count = clazz->super_class->clazz->total_instance_field_count;
+        }
+
+        clazz->total_instance_field_count = clazz->declared_instance_field_count + parent_instance_field_count;
+        for (size_t i = parent_instance_field_count; auto &field : clazz->fields) {
+            if ((field.access_flags & static_cast<u2>(FieldInfoAccessFlags::ACC_STATIC)) == 0) {
+                field.index = i;
+                ++i;
+            }
+        }
+
+        for (auto &interface : clazz->interfaces) {
+            switch (resolve_class(class_files, interface, thread, frame)) {
+                case Resolved::OK:
+                    break;
+                case Resolved::PUSHED_INITIALIZERS:
+                    pushed_initializers = true;
+                    break;
+                case Resolved::NOT_FOUND:
+                    return Resolved::NOT_FOUND;
+            }
+        }
+
+        clazz->resolved = true;
+
+        if (false /* clazz.has_initializer */) {
+            pushed_initializers = true;
+
+            // TODO create a stackframe with the initializer but do not advance the pc of the current frame
+            (void) thread;
+            (void) frame;
+        }
+
+        // make it available even if we haven't executed the initializers yet
+        // TODO is this a bad idea?
+        // TODO maybe a better solution would be to run the initializers in a completely separate interpreter loop.
+        // In that case we wouldn't have to restart/reexecute the caller instruction afterwards
+        class_info->clazz = clazz;
+
+        if (pushed_initializers)
+            return Resolved::PUSHED_INITIALIZERS;
     }
     return Resolved::OK;
 }
