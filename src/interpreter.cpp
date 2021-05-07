@@ -114,7 +114,7 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
         case OpCodes::nop:
             break;
         case OpCodes::aconst_null:
-            frame.push_a(nullptr);
+            frame.push_a(JAVA_NULL);
             break;
         case OpCodes::iconst_m1:
         case OpCodes::iconst_0:
@@ -979,9 +979,9 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
         }
 
         case OpCodes::ifnull:
-            return execute_comparison(code, pc, frame.pop_a() == nullptr);
+            return execute_comparison(code, pc, frame.pop_a() == JAVA_NULL);
         case OpCodes::ifnonnull:
-            return execute_comparison(code, pc, frame.pop_a() != nullptr);
+            return execute_comparison(code, pc, frame.pop_a() != JAVA_NULL);
         case OpCodes::goto_w: {
             s4 offset = static_cast<s4>((code[pc + 1] << 24) | (code[pc + 2] << 16) | (code[pc + 3] << 8) |
                                         code[pc + 4]);

@@ -10,6 +10,14 @@
 #include "classfile.hpp"
 #include "object.hpp"
 
+struct Reference {
+    void *memory;
+
+    bool operator==(const Reference &rhs) const { return memory == rhs.memory; };
+};
+
+Reference const JAVA_NULL = Reference{nullptr};
+
 // see Stack for documentation
 union Value {
     // for dummy elements
@@ -27,13 +35,13 @@ union Value {
 
     explicit Value(double double_) : double_(double_) {}
 
-    explicit Value(Object *reference) : reference(reference) {}
+    explicit Value(Reference reference) : reference(reference) {}
 
     ::s4 s4;
     ::s8 s8;
     float float_;
     double double_;
-    Object *reference;
+    Reference reference;
 };
 
 struct Stack;
@@ -80,13 +88,13 @@ struct Frame {
 
     inline float pop_f() { return pop().float_; }
 
-    inline Object *pop_a() { return pop().reference; }
+    inline Reference pop_a() { return pop().reference; }
 
     inline void push_s4(::s4 s4) { push(Value(s4)); }
 
     inline void push_f(float f) { push(Value(f)); }
 
-    inline void push_a(Object *reference) { push(Value(reference)); }
+    inline void push_a(Reference reference) { push(Value(reference)); }
 
     // category 2
 
