@@ -1,5 +1,8 @@
 # see https://cmake.org/cmake/help/v3.19/guide/tutorial/index.html
 
+# Generator expressions: https://cmake.org/cmake/help/latest/manual/cmake-generator-expressions.7.html
+# $<$<CXX_COMPILER_ID:GNU>:-Wall> with AppleClang|Clang|GNU
+
 cmake_minimum_required(VERSION 3.19)
 project(SchokoVM)
 
@@ -11,34 +14,68 @@ include(UseJava)
 
 find_package(libzip)
 
-# https://cmake.org/cmake/help/latest/command/add_compile_options.html
+#
+# Common compiler options
+#
+
+# For debugging
+#set(CMAKE_VERBOSE_MAKEFILE on)
 if (MSVC)
-    add_compile_options(/W4 /WX) # warning level 4 and all warnings as errors
-elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+    add_compile_options(/W4)
+else ()
     add_compile_options(
             -Wall -Wextra -pedantic
-#            -Wold-style-cast
-            -Wdouble-promotion -Wformat=2 -Wundef -fno-common -Wconversion
-            -Wno-nullability-extension
-            -fno-common
-            # Catch signed integer overflows
-            -ftrapv
-            -fsanitize=address
-    )
-    add_link_options(-fsanitize=address)
-else ()
-    add_compile_options(-Wall -Wextra -pedantic # -Werror
-            # https://interrupt.memfault.com/blog/best-and-worst-gcc-clang-compiler-flags
-            -Wdouble-promotion -Wformat=2 -Wformat-truncation -Wundef -fno-common -Wconversion
+            #            -Wold-style-cast
 
-            # from looking at man g++
-            # -fanalyzer # unfortunately this is very slow
-            -fsanitize=address -fsanitize=pointer-compare -fsanitize=pointer-subtract -fsanitize=leak -fsanitize=undefined
-            )
-    add_link_options(
-            -fsanitize=address -fsanitize=pointer-compare -fsanitize=pointer-subtract -fsanitize=leak -fsanitize=undefined
+            -Wdouble-promotion -Wconversion
+
+            # We don't really use printf but whatever
+            -Wformat=2
+
+            # Warn if an undefined identifier is evaluated in an "#if" directive.
+            -Wundef
+
+            # no duplicate global variables
+            -fno-common
+
+            # not sure what this does
+            $<$<CXX_COMPILER_ID:AppleClang>:-Wno-nullability-extension>
+
+            # Catch signed integer overflows
+            #-ftrapv
+
+            # static analysis, unfortunately this is very slow
+            # -fanalyzer
     )
 endif ()
+
+function(add_sanitizers target)
+    if (MSVC)
+    else ()
+        target_compile_options(${target} PRIVATE
+                -fsanitize=address
+                $<$<NOT:$<CXX_COMPILER_ID:AppleClang>>:
+                -fsanitize=pointer-compare
+                -fsanitize=pointer-subtract
+                -fsanitize=leak
+                -fsanitize=undefined
+                >
+                )
+        target_link_options(${target} PRIVATE
+                -fsanitize=address
+                $<$<NOT:$<CXX_COMPILER_ID:AppleClang>>:
+                -fsanitize=pointer-compare
+                -fsanitize=pointer-subtract
+                -fsanitize=leak
+                -fsanitize=undefined
+                >
+                )
+    endif ()
+endfunction(add_sanitizers)
+
+#
+# Executables and libraries
+#
 
 # I'm not entirely sure how to use add_subdirectory(src) and we only have one executable anyway
 add_executable(SchokoVM
@@ -53,7 +90,9 @@ add_executable(SchokoVM
         src/future.hpp
         src/memory.cpp src/memory.hpp
         src/math.hpp
-        src/classloading.cpp src/classloading.hpp)
+        src/classloading.cpp src/classloading.hpp
+        )
+add_sanitizers(SchokoVM)
 
 if (libzip_FOUND)
     target_link_libraries(SchokoVM libzip::zip)
@@ -61,6 +100,10 @@ else ()
     # hope that it's on the standard search paths
     target_link_libraries(SchokoVM zip)
 endif ()
+
+#
+# Tests
+#
 
 # Note: using glob to create this list is not recommended
 #file(GLOB JAVA_TEST_SOURCES CONFIGURE_DEPENDS tests/*.java)
