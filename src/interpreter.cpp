@@ -850,12 +850,16 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                 }
 
                 if (!resolve_field_recursive(field.class_->clazz, &field))
-                    throw std::runtime_error("field not found: " + field.class_->name->value + "." + field.name_and_type->name->value + " " + field.name_and_type->descriptor->value);
+                    throw std::runtime_error(
+                            "field not found: " + field.class_->name->value + "." + field.name_and_type->name->value +
+                            " " + field.name_and_type->descriptor->value);
                 assert(field.resolved);
             }
 
             switch (static_cast<OpCodes>(opcode)) {
                 case OpCodes::getstatic: {
+                    if (!field.is_static)
+                        throw std::runtime_error("field is not static");
                     auto value = field.class_->clazz->static_field_values[field.index];
                     if (field.category == ValueCategory::C1) {
                         frame.push(value);
@@ -865,6 +869,8 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                     break;
                 }
                 case OpCodes::putstatic: {
+                    if (!field.is_static)
+                        throw std::runtime_error("field is not static");
                     Value value;
                     if (field.category == ValueCategory::C1) {
                         value = frame.pop();
@@ -877,6 +883,8 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                     break;
                 }
                 case OpCodes::getfield: {
+                    if (field.is_static)
+                        throw std::runtime_error("field is static");
                     auto objectref = frame.pop_a();
                     auto value = objectref.data<Value>()[field.index];
                     if (field.category == ValueCategory::C1) {
@@ -887,6 +895,8 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                     break;
                 }
                 case OpCodes::putfield: {
+                    if (field.is_static)
+                        throw std::runtime_error("field is static");
                     Value value;
                     if (field.category == ValueCategory::C1) {
                         value = frame.pop();
@@ -1150,18 +1160,10 @@ resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CO
             return ClassResolution::OK;
         }
 
-        for (size_t i = 0; i < clazz->fields.size(); ++i) {
-            auto &field = clazz->fields[i];
-            if ((field.access_flags & static_cast<u2>(FieldInfoAccessFlags::ACC_STATIC)) == 0) {
+        for (const auto &field : clazz->fields) {
+            if (!field.is_static())
                 ++clazz->declared_instance_field_count;
-                // field.index = initialized below, when we know the total instance field count of the super class
-            } else {
-                field.index = i;
-            }
-            field.category = (field.descriptor_index->value == "D" || field.descriptor_index->value == "J")
-                             ? ValueCategory::C2 : ValueCategory::C1;
         }
-        clazz->static_field_values.resize(clazz->fields.size() - clazz->declared_instance_field_count);
 
         bool pushed_initializers = false;
         size_t parent_instance_field_count = 0;
@@ -1178,13 +1180,20 @@ resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CO
             parent_instance_field_count = clazz->super_class->clazz->total_instance_field_count;
         }
 
+        // instance and static fields
         clazz->total_instance_field_count = clazz->declared_instance_field_count + parent_instance_field_count;
-        for (size_t i = parent_instance_field_count; auto &field : clazz->fields) {
-            if ((field.access_flags & static_cast<u2>(FieldInfoAccessFlags::ACC_STATIC)) == 0) {
-                field.index = i;
-                ++i;
+        for (size_t static_index = 0, instance_index = parent_instance_field_count; auto &field : clazz->fields) {
+            if (field.is_static()) {
+                // used to index into clazz->static_field_values
+                field.index = static_index++;
+            } else {
+                // used to index into instance fields
+                field.index = instance_index++;
             }
+            field.category = (field.descriptor_index->value == "D" || field.descriptor_index->value == "J")
+                             ? ValueCategory::C2 : ValueCategory::C1;
         }
+        clazz->static_field_values.resize(clazz->fields.size() - clazz->declared_instance_field_count);
 
         for (auto &interface : clazz->interfaces) {
             switch (resolve_class(class_files, interface, thread, frame)) {
@@ -1231,6 +1240,7 @@ static bool resolve_field_recursive(ClassFile *clazz, CONSTANT_Fieldref_info *fi
 
                 field_info->resolved = true;
                 field_info->is_boolean = f.descriptor_index->value == "Z";
+                field_info->is_static = f.is_static();
                 field_info->index = f.index;
                 field_info->category = f.category;
 

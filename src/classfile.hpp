@@ -100,6 +100,7 @@ struct CONSTANT_Fieldref_info {
 
     bool resolved;
     bool is_boolean;
+    bool is_static;
     ValueCategory category;
     size_t index;
 };
@@ -233,6 +234,10 @@ struct field_info {
 
     size_t index;
     ValueCategory category;
+
+    [[nodiscard]] inline bool is_static() const {
+        return (access_flags & static_cast<u2>(FieldInfoAccessFlags::ACC_STATIC)) != 0;
+    }
 };
 
 enum class MethodInfoAccessFlags : u2 {
