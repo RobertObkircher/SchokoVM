@@ -93,6 +93,7 @@ add_executable(SchokoVM
         src/math.hpp
         src/classloading.cpp src/classloading.hpp
         src/util.cpp src/util.hpp
+        src/native.cpp src/native.hpp
         )
 add_sanitizers(SchokoVM)
 
@@ -102,6 +103,11 @@ else ()
     # hope that it's on the standard search paths
     target_link_libraries(SchokoVM zip)
 endif ()
+
+add_library(NativeLib MODULE
+        src/native-test.cpp
+        )
+target_link_libraries(SchokoVM dl ffi)
 
 
 #
@@ -152,6 +158,7 @@ set(JAVA_TEST_SOURCES
         tests/MethodsStatic.java
         tests/MethodsVirtualInterface.java
         tests/MultiArrays.java
+        tests/Native.java
         tests/ObjectArray.java
         tests/ReferenceComparisons.java
         tests/Strings.java
