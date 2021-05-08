@@ -89,6 +89,7 @@ struct CONSTANT_Invalid_info {
 struct CONSTANT_Class_info {
     u2 name_index;
     CONSTANT_Utf8_info *name;
+
     ClassFile *clazz;
 };
 

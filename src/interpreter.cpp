@@ -67,7 +67,7 @@ static inline T div_overflow(T dividend, T divisor) {
     return dividend / divisor;
 }
 
-template<std::floating_point F, std::signed_integral I>
+template<typename F, typename I>
 static inline I floating_to_integer(F f) {
     if (std::isnan(f)) {
         return 0;
