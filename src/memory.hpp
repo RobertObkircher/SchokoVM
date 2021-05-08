@@ -17,7 +17,8 @@ consteval size_t offset_of_array_after_header() {
     // see also std::align
     size_t result = (sizeof(Header) - 1u + alignof(Element)) & -alignof(Element);
     assert(result >= sizeof(Header));
-    assert(result <= sizeof(Header) + alignof(std::max_align_t));
+    assert(result < sizeof(Header) + alignof(Element));
+    assert(result % alignof(Element) == 0);
     return result;
 }
 
@@ -26,19 +27,19 @@ struct Reference {
 
     bool operator==(const Reference &rhs) const { return memory == rhs.memory; };
 
-    inline Object *object() {
+    [[nodiscard]] inline Object *object() const {
         return static_cast<Object *>(memory);
     }
 
     template<typename Element>
-    inline Element *element_at_offset(size_t offset) {
+    [[nodiscard]] inline Element *element_at_offset(size_t offset) const {
         return static_cast<Element *>(static_cast<void *>((static_cast<char *>(memory) + offset)));
     }
 
     // For instances Element=Value
     // For arrays Element=s1,s2,s4,s8,Object*
     template<typename Element>
-    inline Element *data() {
+    [[nodiscard]] inline Element *data() const {
         return element_at_offset<Element>(offset_of_array_after_header<Object, Element>());
     }
 };
@@ -79,11 +80,8 @@ union Value {
 struct Object {
     ClassFile *clazz;
     s4 flags;
-    s4 size;
+    s4 length;
 };
-
-static_assert(std::is_standard_layout<Object>() && std::is_trivial<Object>(), "must be pod");
-static_assert(std::is_standard_layout<Value>()); // not sure if it is a problem that it isn't trivial
 
 struct Heap {
     struct OperatorDeleter {
@@ -97,20 +95,20 @@ struct Heap {
     Reference new_instance(ClassFile *clazz);
 
     template<class Element>
-    Reference allocate_array(ClassFile *clazz, s4 size) {
-        assert(size >= 0);
+    Reference allocate_array(ClassFile *clazz, s4 length) {
+        assert(length >= 0);
 
-        size_t const offset = offset_of_array_after_header<Object, Element>();;
-        size_t memory_size = offset + static_cast<size_t>(size) * sizeof(Element);
-        std::unique_ptr<void, OperatorDeleter> pointer(operator new(memory_size));
+        size_t size = offset_of_array_after_header<Object, Element>() + static_cast<size_t>(length) * sizeof(Element);
+        std::unique_ptr<void, OperatorDeleter> pointer(operator new(size));
 
         // TODO is this good enough to initialize all primitive java fields?
-        memset(pointer.get(), 0, memory_size);
+        // from cppreference calloc: Initialization to all bits zero does not guarantee that a floating-point or a pointer would be initialized to 0.0 and the null pointer value, respectively (although that is true on all common platforms)
+        memset(pointer.get(), 0, size);
 
         Reference reference{pointer.get()};
         auto *object = reference.object();
         object->clazz = clazz;
-        object->size = size;
+        object->length = length;
 
         allocations.push_back(std::move(pointer));
 

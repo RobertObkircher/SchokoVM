@@ -5,7 +5,6 @@
 #include <vector>
 #include <cstring>
 #include "classfile.hpp"
-#include "future.hpp"
 
 ParseError::ParseError(std::string message) : message(std::move(message)) {}
 
@@ -119,17 +118,6 @@ ClassFile Parser::parse() {
     u1 unexpected = eat_u1();
     if (!in.eof())
         throw ParseError("Expected EOF but got " + std::to_string((int) unexpected));
-
-    for (size_t i = 0; i < result.fields.size(); ++i) {
-        auto& field = result.fields[i];
-        if ((field.access_flags & static_cast<u2>(FieldInfoAccessFlags::ACC_STATIC)) == 0) {
-            ++result.declared_instance_field_count;
-        } else {
-            field.index = i;
-        }
-        field.category = (field.descriptor_index->value == "D" || field.descriptor_index->value == "J") ? ValueCategory::C2 : ValueCategory::C1;
-    }
-    result.static_field_values.resize(result.fields.size() - result.declared_instance_field_count);
 
     return result;
 }

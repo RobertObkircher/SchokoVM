@@ -1154,6 +1154,17 @@ resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CO
             return Resolved::OK;
         }
 
+        for (size_t i = 0; i < clazz->fields.size(); ++i) {
+            auto& field = clazz->fields[i];
+            if ((field.access_flags & static_cast<u2>(FieldInfoAccessFlags::ACC_STATIC)) == 0) {
+                ++clazz->declared_instance_field_count;
+            } else {
+                field.index = i;
+            }
+            field.category = (field.descriptor_index->value == "D" || field.descriptor_index->value == "J") ? ValueCategory::C2 : ValueCategory::C1;
+        }
+        clazz->static_field_values.resize(clazz->fields.size() - clazz->declared_instance_field_count);
+
         bool pushed_initializers = false;
         size_t parent_instance_field_count = 0;
         if (clazz->super_class->name->value != "java/lang/Object") {
