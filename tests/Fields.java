@@ -20,7 +20,15 @@ public class Fields {
         MyObject next;
     }
 
-    public interface MyInterface {
+    public interface SuperInterface {
+        float super_interface = 0f;
+    }
+
+    public interface SuperInterface2 {
+        float super_interface2 = 0f;
+    }
+
+    public interface MyInterface extends SuperInterface, SuperInterface2 {
         int erface = 0;
         double interfaceDouble = 0.0;
     }
@@ -114,18 +122,41 @@ public class Fields {
         // interface constants
         println(object1.erface);
         println(object1.interfaceDouble);
+        println(object1.super_interface);
+        println(object1.super_interface2);
+
         println(MyObject.erface);
         println(MyObject.interfaceDouble);
+        println(MyObject.super_interface);
+        println(MyObject.super_interface2);
+
         println(object2.erface);
         println(object2.interfaceDouble);
+        println(object2.super_interface);
+        println(object2.super_interface2);
+
         println(MyObjectChild.erface);
         println(MyObjectChild.interfaceDouble);
+        println(MyObjectChild.super_interface);
+        println(MyObjectChild.super_interface2);
     }
 
     public static void printMyObjectChild(MyObjectChild o) {
         println(o.child1);
         println(o.child2);
-        printMyObject(o);
+        println(o.b);
+        println(o.s);
+        println(o.c);
+        println(o.i);
+        println(o.f);
+        println(o.l);
+        println(o.d);
+
+        if (o.next != null) {
+            printMyObject(o.next);
+        } else {
+            println(3333333333333.333333);
+        }
     }
 
     public static void printMyObject(MyObject o) {

@@ -21,15 +21,17 @@ static size_t execute_comparison(const std::vector<u1> &code, size_t pc, bool co
 
 static size_t goto_(const std::vector<u1> &code, size_t pc);
 
-enum class Resolved {
+enum class ClassResolution {
     OK,
     PUSHED_INITIALIZERS,
     NOT_FOUND,
 };
 
-static Resolved
+static ClassResolution
 resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CONSTANT_Class_info *class_info,
               Thread &thread, Frame &frame);
+
+static bool resolve_field_recursive(ClassFile *clazz, CONSTANT_Fieldref_info *field_info);
 
 template<typename T>
 static inline T add_overflow(T a, T b) {
@@ -102,8 +104,9 @@ int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, Cl
     Frame frame{thread.stack, main, main_method, thread.stack.memory_used};
 
     // push the class initializer if necessary
-    Resolved resolved = resolve_class(class_files, main->this_class, thread, frame);
-    assert(resolved == Resolved::OK || resolved == Resolved::PUSHED_INITIALIZERS);
+    ClassResolution resolved = resolve_class(class_files, main->this_class, thread, frame);
+    if (resolved == ClassResolution::NOT_FOUND)
+        abort();
 
     bool shouldExit = false;
     while (!shouldExit) {
@@ -837,39 +840,28 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             auto field = frame.clazz->constant_pool.get<CONSTANT_Fieldref_info>(index);
 
             if (!field.resolved) {
-                Resolved resolved = resolve_class(class_files, field.class_, thread, frame);
-                if (resolved == Resolved::NOT_FOUND)
-                    throw std::runtime_error("class not found: '" + field.class_->name->value + "'");
-
-                // NOTE: Frame might point to an initializer!
-
-                size_t i = 0;
-                // TODO we also need to search in super classes
-                // Maybe we should build a hashmap when the class is loaded
-                for (auto const &f : field.class_->clazz->fields) {
-                    if (f.name_index->value == field.name_and_type->name->value &&
-                        f.descriptor_index->value == field.name_and_type->descriptor->value) {
-
-                        field.resolved = true;
-                        field.is_boolean = f.descriptor_index->value == "Z";
-                        field.index = f.index;
-                        field.category = f.category;
-
-                        // TODO check access_flags
+                switch (resolve_class(class_files, field.class_, thread, frame)) {
+                    case ClassResolution::OK:
                         break;
-                    }
-                    ++i;
+                    case ClassResolution::PUSHED_INITIALIZERS:
+                        return 0;
+                    case ClassResolution::NOT_FOUND:
+                        throw std::runtime_error("class not found: '" + field.class_->name->value + "'");
                 }
-                assert(field.resolved);
 
-                if (resolved == Resolved::PUSHED_INITIALIZERS)
-                    return 0;
+                if (!resolve_field_recursive(field.class_->clazz, &field))
+                    throw std::runtime_error("field not found: " + field.class_->name->value + "." + field.name_and_type->name->value + " " + field.name_and_type->descriptor->value);
+                assert(field.resolved);
             }
 
             switch (static_cast<OpCodes>(opcode)) {
                 case OpCodes::getstatic: {
                     auto value = field.class_->clazz->static_field_values[field.index];
-                    (field.category == ValueCategory::C1) ? frame.push(value) : frame.push2(value);
+                    if (field.category == ValueCategory::C1) {
+                        frame.push(value);
+                    } else {
+                        frame.push2(value);
+                    }
                     break;
                 }
                 case OpCodes::putstatic: {
@@ -887,7 +879,11 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                 case OpCodes::getfield: {
                     auto objectref = frame.pop_a();
                     auto value = objectref.data<Value>()[field.index];
-                    (field.category == ValueCategory::C1) ? frame.push(value) : frame.push2(value);
+                    if (field.category == ValueCategory::C1) {
+                        frame.push(value);
+                    } else {
+                        frame.push2(value);
+                    }
                     break;
                 }
                 case OpCodes::putfield: {
@@ -985,10 +981,10 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             ClassFile *clazz = method_ref.class_->clazz;
 
             if (method == nullptr) {
-                Resolved resolved = resolve_class(class_files, method_ref.class_, thread, frame);
-                if (resolved == Resolved::PUSHED_INITIALIZERS)
+                ClassResolution resolved = resolve_class(class_files, method_ref.class_, thread, frame);
+                if (resolved == ClassResolution::PUSHED_INITIALIZERS)
                     return 0;
-                if (resolved == Resolved::NOT_FOUND)
+                if (resolved == ClassResolution::NOT_FOUND)
                     throw std::runtime_error("class not found: '" + method_ref.class_->name->value + "'");
 
                 clazz = method_ref.class_->clazz;
@@ -1034,9 +1030,9 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
 
             auto resolved = resolve_class(class_files, &class_info, thread, frame);
-            if (resolved == Resolved::PUSHED_INITIALIZERS)
+            if (resolved == ClassResolution::PUSHED_INITIALIZERS)
                 return 0;
-            if (resolved == Resolved::NOT_FOUND)
+            if (resolved == ClassResolution::NOT_FOUND)
                 throw std::runtime_error("class not found: '" + class_info.name->value + "'");
             auto clazz = class_info.clazz;
 
@@ -1133,7 +1129,7 @@ static size_t goto_(const std::vector<u1> &code, size_t pc) {
 }
 
 
-static Resolved
+static ClassResolution
 resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CONSTANT_Class_info *class_info,
               Thread &thread, Frame &frame) {
     if (class_info->clazz == nullptr) {
@@ -1146,22 +1142,24 @@ resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CO
 
         auto result = class_files.find(name);
         if (result == class_files.end())
-            return Resolved::NOT_FOUND;
+            return ClassResolution::NOT_FOUND;
         ClassFile *clazz = result->second;
 
         if (clazz->resolved) {
             class_info->clazz = clazz;
-            return Resolved::OK;
+            return ClassResolution::OK;
         }
 
         for (size_t i = 0; i < clazz->fields.size(); ++i) {
-            auto& field = clazz->fields[i];
+            auto &field = clazz->fields[i];
             if ((field.access_flags & static_cast<u2>(FieldInfoAccessFlags::ACC_STATIC)) == 0) {
                 ++clazz->declared_instance_field_count;
+                // field.index = initialized below, when we know the total instance field count of the super class
             } else {
                 field.index = i;
             }
-            field.category = (field.descriptor_index->value == "D" || field.descriptor_index->value == "J") ? ValueCategory::C2 : ValueCategory::C1;
+            field.category = (field.descriptor_index->value == "D" || field.descriptor_index->value == "J")
+                             ? ValueCategory::C2 : ValueCategory::C1;
         }
         clazz->static_field_values.resize(clazz->fields.size() - clazz->declared_instance_field_count);
 
@@ -1169,13 +1167,13 @@ resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CO
         size_t parent_instance_field_count = 0;
         if (clazz->super_class->name->value != "java/lang/Object") {
             switch (resolve_class(class_files, clazz->super_class, thread, frame)) {
-                case Resolved::OK:
+                case ClassResolution::OK:
                     break;
-                case Resolved::PUSHED_INITIALIZERS:
+                case ClassResolution::PUSHED_INITIALIZERS:
                     pushed_initializers = true;
                     break;
-                case Resolved::NOT_FOUND:
-                    return Resolved::NOT_FOUND;
+                case ClassResolution::NOT_FOUND:
+                    return ClassResolution::NOT_FOUND;
             }
             parent_instance_field_count = clazz->super_class->clazz->total_instance_field_count;
         }
@@ -1190,13 +1188,13 @@ resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CO
 
         for (auto &interface : clazz->interfaces) {
             switch (resolve_class(class_files, interface, thread, frame)) {
-                case Resolved::OK:
+                case ClassResolution::OK:
                     break;
-                case Resolved::PUSHED_INITIALIZERS:
+                case ClassResolution::PUSHED_INITIALIZERS:
                     pushed_initializers = true;
                     break;
-                case Resolved::NOT_FOUND:
-                    return Resolved::NOT_FOUND;
+                case ClassResolution::NOT_FOUND:
+                    return ClassResolution::NOT_FOUND;
             }
         }
 
@@ -1217,9 +1215,47 @@ resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CO
         class_info->clazz = clazz;
 
         if (pushed_initializers)
-            return Resolved::PUSHED_INITIALIZERS;
+            return ClassResolution::PUSHED_INITIALIZERS;
     }
-    return Resolved::OK;
+    return ClassResolution::OK;
+}
+
+static bool resolve_field_recursive(ClassFile *clazz, CONSTANT_Fieldref_info *field_info) {
+    // Steps: https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.4.3.2
+    for (;;) {
+        // 1.
+        assert(!field_info->resolved);
+        for (auto const &f : clazz->fields) {
+            if (f.name_index->value == field_info->name_and_type->name->value &&
+                f.descriptor_index->value == field_info->name_and_type->descriptor->value) {
+
+                field_info->resolved = true;
+                field_info->is_boolean = f.descriptor_index->value == "Z";
+                field_info->index = f.index;
+                field_info->category = f.category;
+
+                // TODO check access_flags
+                return true;
+            }
+        }
+
+        // 2.
+        assert(!field_info->resolved);
+        for (auto const &interface : field_info->class_->clazz->interfaces) {
+            if (resolve_field_recursive(interface->clazz, field_info))
+                return true;
+        }
+
+        assert(!field_info->resolved);
+
+        if (clazz->super_class != nullptr) {
+            // 3.
+            clazz = clazz->super_class->clazz;
+        } else {
+            break;
+        }
+    }
+    return false;
 }
 
 Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top)
