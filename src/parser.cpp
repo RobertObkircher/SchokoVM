@@ -5,7 +5,6 @@
 #include <vector>
 #include <cstring>
 #include "classfile.hpp"
-#include "future.hpp"
 
 ParseError::ParseError(std::string message) : message(std::move(message)) {}
 

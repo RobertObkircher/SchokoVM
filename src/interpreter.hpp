@@ -8,33 +8,7 @@
 
 #include "future.hpp"
 #include "classfile.hpp"
-#include "object.hpp"
-
-// see Stack for documentation
-union Value {
-    // for dummy elements
-    Value() : s8(0) {}
-
-    explicit Value(::u4 u4) : s4(future::bit_cast<::s4>(u4)) {}
-
-    explicit Value(::s4 s4) : s4(s4) {}
-
-    explicit Value(::u8 u8) : s8(future::bit_cast<::s8>(u8)) {}
-
-    explicit Value(::s8 s8) : s8(s8) {}
-
-    explicit Value(float float_) : float_(float_) {}
-
-    explicit Value(double double_) : double_(double_) {}
-
-    explicit Value(Object *reference) : reference(reference) {}
-
-    ::s4 s4;
-    ::s8 s8;
-    float float_;
-    double double_;
-    Object *reference;
-};
+#include "memory.hpp"
 
 struct Stack;
 
@@ -80,13 +54,13 @@ struct Frame {
 
     inline float pop_f() { return pop().float_; }
 
-    inline Object *pop_a() { return pop().reference; }
+    inline Reference pop_a() { return pop().reference; }
 
     inline void push_s4(::s4 s4) { push(Value(s4)); }
 
     inline void push_f(float f) { push(Value(f)); }
 
-    inline void push_a(Object *reference) { push(Value(reference)); }
+    inline void push_a(Reference reference) { push(Value(reference)); }
 
     // category 2
 

@@ -14,12 +14,24 @@ static const u2 MAIN_ACCESS_FLAGS = (static_cast<u2>(FieldInfoAccessFlags::ACC_P
 static const auto MAIN_NAME = "main";
 static const auto MAIN_DESCRIPTOR = "([Ljava/lang/String;)V";
 
-static size_t execute_instruction(Thread &thread, Frame &frame,
+static size_t execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                                   std::unordered_map<std::string_view, ClassFile *> &class_files, bool &shouldExit);
 
 static size_t execute_comparison(const std::vector<u1> &code, size_t pc, bool condition);
 
 static size_t goto_(const std::vector<u1> &code, size_t pc);
+
+enum class ClassResolution {
+    OK,
+    PUSHED_INITIALIZERS,
+    NOT_FOUND,
+};
+
+static ClassResolution
+resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CONSTANT_Class_info *class_info,
+              Thread &thread, Frame &frame);
+
+static bool resolve_field_recursive(ClassFile *clazz, CONSTANT_Fieldref_info *field_info);
 
 template<typename T>
 static inline T add_overflow(T a, T b) {
@@ -81,6 +93,8 @@ int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, Cl
     }
     method_info *main_method = &*main_method_iter;
 
+    Heap heap{};
+
     Thread thread{};
     thread.stack.memory.resize(1024 * 1024 / sizeof(Value)); // 1mb for now
 
@@ -89,9 +103,14 @@ int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, Cl
 
     Frame frame{thread.stack, main, main_method, thread.stack.memory_used};
 
+    // push the class initializer if necessary
+    ClassResolution resolved = resolve_class(class_files, main->this_class, thread, frame);
+    if (resolved == ClassResolution::NOT_FOUND)
+        abort();
+
     bool shouldExit = false;
     while (!shouldExit) {
-        frame.pc = execute_instruction(thread, frame, class_files, shouldExit);
+        frame.pc = execute_instruction(heap, thread, frame, class_files, shouldExit);
     }
 
     // print exit code
@@ -102,7 +121,7 @@ int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, Cl
     }
 }
 
-static inline size_t execute_instruction(Thread &thread, Frame &frame,
+static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                                          std::unordered_map<std::string_view, ClassFile *> &class_files,
                                          bool &shouldExit) {
     size_t pc = frame.pc;
@@ -114,7 +133,7 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
         case OpCodes::nop:
             break;
         case OpCodes::aconst_null:
-            frame.push_a(nullptr);
+            frame.push_a(JAVA_NULL);
             break;
         case OpCodes::iconst_m1:
         case OpCodes::iconst_0:
@@ -813,8 +832,98 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
 
 
             /* ======================= References ======================= */
+        case OpCodes::getstatic:
+        case OpCodes::putstatic:
+        case OpCodes::getfield:
+        case OpCodes::putfield: {
+            u2 index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
+            auto field = frame.clazz->constant_pool.get<CONSTANT_Fieldref_info>(index);
+
+            if (!field.resolved) {
+                switch (resolve_class(class_files, field.class_, thread, frame)) {
+                    case ClassResolution::OK:
+                        break;
+                    case ClassResolution::PUSHED_INITIALIZERS:
+                        return 0;
+                    case ClassResolution::NOT_FOUND:
+                        throw std::runtime_error("class not found: '" + field.class_->name->value + "'");
+                }
+
+                if (!resolve_field_recursive(field.class_->clazz, &field))
+                    throw std::runtime_error(
+                            "field not found: " + field.class_->name->value + "." + field.name_and_type->name->value +
+                            " " + field.name_and_type->descriptor->value);
+                assert(field.resolved);
+            }
+
+            switch (static_cast<OpCodes>(opcode)) {
+                case OpCodes::getstatic: {
+                    if (!field.is_static)
+                        throw std::runtime_error("field is not static");
+                    auto value = field.class_->clazz->static_field_values[field.index];
+                    if (field.category == ValueCategory::C1) {
+                        frame.push(value);
+                    } else {
+                        frame.push2(value);
+                    }
+                    break;
+                }
+                case OpCodes::putstatic: {
+                    if (!field.is_static)
+                        throw std::runtime_error("field is not static");
+                    Value value;
+                    if (field.category == ValueCategory::C1) {
+                        value = frame.pop();
+                        if (field.is_boolean)
+                            value.s4 = value.s4 & 1;
+                    } else {
+                        value = frame.pop2();
+                    }
+                    field.class_->clazz->static_field_values[field.index] = value;
+                    break;
+                }
+                case OpCodes::getfield: {
+                    if (field.is_static)
+                        throw std::runtime_error("field is static");
+                    auto objectref = frame.pop_a();
+                    auto value = objectref.data<Value>()[field.index];
+                    if (field.category == ValueCategory::C1) {
+                        frame.push(value);
+                    } else {
+                        frame.push2(value);
+                    }
+                    break;
+                }
+                case OpCodes::putfield: {
+                    if (field.is_static)
+                        throw std::runtime_error("field is static");
+                    Value value;
+                    if (field.category == ValueCategory::C1) {
+                        value = frame.pop();
+                        if (field.is_boolean)
+                            value.s4 = value.s4 & 1;
+                    } else {
+                        value = frame.pop2();
+                    }
+                    auto objectref = frame.pop_a();
+                    objectref.data<Value>()[field.index] = value;
+                    break;
+                }
+                default:
+                    assert(false);
+            }
+
+            return pc + 3;
+        }
+        case OpCodes::invokespecial: {
+            u2 index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
+            (void) index;
+            frame.pop_a(); // this arguemnt for constructor
+            // TODO implement invokespecial
+            return pc + 3;
+        }
         case OpCodes::invokestatic: {
-            size_t method_index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
+            u2 method_index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
             auto method_ref = std::get<CONSTANT_Methodref_info>(frame.clazz->constant_pool.table[method_index].variant);
 
             // TODO this is hardcoded for now
@@ -882,15 +991,13 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
             ClassFile *clazz = method_ref.class_->clazz;
 
             if (method == nullptr) {
-                if (clazz == nullptr) {
-                    auto result = class_files.find(method_ref.class_->name->value);
-                    if (result == class_files.end()) {
-                        throw std::runtime_error("class not found: '" + method_ref.class_->name->value + "'");
-                    }
-                    method_ref.class_->clazz = clazz = result->second;
+                ClassResolution resolved = resolve_class(class_files, method_ref.class_, thread, frame);
+                if (resolved == ClassResolution::PUSHED_INITIALIZERS)
+                    return 0;
+                if (resolved == ClassResolution::NOT_FOUND)
+                    throw std::runtime_error("class not found: '" + method_ref.class_->name->value + "'");
 
-                    // TODO if clazz is not initialized: create a stackframe with the initializer but do not advance the pc of this frame
-                }
+                clazz = method_ref.class_->clazz;
 
                 auto method_iter = std::find_if(clazz->methods.begin(), clazz->methods.end(),
                                                 [method_ref](const method_info &m) {
@@ -926,6 +1033,24 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
                     throw std::runtime_error("stack overflow");
                 return 0; // will be set on the new frame
             }
+        }
+        case OpCodes::new_: {
+            u2 index = static_cast<u2>((code[pc + 1]) << 8 | (code[pc + 2]));
+
+            auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
+
+            auto resolved = resolve_class(class_files, &class_info, thread, frame);
+            if (resolved == ClassResolution::PUSHED_INITIALIZERS)
+                return 0;
+            if (resolved == ClassResolution::NOT_FOUND)
+                throw std::runtime_error("class not found: '" + class_info.name->value + "'");
+            auto clazz = class_info.clazz;
+
+            auto reference = heap.new_instance(clazz);
+            frame.push_a(reference);
+
+            // TODO: the next two instructions are probably dup+invokespecial. We could optimize for that pattern.
+            return pc + 3;
         }
         case OpCodes::wide: {
             u2 index = static_cast<u2>((code[pc + 2] << 8) | code[pc + 3]);
@@ -979,9 +1104,9 @@ static inline size_t execute_instruction(Thread &thread, Frame &frame,
         }
 
         case OpCodes::ifnull:
-            return execute_comparison(code, pc, frame.pop_a() == nullptr);
+            return execute_comparison(code, pc, frame.pop_a() == JAVA_NULL);
         case OpCodes::ifnonnull:
-            return execute_comparison(code, pc, frame.pop_a() != nullptr);
+            return execute_comparison(code, pc, frame.pop_a() != JAVA_NULL);
         case OpCodes::goto_w: {
             s4 offset = static_cast<s4>((code[pc + 1] << 24) | (code[pc + 2] << 16) | (code[pc + 3] << 8) |
                                         code[pc + 4]);
@@ -1011,6 +1136,136 @@ static size_t goto_(const std::vector<u1> &code, size_t pc) {
     u2 offset_u = static_cast<u2>((code[pc + 1]) << 8 | (code[pc + 2]));
     auto offset = future::bit_cast<s2>(offset_u);
     return static_cast<size_t>(static_cast<long>(pc) + offset);
+}
+
+
+static ClassResolution
+resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CONSTANT_Class_info *class_info,
+              Thread &thread, Frame &frame) {
+    if (class_info->clazz == nullptr) {
+        auto &name = class_info->name->value;
+
+        // see https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.3.5
+        // and https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.4.3.1
+
+        // TODO we also need to deal with array classes here. They also load the class for the elements.
+
+        auto result = class_files.find(name);
+        if (result == class_files.end())
+            return ClassResolution::NOT_FOUND;
+        ClassFile *clazz = result->second;
+
+        if (clazz->resolved) {
+            class_info->clazz = clazz;
+            return ClassResolution::OK;
+        }
+
+        for (const auto &field : clazz->fields) {
+            if (!field.is_static())
+                ++clazz->declared_instance_field_count;
+        }
+
+        bool pushed_initializers = false;
+        size_t parent_instance_field_count = 0;
+        if (clazz->super_class->name->value != "java/lang/Object") {
+            switch (resolve_class(class_files, clazz->super_class, thread, frame)) {
+                case ClassResolution::OK:
+                    break;
+                case ClassResolution::PUSHED_INITIALIZERS:
+                    pushed_initializers = true;
+                    break;
+                case ClassResolution::NOT_FOUND:
+                    return ClassResolution::NOT_FOUND;
+            }
+            parent_instance_field_count = clazz->super_class->clazz->total_instance_field_count;
+        }
+
+        // instance and static fields
+        clazz->total_instance_field_count = clazz->declared_instance_field_count + parent_instance_field_count;
+        for (size_t static_index = 0, instance_index = parent_instance_field_count; auto &field : clazz->fields) {
+            if (field.is_static()) {
+                // used to index into clazz->static_field_values
+                field.index = static_index++;
+            } else {
+                // used to index into instance fields
+                field.index = instance_index++;
+            }
+            field.category = (field.descriptor_index->value == "D" || field.descriptor_index->value == "J")
+                             ? ValueCategory::C2 : ValueCategory::C1;
+        }
+        clazz->static_field_values.resize(clazz->fields.size() - clazz->declared_instance_field_count);
+
+        for (auto &interface : clazz->interfaces) {
+            switch (resolve_class(class_files, interface, thread, frame)) {
+                case ClassResolution::OK:
+                    break;
+                case ClassResolution::PUSHED_INITIALIZERS:
+                    pushed_initializers = true;
+                    break;
+                case ClassResolution::NOT_FOUND:
+                    return ClassResolution::NOT_FOUND;
+            }
+        }
+
+        clazz->resolved = true;
+
+        if (false /* clazz.has_initializer */) {
+            pushed_initializers = true;
+
+            // TODO create a stackframe with the initializer but do not advance the pc of the current frame
+            (void) thread;
+            (void) frame;
+        }
+
+        // make it available even if we haven't executed the initializers yet
+        // TODO is this a bad idea?
+        // TODO maybe a better solution would be to run the initializers in a completely separate interpreter loop.
+        // In that case we wouldn't have to restart/reexecute the caller instruction afterwards
+        class_info->clazz = clazz;
+
+        if (pushed_initializers)
+            return ClassResolution::PUSHED_INITIALIZERS;
+    }
+    return ClassResolution::OK;
+}
+
+static bool resolve_field_recursive(ClassFile *clazz, CONSTANT_Fieldref_info *field_info) {
+    // Steps: https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.4.3.2
+    for (;;) {
+        // 1.
+        assert(!field_info->resolved);
+        for (auto const &f : clazz->fields) {
+            if (f.name_index->value == field_info->name_and_type->name->value &&
+                f.descriptor_index->value == field_info->name_and_type->descriptor->value) {
+
+                field_info->resolved = true;
+                field_info->is_boolean = f.descriptor_index->value == "Z";
+                field_info->is_static = f.is_static();
+                field_info->index = f.index;
+                field_info->category = f.category;
+
+                // TODO check access_flags
+                return true;
+            }
+        }
+
+        // 2.
+        assert(!field_info->resolved);
+        for (auto const &interface : field_info->class_->clazz->interfaces) {
+            if (resolve_field_recursive(interface->clazz, field_info))
+                return true;
+        }
+
+        assert(!field_info->resolved);
+
+        if (clazz->super_class != nullptr) {
+            // 3.
+            clazz = clazz->super_class->clazz;
+        } else {
+            break;
+        }
+    }
+    return false;
 }
 
 Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top)

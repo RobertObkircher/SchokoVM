@@ -2,6 +2,7 @@
 #define SCHOKOVM_FUTURE_HPP
 
 #include <cstring>
+#include <type_traits>
 
 // C++20's std::bit_cast
 namespace future {

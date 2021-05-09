@@ -7,6 +7,7 @@
 #include <cassert>
 #include <string>
 
+#include "memory.hpp"
 #include "types.hpp"
 
 // Initially generated like this:
@@ -96,6 +97,12 @@ struct CONSTANT_Fieldref_info {
     u2 name_and_type_index;
     CONSTANT_Class_info *class_;
     CONSTANT_NameAndType_info *name_and_type;
+
+    bool resolved;
+    bool is_boolean;
+    bool is_static;
+    ValueCategory category;
+    size_t index;
 };
 
 struct CONSTANT_Methodref_info {
@@ -224,6 +231,13 @@ struct field_info {
     CONSTANT_Utf8_info *name_index;
     CONSTANT_Utf8_info *descriptor_index;
     std::vector<attribute_info> attributes;
+
+    size_t index;
+    ValueCategory category;
+
+    [[nodiscard]] inline bool is_static() const {
+        return (access_flags & static_cast<u2>(FieldInfoAccessFlags::ACC_STATIC)) != 0;
+    }
 };
 
 enum class MethodInfoAccessFlags : u2 {
@@ -734,6 +748,12 @@ struct ClassFile {
     std::vector<field_info> fields;
     std::vector<method_info> methods;
     std::vector<attribute_info> attributes;
+
+    size_t declared_instance_field_count;
+    size_t total_instance_field_count;
+    std::vector<Value> static_field_values;
+
+    bool resolved;
 };
 
 
