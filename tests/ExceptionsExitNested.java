@@ -5,13 +5,21 @@ public class ExceptionsExitNested {
         public int code;
     }
 
-    public static void middle() throws CustomException {
+    public static void c() throws CustomException {
         CustomException e = new CustomException();
         e.code = 123;
         throw e;
     }
 
+    public static void b() throws CustomException {
+        c();
+    }
+
+    public static void a() throws CustomException {
+        b();
+    }
+
     public static void main(String[] args) throws CustomException {
-        middle();
+        a();
     }
 }

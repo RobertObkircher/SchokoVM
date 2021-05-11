@@ -1100,8 +1100,10 @@ static size_t goto_(const std::vector<u1> &code, size_t pc) {
 
 static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_t &pc, Reference exception) {
     auto obj = exception.object();
+    std::vector<Frame> stack_trace;
 
     for (;;) {
+        stack_trace.push_back(frame);
         auto &exception_table = frame.method->code_attribute->exception_table;
 
         auto handler_iter = std::find_if(exception_table.begin(),
@@ -1120,6 +1122,40 @@ static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_
         if (handler_iter == std::end(exception_table)) {
             if (thread.stack.parent_frames.empty()) {
                 // Bubbled to the top, no exception handler was found, so exit thread
+
+                std::string message = "Exception in thread \"main\" ";
+                message.append(obj->clazz->this_class->name->value);
+                message.append("\n");
+                for(const Frame &f : stack_trace) {
+                    message.append("\tat ");
+                    message.append(f.clazz->this_class->name->value);
+                    message.append(".");
+                    message.append(f.method->name_index->value);
+
+                    auto source_file = std::find_if(f.clazz->attributes.begin(), f.clazz->attributes.end(), [](const attribute_info &a) {
+                        return std::holds_alternative<SourceFile_attribute>(a.variant);
+                    });
+                    // TODO there can be multiple LNT attributes
+                    auto line_numbers = std::find_if(f.method->attributes.begin(), f.method->attributes.end(), [](const attribute_info &a) {
+                        return std::holds_alternative<LineNumberTable_attribute>(a.variant);
+                    });
+                    message.append("(");
+                    if(source_file != std::end(f.clazz->attributes) && line_numbers != std::end(f.method->attributes)) {
+                        message.append(std::get<SourceFile_attribute>(source_file->variant).sourcefile_index->value);
+                        message.append(":");
+                        for(const auto &entry: std::get<LineNumberTable_attribute>(source_file->variant).line_number_table) {
+                            if(entry.start_pc == f.pc) {
+                                message.append(std::to_string(entry.line_number));
+                                break;
+                            }
+                        }
+                    } else {
+                        message.append(std::to_string(f.pc));
+                    }
+                    message.append(")\n");
+                }
+                std::cerr << message << "\n";
+
                 frame.clear();
                 frame.push_s4(1);
                 shouldExit = true;
