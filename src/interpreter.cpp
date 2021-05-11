@@ -24,7 +24,7 @@ static size_t goto_(const std::vector<u1> &code, size_t pc);
 
 static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_t &pc, Reference exception);
 
-static inline size_t pop_frame(Thread &thread, Frame &frame, bool current_invoke = false);
+static inline size_t pop_frame(Thread &thread, Frame &frame, bool jump_to_invoke = false);
 
 int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, ClassFile *main) {
     auto main_method_iter = std::find_if(main->methods.begin(), main->methods.end(),
@@ -972,8 +972,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                 size_t operand_stack_top = frame.first_operand_index + frame.operands_top;
                 frame.operands_top += -method->stack_slots_for_parameters + method->return_size;
 
-                frame.pc += 3;
-                frame.invoke_offset = 3;
+                frame.invoke_length = 3;
                 thread.stack.parent_frames.push_back(frame);
 
                 frame = {thread.stack, clazz, method, operand_stack_top};
@@ -1100,6 +1099,7 @@ static size_t goto_(const std::vector<u1> &code, size_t pc) {
 
 static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_t &pc, Reference exception) {
     auto obj = exception.object();
+    // TODO this is actually wrong, the stack should be generated when the Throwable is constructed
     std::vector<Frame> stack_trace;
 
     for (;;) {
@@ -1110,7 +1110,7 @@ static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_
                                          exception_table.end(),
                                          [pc, &frame, obj](const ExceptionTableEntry &e) {
                                              if (e.start_pc <= pc && pc < e.end_pc) {
-                                                 if(e.catch_type == 0) {
+                                                 if (e.catch_type == 0) {
                                                      // "any"
                                                      return true;
                                                  } else {
@@ -1131,26 +1131,34 @@ static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_
                 std::string message = "Exception in thread \"main\" ";
                 message.append(obj->clazz->this_class->name->value);
                 message.append("\n");
-                for(const Frame &f : stack_trace) {
+                for (const Frame &f : stack_trace) {
                     message.append("\tat ");
                     message.append(f.clazz->this_class->name->value);
                     message.append(".");
                     message.append(f.method->name_index->value);
 
-                    auto source_file = std::find_if(f.clazz->attributes.begin(), f.clazz->attributes.end(), [](const attribute_info &a) {
-                        return std::holds_alternative<SourceFile_attribute>(a.variant);
-                    });
+                    auto source_file = std::find_if(f.clazz->attributes.begin(), f.clazz->attributes.end(),
+                                                    [](const attribute_info &a) {
+                                                        return std::holds_alternative<SourceFile_attribute>(a.variant);
+                                                    });
                     // TODO there can be multiple LNT attributes
-                    auto line_numbers = std::find_if(f.method->code_attribute->attributes.begin(), f.method->code_attribute->attributes.end(), [](const attribute_info &a) {
-                        return std::holds_alternative<LineNumberTable_attribute>(a.variant);
-                    });
+                    auto line_numbers_iter = std::find_if(f.method->code_attribute->attributes.begin(),
+                                                          f.method->code_attribute->attributes.end(),
+                                                          [](const attribute_info &a) {
+                                                              return std::holds_alternative<LineNumberTable_attribute>(
+                                                                      a.variant);
+                                                          });
                     message.append("(");
-                    if(source_file != std::end(f.clazz->attributes) && line_numbers != std::end(f.method->code_attribute->attributes)) {
+                    if (source_file != std::end(f.clazz->attributes) &&
+                        line_numbers_iter != std::end(f.method->code_attribute->attributes)) {
+                        auto &line_number_table = std::get<LineNumberTable_attribute>(
+                                line_numbers_iter->variant).line_number_table;
                         message.append(std::get<SourceFile_attribute>(source_file->variant).sourcefile_index->value);
                         message.append(":");
-                        for(const auto &entry: std::get<LineNumberTable_attribute>(line_numbers->variant).line_number_table) {
-                            if(entry.start_pc <= f.pc) {
-                                message.append(std::to_string(entry.line_number));
+                        // NOLINTNEXTLINE
+                        for (auto entry = line_number_table.rbegin(); entry != line_number_table.rend(); ++entry) {
+                            if (entry->start_pc <= f.pc) {
+                                message.append(std::to_string(entry->line_number));
                                 break;
                             }
                         }
@@ -1179,18 +1187,15 @@ static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_
     }
 }
 
-static inline size_t pop_frame(Thread &thread, Frame &frame, bool current_invoke) {
+static inline size_t pop_frame(Thread &thread, Frame &frame, bool jump_to_invoke) {
     thread.stack.memory_used = frame.previous_stack_memory_usage;
     frame = thread.stack.parent_frames.back();
     thread.stack.parent_frames.pop_back();
 
-    unsigned char invoke_offset = frame.invoke_offset;
-    frame.invoke_offset = 0;
-
-    if (current_invoke) {
-        return frame.pc - invoke_offset;
-    } else {
+    if (jump_to_invoke) {
         return frame.pc;
+    } else {
+        return frame.pc + frame.invoke_length;
     }
 }
 
@@ -1201,7 +1206,7 @@ Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand
           operands_top(0),
           previous_stack_memory_usage(stack.memory_used),
           pc(0),
-          invoke_offset(0) {
+          invoke_length(0) {
     //assert(method->code_attribute->max_locals >= method->parameter_count);
     assert(stack.memory_used >= method->stack_slots_for_parameters);
     assert(operand_stack_top >= method->stack_slots_for_parameters);

@@ -2,13 +2,10 @@ public class ExceptionsExitNested {
     public static void println(int i) { System.out.println(i); }
 
     static class CustomException extends Exception {
-        public int code;
     }
 
     public static void c() throws CustomException {
-        CustomException e = new CustomException();
-        e.code = 123;
-        throw e;
+        throw new CustomException();
     }
 
     public static void b() throws CustomException {

@@ -26,10 +26,11 @@ struct Frame {
     size_t operands_top;
     size_t previous_stack_memory_usage;
 
-    // If this is not the current frame (this is a caller frame), then the invoke
-    // instruction is at `pc - invoke_offset`
+    // The index of the instruction that is currently being execute (= the invoke* instruction in parent frames).
     size_t pc;
-    unsigned char invoke_offset;
+    // The length of the invoke* instruction, to calculate the next instruction upon return
+    // (only used when a parent frame is popped).
+    unsigned char invoke_length;
 
     Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top);
 
@@ -51,7 +52,7 @@ struct Frame {
         operands_top += 2;
     }
 
-    inline void clear(){
+    inline void clear() {
         operands_top = 0;
     }
 
