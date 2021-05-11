@@ -26,7 +26,10 @@ struct Frame {
     size_t operands_top;
     size_t previous_stack_memory_usage;
 
+    // If this is not the current frame (this is a caller frame), then the invoke
+    // instruction is at `pc - invoke_offset`
     size_t pc;
+    unsigned char invoke_offset;
 
     Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top);
 

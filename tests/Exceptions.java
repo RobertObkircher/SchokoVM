@@ -3,9 +3,6 @@ public class Exceptions {
 
     static class CustomException extends Exception {
         public int code;
-        public CustomException() {
-            this.code = code;
-        }
     }
 
     public static void crash() throws CustomException {
@@ -38,7 +35,5 @@ public class Exceptions {
         println(2);
         middle();
         println(3);
-        crash();
-        println(4);
     }
 }
