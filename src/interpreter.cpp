@@ -24,6 +24,8 @@ static size_t goto_(const std::vector<u1> &code, size_t pc);
 
 static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_t &pc, Reference exception);
 
+static inline size_t pop_frame(Thread &thread, Frame &frame, bool current_invoke = false);
+
 int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, ClassFile *main) {
     auto main_method_iter = std::find_if(main->methods.begin(), main->methods.end(),
                                          [](const method_info &m) {
@@ -766,11 +768,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             if (thread.stack.parent_frames.empty()) {
                 shouldExit = true;
             } else {
-                thread.stack.memory_used = frame.previous_stack_memory_usage;
-                frame = thread.stack.parent_frames.back();
-                thread.stack.parent_frames.pop_back();
-                frame.invoke_offset = 0;
-                return frame.pc;
+                return pop_frame(thread, frame);
             }
             break;
         }
@@ -1102,46 +1100,56 @@ static size_t goto_(const std::vector<u1> &code, size_t pc) {
 
 static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_t &pc, Reference exception) {
     auto obj = exception.object();
-    auto &exception_table = frame.method->code_attribute->exception_table;
 
-    auto handler_iter = std::find_if(exception_table.begin(),
-                                     exception_table.end(),
-                                     [pc, &frame, obj](const ExceptionTableEntry &e) {
-                                         if (e.start_pc <= pc && pc < e.end_pc) {
-                                             auto clazz = std::get<CONSTANT_Class_info>(
-                                                     frame.clazz->constant_pool.table[e.catch_type].variant);
-                                             // TODO check if subclass
-                                             return obj->clazz == clazz.clazz;
+    for (;;) {
+        auto &exception_table = frame.method->code_attribute->exception_table;
+
+        auto handler_iter = std::find_if(exception_table.begin(),
+                                         exception_table.end(),
+                                         [pc, &frame, obj](const ExceptionTableEntry &e) {
+                                             if (e.start_pc <= pc && pc < e.end_pc) {
+                                                 auto clazz = std::get<CONSTANT_Class_info>(
+                                                         frame.clazz->constant_pool.table[e.catch_type].variant);
+                                                 // TODO check if subclass
+                                                 return obj->clazz == clazz.clazz;
+                                             }
+                                             return false;
                                          }
-                                         return false;
-                                     }
-    );
+        );
 
-    if (handler_iter == std::end(exception_table)) {
-        // that frame is popped.
-        // Finally, the frame of its invoker is reinstated, if such a frame exists, and the objectref is
-        // rethrown. If no such frame exists, the current thread exits.
-        if (thread.stack.parent_frames.size() == 1) {
-            frame.clear();
-            frame.push_s4(1);
-            shouldExit = true;
-            return pc;
+        if (handler_iter == std::end(exception_table)) {
+            if (thread.stack.parent_frames.empty()) {
+                // Bubbled to the top, no exception handler was found, so exit thread
+                frame.clear();
+                frame.push_s4(1);
+                shouldExit = true;
+                return pc;
+            } else {
+                pc = pop_frame(thread, frame, true);
+                frame.clear();
+                continue;
+            }
         } else {
-            thread.stack.memory_used = frame.previous_stack_memory_usage;
-            frame = thread.stack.parent_frames.back();
-            thread.stack.parent_frames.pop_back();
-            // frame.pc contains the next address to execute, not the current one
-            pc = frame.pc - frame.invoke_offset;
-            frame.invoke_offset = 0;
+            // Push exception back on stack, continue normal execution.
             frame.clear();
-            return handle_throw(thread, frame, shouldExit, pc, exception);
+            frame.push_a(exception);
+            return handler_iter->handler_pc;
         }
+    }
+}
+
+static inline size_t pop_frame(Thread &thread, Frame &frame, bool current_invoke) {
+    thread.stack.memory_used = frame.previous_stack_memory_usage;
+    frame = thread.stack.parent_frames.back();
+    thread.stack.parent_frames.pop_back();
+
+    unsigned char invoke_offset = frame.invoke_offset;
+    frame.invoke_offset = 0;
+
+    if (current_invoke) {
+        return frame.pc - invoke_offset;
     } else {
-        // The pc register is reset to that location, the operand stack of the current frame is cleared,
-        // objectref is pushed back onto the operand stack, and execution continues.
-        frame.clear();
-        frame.push_a(exception);
-        return handler_iter->handler_pc;
+        return frame.pc;
     }
 }
 
