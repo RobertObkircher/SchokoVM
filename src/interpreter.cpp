@@ -765,7 +765,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                 shouldExit = true;
             } else {
                 thread.stack.memory_used = frame.previous_stack_memory_usage;
-                frame = thread.stack.parent_frames[thread.stack.parent_frames.size() - 1];
+                frame = thread.stack.parent_frames.back();
                 thread.stack.parent_frames.pop_back();
                 return frame.pc;
             }
@@ -939,6 +939,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                     case ClassResolution::PUSHED_INITIALIZER:
                         return 0;
                     case ClassResolution::NOT_FOUND:
+                    // TODO this prints "A not found" if A was found but a superclass/interface wasn't
                         throw std::runtime_error("class not found: '" + method_ref.class_->name->value + "'");
                 }
 
@@ -999,6 +1000,54 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             // TODO: the next two instructions are probably dup+invokespecial. We could optimize for that pattern.
             return pc + 3;
         }
+
+        case OpCodes::athrow: {
+            // TODO If objectref is null, athrow throws a NullPointerException instead of objectref.
+
+            auto value = frame.pop_a();
+            auto obj = value.object();
+            auto &exception_table = frame.method->code_attribute->exception_table;
+
+            auto handler_iter = std::find_if(exception_table.begin(),
+                                             exception_table.end(),
+                                             [pc, &frame, obj](const ExceptionTableEntry &e) {
+                                                 if (e.start_pc <= pc && pc < e.end_pc) {
+                                                     auto clazz = std::get<CONSTANT_Class_info>(
+                                                             frame.clazz->constant_pool.table[e.catch_type].variant);
+                                                     // TODO check if subclass
+                                                     return obj->clazz == clazz.clazz;
+                                                 }
+                                                 return false;
+                                             }
+            );
+
+            if (handler_iter == std::end(exception_table)) {
+                // that frame is popped.
+                // Finally, the frame of its invoker is reinstated, if such a frame exists, and the objectref is
+                // rethrown. If no such frame exists, the current thread exits.
+                // TODO
+                if (thread.stack.parent_frames.empty()) {
+                    frame.clear();
+                    frame.push_s4(1);
+                    shouldExit = true;
+                    break;
+                } else {
+                    thread.stack.memory_used = frame.previous_stack_memory_usage;
+                    frame = thread.stack.parent_frames.back();
+                    thread.stack.parent_frames.pop_back();
+                    pc = frame.pc;
+                    // TODO reenter athrow here
+                    throw std::runtime_error("unimplemented");
+                }
+            } else {
+                // The pc register is reset to that location, the operand stack of the current frame is cleared,
+                // objectref is pushed back onto the operand stack, and execution continues.
+                frame.clear();
+                frame.push_a(value);
+                return handler_iter->handler_pc;
+            }
+        }
+
         case OpCodes::wide: {
             u2 index = static_cast<u2>((code[pc + 2] << 8) | code[pc + 3]);
             auto &local = frame.locals[index];

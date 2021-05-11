@@ -48,6 +48,10 @@ struct Frame {
         operands_top += 2;
     }
 
+    inline void clear(){
+        operands_top = 0;
+    }
+
     // category 1
 
     inline s4 pop_s4() { return pop().s4; }
