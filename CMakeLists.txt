@@ -71,6 +71,7 @@ set(JAVA_TEST_SOURCES
         tests/Fields.java
         tests/InvokeStatic.java
 #        tests/KarelTheRobot.java
+        tests/Methods.java
         tests/ReferenceComparisons.java
         tests/Switch.java
         tests/UnitBoolean.java
