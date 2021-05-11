@@ -52,7 +52,7 @@ add_executable(SchokoVM
         src/opcodes.hpp
         src/future.hpp
         src/memory.cpp src/memory.hpp
-        )
+        src/math.hpp)
 
 if (libzip_FOUND)
     target_link_libraries(SchokoVM libzip::zip)
