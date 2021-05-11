@@ -69,6 +69,7 @@ set(JAVA_TEST_SOURCES
         tests/Empty.java
 #        tests/HelloWorld.java
         tests/Exceptions.java
+#        tests/ExceptionsConstruct.java
         tests/ExceptionsExit.java
         tests/ExceptionsExitNested.java
         tests/Fields.java

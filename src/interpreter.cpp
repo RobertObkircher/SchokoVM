@@ -1110,10 +1110,15 @@ static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_
                                          exception_table.end(),
                                          [pc, &frame, obj](const ExceptionTableEntry &e) {
                                              if (e.start_pc <= pc && pc < e.end_pc) {
-                                                 auto clazz = std::get<CONSTANT_Class_info>(
-                                                         frame.clazz->constant_pool.table[e.catch_type].variant);
-                                                 // TODO check if subclass
-                                                 return obj->clazz == clazz.clazz;
+                                                 if(e.catch_type == 0) {
+                                                     // "any"
+                                                     return true;
+                                                 } else {
+                                                     auto clazz = std::get<CONSTANT_Class_info>(
+                                                             frame.clazz->constant_pool.table[e.catch_type].variant);
+                                                     // TODO check if subclass
+                                                     return obj->clazz == clazz.clazz;
+                                                 }
                                              }
                                              return false;
                                          }

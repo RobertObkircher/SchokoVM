@@ -18,6 +18,8 @@ public class Exceptions {
             throw e;
         } catch (CustomException e){
             println(e.code);
+        } finally {
+            println(100);
         }
     }
 
@@ -30,8 +32,17 @@ public class Exceptions {
     }
 
     public static void main(String[] args) throws CustomException {
-        println(1);
+        try {
+            println(1);
+        } finally {
+            println(101);
+        }
         crash_catch();
+        try {
+            println(1);
+        } finally {
+            println(102);
+        }
         println(2);
         middle();
         println(3);
