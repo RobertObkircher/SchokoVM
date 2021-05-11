@@ -864,6 +864,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             (void) index;
             frame.pop_a(); // this arguemnt for constructor
             // TODO implement invokespecial
+            // frame.invoke_length = 3;
             return pc + 3;
         }
         case OpCodes::invokestatic: {
@@ -941,7 +942,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                     case ClassResolution::PUSHED_INITIALIZER:
                         return 0;
                     case ClassResolution::NOT_FOUND:
-                    // TODO this prints "A not found" if A was found but a superclass/interface wasn't
+                        // TODO this prints "A not found" if A was found but a superclass/interface wasn't
                         throw std::runtime_error("class not found: '" + method_ref.class_->name->value + "'");
                 }
 
@@ -1115,11 +1116,13 @@ static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_
                                                      // "any"
                                                      return true;
                                                  } else {
-                                                     auto clazz = std::get<CONSTANT_Class_info>(
-                                                             frame.clazz->constant_pool.table[e.catch_type].variant);
-                                                     for (ClassFile *c = obj->clazz;
-                                                          c != nullptr; c = c->super_class->clazz) {
-                                                         if (c == clazz.clazz) { return true; }
+                                                     // TODO Don't compare by name but resolve the class instead,
+                                                     // but without running the class initializer.
+                                                     auto &clazz_name = frame.clazz->constant_pool.get<CONSTANT_Class_info>(
+                                                             e.catch_type).name->value;
+                                                     for (ClassFile *c = obj->clazz;; c = c->super_class->clazz) {
+                                                         if (c->this_class->name->value == clazz_name) { return true; }
+                                                         if (c->super_class == nullptr) { break; }
                                                      }
                                                      return false;
                                                  }

@@ -1,9 +1,21 @@
 public class ExceptionsInheritance {
     public static void println(int i) { System.out.println(i); }
 
-    static class CustomException extends Exception {}
-    static class CustomExceptionA extends CustomException {}
-    static class CustomExceptionB extends CustomException {}
+    static class CustomException extends Exception {
+        static {
+            println(10000);
+        }
+    }
+    static class CustomExceptionA extends CustomException {
+        static {
+            println(10001);
+        }
+    }
+    static class CustomExceptionB extends CustomException {
+        static {
+            println(10002);
+        }
+    }
 
     public static void throw_sub() throws CustomException {
         throw new CustomExceptionA();
@@ -27,13 +39,9 @@ public class ExceptionsInheritance {
         }
     }
 
-    public static void catch_super() {
+    public static void catch_sub_super() {
         try {
-            throw_super();
-        } catch (CustomExceptionA e){
-            println(200);
-        } catch (CustomExceptionB e){
-            println(201);
+            throw_sub();
         } catch (CustomException e){
             println(202);
         } finally {
@@ -41,8 +49,23 @@ public class ExceptionsInheritance {
         }
     }
 
+    public static void catch_super() {
+        try {
+            throw_super();
+        } catch (CustomExceptionA e){
+            println(300);
+        } catch (CustomExceptionB e){
+            println(301);
+        } catch (CustomException e){
+            println(302);
+        } finally {
+            println(303);
+        }
+    }
+
     public static void main(String[] args)  {
         catch_sub();
+        catch_sub_super();
         catch_super();
     }
 }

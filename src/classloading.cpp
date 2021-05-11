@@ -40,6 +40,7 @@ static bool initialize_class(ClassFile *clazz, Thread &thread, Frame &frame) {
         size_t operand_stack_top = frame.first_operand_index + frame.operands_top;
         frame.operands_top += -method->stack_slots_for_parameters + method->return_size;
 
+        frame.invoke_length = 0;
         thread.stack.parent_frames.push_back(frame);
 
         frame = {thread.stack, clazz, method, operand_stack_top};

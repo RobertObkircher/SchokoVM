@@ -44,6 +44,10 @@ ClassFile Parser::parse() {
         result.super_class = nullptr;
     } else {
         result.super_class = &check_cp_range_and_type<CONSTANT_Class_info>(result.constant_pool, super_class);
+        if (result.super_class->name->value == "java/lang/Object" ||
+            // TODO remove once we have a stdlib
+            result.super_class->name->value == "java/lang/Exception")
+            result.super_class = nullptr;
     }
 
     u2 interfaces_count = eat_u2();
