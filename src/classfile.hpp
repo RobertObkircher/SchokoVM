@@ -271,6 +271,10 @@ struct method_info {
     enum : u1 {
         Void = 0, Category1 = 1, Category2 = 2
     } return_size;
+
+    [[nodiscard]] inline bool is_static() const {
+        return (access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_STATIC)) != 0;
+    }
 };
 
 // attribute_info...
@@ -749,6 +753,8 @@ struct ClassFile {
     std::vector<field_info> fields;
     std::vector<method_info> methods;
     std::vector<attribute_info> attributes;
+
+    int clinit_index = -1;
 
     size_t declared_instance_field_count;
     size_t total_instance_field_count;
