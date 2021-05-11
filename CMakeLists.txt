@@ -72,6 +72,7 @@ set(JAVA_TEST_SOURCES
 #        tests/ExceptionsConstruct.java
         tests/ExceptionsExit.java
         tests/ExceptionsExitNested.java
+        tests/ExceptionsInheritance.java
         tests/Fields.java
         tests/InvokeStatic.java
 #        tests/KarelTheRobot.java

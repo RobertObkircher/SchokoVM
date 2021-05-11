@@ -1117,8 +1117,11 @@ static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_
                                                  } else {
                                                      auto clazz = std::get<CONSTANT_Class_info>(
                                                              frame.clazz->constant_pool.table[e.catch_type].variant);
-                                                     // TODO check if subclass
-                                                     return obj->clazz == clazz.clazz;
+                                                     for (ClassFile *c = obj->clazz;
+                                                          c != nullptr; c = c->super_class->clazz) {
+                                                         if (c == clazz.clazz) { return true; }
+                                                     }
+                                                     return false;
                                                  }
                                              }
                                              return false;
