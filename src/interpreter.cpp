@@ -24,7 +24,7 @@ static size_t goto_(const std::vector<u1> &code, size_t pc);
 
 static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_t &pc, Reference exception);
 
-static inline size_t pop_frame(Thread &thread, Frame &frame, bool jump_to_invoke = false);
+static inline size_t pop_frame(Thread &thread, Frame &frame);
 
 int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, ClassFile *main) {
     auto main_method_iter = std::find_if(main->methods.begin(), main->methods.end(),
@@ -768,7 +768,8 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             if (thread.stack.parent_frames.empty()) {
                 shouldExit = true;
             } else {
-                return pop_frame(thread, frame);
+                pop_frame(thread, frame);
+                return frame.pc + frame.invoke_length;
             }
             break;
         }
@@ -1174,7 +1175,7 @@ static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_
                 shouldExit = true;
                 return pc;
             } else {
-                pc = pop_frame(thread, frame, true);
+                pc = pop_frame(thread, frame);
                 frame.clear();
                 continue;
             }
@@ -1187,16 +1188,12 @@ static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_
     }
 }
 
-static inline size_t pop_frame(Thread &thread, Frame &frame, bool jump_to_invoke) {
+static inline size_t pop_frame(Thread &thread, Frame &frame) {
     thread.stack.memory_used = frame.previous_stack_memory_usage;
     frame = thread.stack.parent_frames.back();
     thread.stack.parent_frames.pop_back();
 
-    if (jump_to_invoke) {
-        return frame.pc;
-    } else {
-        return frame.pc + frame.invoke_length;
-    }
+    return frame.pc;
 }
 
 Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top)
