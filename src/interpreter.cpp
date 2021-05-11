@@ -1136,15 +1136,15 @@ static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_
                         return std::holds_alternative<SourceFile_attribute>(a.variant);
                     });
                     // TODO there can be multiple LNT attributes
-                    auto line_numbers = std::find_if(f.method->attributes.begin(), f.method->attributes.end(), [](const attribute_info &a) {
+                    auto line_numbers = std::find_if(f.method->code_attribute->attributes.begin(), f.method->code_attribute->attributes.end(), [](const attribute_info &a) {
                         return std::holds_alternative<LineNumberTable_attribute>(a.variant);
                     });
                     message.append("(");
-                    if(source_file != std::end(f.clazz->attributes) && line_numbers != std::end(f.method->attributes)) {
+                    if(source_file != std::end(f.clazz->attributes) && line_numbers != std::end(f.method->code_attribute->attributes)) {
                         message.append(std::get<SourceFile_attribute>(source_file->variant).sourcefile_index->value);
                         message.append(":");
-                        for(const auto &entry: std::get<LineNumberTable_attribute>(source_file->variant).line_number_table) {
-                            if(entry.start_pc == f.pc) {
+                        for(const auto &entry: std::get<LineNumberTable_attribute>(line_numbers->variant).line_number_table) {
+                            if(entry.start_pc <= f.pc) {
                                 message.append(std::to_string(entry.line_number));
                                 break;
                             }
@@ -1154,7 +1154,7 @@ static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_
                     }
                     message.append(")\n");
                 }
-                std::cerr << message << "\n";
+                std::cerr << message;
 
                 frame.clear();
                 frame.push_s4(1);
