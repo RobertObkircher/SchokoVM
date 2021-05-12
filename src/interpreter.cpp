@@ -785,7 +785,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                 switch (resolve_class(class_files, field.class_, thread, frame)) {
                     case ClassResolution::OK:
                         break;
-                    case ClassResolution::PUSHED_INITIALIZERS:
+                    case ClassResolution::PUSHED_INITIALIZER:
                         return 0;
                     case ClassResolution::NOT_FOUND:
                         throw std::runtime_error("class not found: '" + field.class_->name->value + "'");
@@ -933,11 +933,14 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             ClassFile *clazz = method_ref.class_->clazz;
 
             if (method == nullptr) {
-                ClassResolution resolved = resolve_class(class_files, method_ref.class_, thread, frame);
-                if (resolved == ClassResolution::PUSHED_INITIALIZERS)
-                    return 0;
-                if (resolved == ClassResolution::NOT_FOUND)
-                    throw std::runtime_error("class not found: '" + method_ref.class_->name->value + "'");
+                switch (resolve_class(class_files, method_ref.class_, thread, frame)) {
+                    case ClassResolution::OK:
+                        break;
+                    case ClassResolution::PUSHED_INITIALIZER:
+                        return 0;
+                    case ClassResolution::NOT_FOUND:
+                        throw std::runtime_error("class not found: '" + method_ref.class_->name->value + "'");
+                }
 
                 clazz = method_ref.class_->clazz;
 
@@ -978,14 +981,16 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
         }
         case OpCodes::new_: {
             u2 index = static_cast<u2>((code[pc + 1]) << 8 | (code[pc + 2]));
-
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
 
-            auto resolved = resolve_class(class_files, &class_info, thread, frame);
-            if (resolved == ClassResolution::PUSHED_INITIALIZERS)
-                return 0;
-            if (resolved == ClassResolution::NOT_FOUND)
-                throw std::runtime_error("class not found: '" + class_info.name->value + "'");
+            switch (resolve_class(class_files, &class_info, thread, frame)) {
+                case ClassResolution::OK:
+                    break;
+                case ClassResolution::PUSHED_INITIALIZER:
+                    return 0;
+                case ClassResolution::NOT_FOUND:
+                    throw std::runtime_error("class not found: '" + class_info.name->value + "'");
+            }
             auto clazz = class_info.clazz;
 
             auto reference = heap.new_instance(clazz);

@@ -112,7 +112,7 @@ resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CO
         class_info->clazz = clazz;
 
         if (initialize_class(clazz, thread, frame))
-            return ClassResolution::PUSHED_INITIALIZERS;
+            return ClassResolution::PUSHED_INITIALIZER;
     }
     return ClassResolution::OK;
 }

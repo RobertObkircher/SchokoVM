@@ -7,7 +7,7 @@
 
 enum class ClassResolution {
     OK,
-    PUSHED_INITIALIZERS,
+    PUSHED_INITIALIZER,
     NOT_FOUND,
 };
 
