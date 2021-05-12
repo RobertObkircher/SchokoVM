@@ -1,5 +1,56 @@
 #include "classloading.hpp"
 
+static bool initialize_class(ClassFile *clazz, Thread &thread, Frame &frame) {
+    for (const auto &field : clazz->fields) {
+        if (field.is_static()) {
+            bool fail = false;
+            for (const auto &attribute : field.attributes) {
+                auto *constant_value_attribute = std::get_if<ConstantValue_attribute>(&attribute.variant);
+                if (constant_value_attribute != nullptr) {
+                    if (fail) {
+                        assert(false);
+                    }
+                    fail = true;
+                    auto const &value = clazz->constant_pool.table[constant_value_attribute->constantvalue_index].variant;
+
+                    auto &descriptor = field.descriptor_index->value;
+                    if (descriptor == "I" || descriptor == "S" || descriptor == "C" || descriptor == "B" ||
+                        descriptor == "Z") {
+                        clazz->static_field_values[field.index] = Value(std::get<CONSTANT_Integer_info>(value).value);
+                    } else if (descriptor == "F") {
+                        clazz->static_field_values[field.index] = Value(std::get<CONSTANT_Float_info>(value).value);
+                    } else if (descriptor == "J") {
+                        clazz->static_field_values[field.index] = Value(std::get<CONSTANT_Long_info>(value).value);
+                    } else if (descriptor == "D") {
+                        clazz->static_field_values[field.index] = Value(std::get<CONSTANT_Double_info>(value).value);
+                    } else if (descriptor == "Ljava/lang/String;") {
+                        // TODO
+                        assert(false);
+                    } else {
+                        assert(false);
+                    }
+                }
+            }
+        }
+    }
+
+    if (clazz->clinit_index >= 0) {
+        method_info *method = &clazz->methods[static_cast<unsigned long>(clazz->clinit_index)];
+
+        size_t operand_stack_top = frame.first_operand_index + frame.operands_top;
+        frame.operands_top += -method->stack_slots_for_parameters + method->return_size;
+
+        thread.stack.parent_frames.push_back(frame);
+
+        frame = {thread.stack, clazz, method, operand_stack_top};
+        if (thread.stack.memory_used > thread.stack.memory.size())
+            throw std::runtime_error("stack overflow");
+        return true;
+    }
+    return false;
+}
+
+
 ClassResolution
 resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CONSTANT_Class_info *class_info,
               Thread &thread, Frame &frame) {
@@ -26,20 +77,13 @@ resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CO
                 ++clazz->declared_instance_field_count;
         }
 
-        bool pushed_initializers = false;
         size_t parent_instance_field_count = 0;
         // TODO use stdlib
-        if (clazz->super_class->name->value != "java/lang/Object" &&
+        if (clazz->super_class != nullptr && clazz->super_class->name->value != "java/lang/Object" &&
             clazz->super_class->name->value != "java/lang/Exception") {
-            switch (resolve_class(class_files, clazz->super_class, thread, frame)) {
-                case ClassResolution::OK:
-                    break;
-                case ClassResolution::PUSHED_INITIALIZERS:
-                    pushed_initializers = true;
-                    break;
-                case ClassResolution::NOT_FOUND:
-                    return ClassResolution::NOT_FOUND;
-            }
+            auto resolution = resolve_class(class_files, clazz->super_class, thread, frame);
+            if (resolution != ClassResolution::OK)
+                return resolution;
             parent_instance_field_count = clazz->super_class->clazz->total_instance_field_count;
         }
 
@@ -59,35 +103,16 @@ resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CO
         clazz->static_field_values.resize(clazz->fields.size() - clazz->declared_instance_field_count);
 
         for (auto &interface : clazz->interfaces) {
-            switch (resolve_class(class_files, interface, thread, frame)) {
-                case ClassResolution::OK:
-                    break;
-                case ClassResolution::PUSHED_INITIALIZERS:
-                    pushed_initializers = true;
-                    break;
-                case ClassResolution::NOT_FOUND:
-                    return ClassResolution::NOT_FOUND;
-            }
+            auto resolution = resolve_class(class_files, interface, thread, frame);
+            if (resolution != ClassResolution::OK)
+                return resolution;
         }
 
         clazz->resolved = true;
-
-        if (false /* clazz.has_initializer */) {
-            pushed_initializers = true;
-
-            // TODO create a stackframe with the initializer but do not advance the pc of the current frame
-            (void) thread;
-            (void) frame;
-        }
-
-        // make it available even if we haven't executed the initializers yet
-        // TODO is this a bad idea?
-        // TODO maybe a better solution would be to run the initializers in a completely separate interpreter loop.
-        // In that case we wouldn't have to restart/reexecute the caller instruction afterwards
         class_info->clazz = clazz;
 
-        if (pushed_initializers)
-            return ClassResolution::PUSHED_INITIALIZERS;
+        if (initialize_class(clazz, thread, frame))
+            return ClassResolution::PUSHED_INITIALIZER;
     }
     return ClassResolution::OK;
 }

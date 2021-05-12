@@ -21,16 +21,16 @@ public class Fields {
     }
 
     public interface SuperInterface {
-        float super_interface = 0f;
+        float super_interface = 2393.0f;
     }
 
     public interface SuperInterface2 {
-        float super_interface2 = 0f;
+        float super_interface2 = 323333.0f;
     }
 
     public interface MyInterface extends SuperInterface, SuperInterface2 {
-        int erface = 0;
-        double interfaceDouble = 0.0;
+        int erface = 8880;
+        double interfaceDouble = 3239.0;
     }
 
     static class MyObjectChild extends MyObject {
@@ -39,15 +39,23 @@ public class Fields {
     }
 
     static class MyStatic {
-        static boolean bool;
-        static byte b;
-        static short s;
-        static char c;
-        static int i;
-        static float f;
-        static long l;
-        static double d;
+        static boolean bool = true;
+        static byte b = 99;
+        static short s = 32394;
+        static char c = 'x';
+        static int i = 3494;
+        static float f = 43.0f;
+        static long l = 4394;
+        static double d = 4;
         static MyObject next;
+
+        static {
+            i++;
+        }
+
+        static {
+            i *= 2;
+        }
 
         public static void print() {
             println(bool);

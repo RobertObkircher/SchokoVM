@@ -109,6 +109,16 @@ ClassFile Parser::parse() {
                                                           ? method_info::Category2
                                                           : method_info::Category1);
 
+        if (method_info.name_index->value == "<clinit>") {
+            if (result.clinit_index >= 0)
+                throw ParseError("Found multiple <clinit> methods");
+            if (method_info.descriptor_index->value != "()V")
+                throw ParseError("Invalid descriptor");
+            if (result.major_version >= 51 && !method_info.is_static())
+                throw ParseError("<clinit> must be static");
+            result.clinit_index = i;
+        }
+
         result.methods.push_back(std::move(method_info));
     }
 
