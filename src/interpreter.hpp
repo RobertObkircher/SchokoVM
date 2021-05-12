@@ -26,7 +26,11 @@ struct Frame {
     size_t operands_top;
     size_t previous_stack_memory_usage;
 
+    // The index of the instruction that is currently being execute (= the invoke* instruction in parent frames).
     size_t pc;
+    // The length of the invoke* instruction, to calculate the next instruction upon return
+    // (only used when a parent frame is popped).
+    unsigned char invoke_length;
 
     Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top);
 
@@ -46,6 +50,10 @@ struct Frame {
     inline void push2(Value operand) {
         operands[operands_top] = operand;
         operands_top += 2;
+    }
+
+    inline void clear() {
+        operands_top = 0;
     }
 
     // category 1

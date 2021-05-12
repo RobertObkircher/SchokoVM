@@ -22,6 +22,10 @@ static size_t execute_comparison(const std::vector<u1> &code, size_t pc, bool co
 
 static size_t goto_(const std::vector<u1> &code, size_t pc);
 
+static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_t &pc, Reference exception);
+
+static inline size_t pop_frame(Thread &thread, Frame &frame);
+
 int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, ClassFile *main) {
     auto main_method_iter = std::find_if(main->methods.begin(), main->methods.end(),
                                          [](const method_info &m) {
@@ -764,10 +768,8 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             if (thread.stack.parent_frames.empty()) {
                 shouldExit = true;
             } else {
-                thread.stack.memory_used = frame.previous_stack_memory_usage;
-                frame = thread.stack.parent_frames[thread.stack.parent_frames.size() - 1];
-                thread.stack.parent_frames.pop_back();
-                return frame.pc;
+                pop_frame(thread, frame);
+                return frame.pc + frame.invoke_length;
             }
             break;
         }
@@ -862,6 +864,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             (void) index;
             frame.pop_a(); // this arguemnt for constructor
             // TODO implement invokespecial
+            // frame.invoke_length = 3;
             return pc + 3;
         }
         case OpCodes::invokestatic: {
@@ -939,6 +942,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                     case ClassResolution::PUSHED_INITIALIZER:
                         return 0;
                     case ClassResolution::NOT_FOUND:
+                        // TODO this prints "A not found" if A was found but a superclass/interface wasn't
                         throw std::runtime_error("class not found: '" + method_ref.class_->name->value + "'");
                 }
 
@@ -970,7 +974,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                 size_t operand_stack_top = frame.first_operand_index + frame.operands_top;
                 frame.operands_top += -method->stack_slots_for_parameters + method->return_size;
 
-                frame.pc += 3;
+                frame.invoke_length = 3;
                 thread.stack.parent_frames.push_back(frame);
 
                 frame = {thread.stack, clazz, method, operand_stack_top};
@@ -999,6 +1003,16 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             // TODO: the next two instructions are probably dup+invokespecial. We could optimize for that pattern.
             return pc + 3;
         }
+
+        case OpCodes::athrow: {
+            auto value = frame.pop_a();
+            if (value == JAVA_NULL) {
+                // TODO If objectref is null, athrow throws a NullPointerException instead of objectref.
+                throw std::runtime_error("TODO NullPointerException");
+            }
+            return handle_throw(thread, frame, shouldExit, pc, value);
+        }
+
         case OpCodes::wide: {
             u2 index = static_cast<u2>((code[pc + 2] << 8) | code[pc + 3]);
             auto &local = frame.locals[index];
@@ -1085,13 +1099,117 @@ static size_t goto_(const std::vector<u1> &code, size_t pc) {
     return static_cast<size_t>(static_cast<long>(pc) + offset);
 }
 
+static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_t &pc, Reference exception) {
+    auto obj = exception.object();
+    // TODO this is actually wrong, the stack should be generated when the Throwable is constructed
+    std::vector<Frame> stack_trace;
+
+    for (;;) {
+        stack_trace.push_back(frame);
+        auto &exception_table = frame.method->code_attribute->exception_table;
+
+        auto handler_iter = std::find_if(exception_table.begin(),
+                                         exception_table.end(),
+                                         [pc, &frame, obj](const ExceptionTableEntry &e) {
+                                             if (e.start_pc <= pc && pc < e.end_pc) {
+                                                 if (e.catch_type == 0) {
+                                                     // "any"
+                                                     return true;
+                                                 } else {
+                                                     // TODO Don't compare by name but resolve the class instead,
+                                                     // but without running the class initializer.
+                                                     auto &clazz_name = frame.clazz->constant_pool.get<CONSTANT_Class_info>(
+                                                             e.catch_type).name->value;
+                                                     for (ClassFile *c = obj->clazz;; c = c->super_class->clazz) {
+                                                         if (c->this_class->name->value == clazz_name) { return true; }
+                                                         if (c->super_class == nullptr) { break; }
+                                                     }
+                                                     return false;
+                                                 }
+                                             }
+                                             return false;
+                                         }
+        );
+
+        if (handler_iter == std::end(exception_table)) {
+            if (thread.stack.parent_frames.empty()) {
+                // Bubbled to the top, no exception handler was found, so exit thread
+
+                std::string message = "Exception in thread \"main\" ";
+                message.append(obj->clazz->this_class->name->value);
+                message.append("\n");
+                for (const Frame &f : stack_trace) {
+                    message.append("\tat ");
+                    message.append(f.clazz->this_class->name->value);
+                    message.append(".");
+                    message.append(f.method->name_index->value);
+
+                    auto source_file = std::find_if(f.clazz->attributes.begin(), f.clazz->attributes.end(),
+                                                    [](const attribute_info &a) {
+                                                        return std::holds_alternative<SourceFile_attribute>(a.variant);
+                                                    });
+                    // TODO there can be multiple LNT attributes
+                    auto line_numbers_iter = std::find_if(f.method->code_attribute->attributes.begin(),
+                                                          f.method->code_attribute->attributes.end(),
+                                                          [](const attribute_info &a) {
+                                                              return std::holds_alternative<LineNumberTable_attribute>(
+                                                                      a.variant);
+                                                          });
+                    message.append("(");
+                    if (source_file != std::end(f.clazz->attributes) &&
+                        line_numbers_iter != std::end(f.method->code_attribute->attributes)) {
+                        auto &line_number_table = std::get<LineNumberTable_attribute>(
+                                line_numbers_iter->variant).line_number_table;
+                        message.append(std::get<SourceFile_attribute>(source_file->variant).sourcefile_index->value);
+                        message.append(":");
+                        // NOLINTNEXTLINE
+                        for (auto entry = line_number_table.rbegin(); entry != line_number_table.rend(); ++entry) {
+                            if (entry->start_pc <= f.pc) {
+                                message.append(std::to_string(entry->line_number));
+                                break;
+                            }
+                        }
+                    } else {
+                        message.append(std::to_string(f.pc));
+                    }
+                    message.append(")\n");
+                }
+                std::cerr << message;
+
+                frame.clear();
+                frame.push_s4(1);
+                shouldExit = true;
+                return pc;
+            } else {
+                pc = pop_frame(thread, frame);
+                frame.clear();
+                continue;
+            }
+        } else {
+            // Push exception back on stack, continue normal execution.
+            frame.clear();
+            frame.push_a(exception);
+            return handler_iter->handler_pc;
+        }
+    }
+}
+
+static inline size_t pop_frame(Thread &thread, Frame &frame) {
+    thread.stack.memory_used = frame.previous_stack_memory_usage;
+    frame = thread.stack.parent_frames.back();
+    thread.stack.parent_frames.pop_back();
+
+    return frame.pc;
+}
+
 Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top)
         : clazz(clazz),
           method(method),
           code(&method->code_attribute->code),
           operands_top(0),
           previous_stack_memory_usage(stack.memory_used),
-          pc(0) {
+          pc(0),
+          invoke_length(0) {
     //assert(method->code_attribute->max_locals >= method->parameter_count);
     assert(stack.memory_used >= method->stack_slots_for_parameters);
     assert(operand_stack_top >= method->stack_slots_for_parameters);

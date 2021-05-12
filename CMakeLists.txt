@@ -68,9 +68,15 @@ set(JAVA_TEST_SOURCES
         tests/Bitwise.java
         tests/Empty.java
 #        tests/HelloWorld.java
+        tests/Exceptions.java
+#        tests/ExceptionsConstruct.java
+        tests/ExceptionsExit.java
+        tests/ExceptionsExitNested.java
+        tests/ExceptionsInheritance.java
         tests/Fields.java
         tests/InvokeStatic.java
 #        tests/KarelTheRobot.java
+        tests/Methods.java
         tests/ReferenceComparisons.java
         tests/Switch.java
         tests/UnitBoolean.java
