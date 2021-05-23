@@ -120,6 +120,7 @@ set(JAVA_TEST_SOURCES
         tests/InvokeStatic.java
         # tests/KarelTheRobot.java
         tests/Methods.java
+        tests/ObjectArray.java
         tests/ReferenceComparisons.java
         tests/Switch.java
         tests/UnitBoolean.java

@@ -124,8 +124,6 @@ struct Frame {
         push_a(value);
     }
 
-
-
     template<>
     bool pop<bool>() {
         return static_cast<bool>(pop_s4());
