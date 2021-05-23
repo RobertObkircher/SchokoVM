@@ -63,6 +63,8 @@ public class Generator {
         generate(path, "InvokeStaticPermutations", Generator::generateInvokeStaticPermutations);
 
         generate(path, "Wide", Generator::generateWide);
+
+        generate(path, "Arrays", Generator::generateArrays);
     }
 
     public static void generate(Path directory, String name, Consumer<PrintWriter> generator) {
@@ -506,5 +508,40 @@ public class Generator {
         w.println("        println(i);");
 
         w.println(END_MAIN);
+    }
+
+    public static void generateArrays(PrintWriter w) {
+        w.println(BEGIN_MAIN);
+            
+        for (String type : new String[] {"boolean", "byte", "char", "int", "long", "float", "double" }) {
+            w.println("        test_" + type + "();");
+        }
+
+        w.println(END_MAIN);
+
+        for (String type : new String[] {"byte", "char", "int", "long", "float", "double" }) {
+            w.println("    public static void test_" + type + "(){");
+            w.println("        "+type+"[] arr = new "+type+"[20];");
+            w.println("        for(int i = 0; i < arr.length; i++) {");
+            w.println("            arr[i] = ("+type+") (100 - i);");
+            w.println("        }");
+            w.println("        int sum = 0;");
+            w.println("        for(int i = arr.length - 1; i >= 0; i--) {");
+            w.println("            sum += arr[i];");
+            w.println("        }");
+            w.println("        println(sum);");
+            w.println("    }");
+        }
+        w.println("    public static void test_boolean(){");
+        w.println("        boolean[] arr = new boolean[20];");
+        w.println("        for(int i = 0; i < arr.length; i++) {");
+        w.println("            arr[i] = (i % 2) == 0;");
+        w.println("        }");
+        w.println("        int sum = 0;");
+        w.println("        for(int i = arr.length - 1; i >= 0; i--) {");
+        w.println("            sum += arr[i] ? 1 : 0;");
+        w.println("        }");
+        w.println("        println(sum);");
+        w.println("    }");
     }
 }

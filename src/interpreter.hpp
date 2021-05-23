@@ -34,6 +34,12 @@ struct Frame {
 
     Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top);
 
+    template<typename Element>
+    void push(Element value);
+
+    template<typename Element>
+    Element pop();
+
     inline Value pop() {
         return operands[--operands_top];
     }
@@ -79,6 +85,84 @@ struct Frame {
     inline void push_s8(::s8 s8) { push2(Value(s8)); }
 
     inline void push_d(double d) { push2(Value(d)); }
+
+    template<>
+    void push<bool>(bool value) {
+        push_s4(value);
+    }
+    template<>
+    void push<s1>(s1 value) {
+        push_s4(value);
+    }
+    template<>
+    void push<u2>(u2 value) {
+        push_s4(value);
+    }
+
+    template<>
+    void push<s4>(s4 value) {
+        push_s4(value);
+    }
+
+    template<>
+    void push<s8>(s8 value) {
+        push_s8(value);
+    }
+
+    template<>
+    void push<float>(float value) {
+        push_f(value);
+    }
+
+    template<>
+    void push<double>(double value) {
+        push_d(value);
+    }
+
+    template<>
+    void push<Reference>(Reference value) {
+        push_a(value);
+    }
+
+
+
+    template<>
+    bool pop<bool>() {
+        return static_cast<bool>(pop_s4());
+    }
+    template<>
+    s1 pop<s1>() {
+        return static_cast<s1>(pop_s4());
+    }
+    template<>
+    u2 pop<u2>() {
+        return static_cast<u2>(pop_s4());
+    }
+    template<>
+    s4 pop<s4>() {
+        return pop_s4();
+    }
+
+    template<>
+    s8 pop<s8>() {
+        return pop_s8();
+    }
+
+    template<>
+    float pop<float>() {
+        return pop_f();
+    }
+
+    template<>
+    double pop<double>() {
+        return pop_d();
+    }
+
+    template<>
+    Reference pop<Reference>() {
+        return pop_a();
+    }
+
 };
 
 //struct MethodArea {

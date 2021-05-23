@@ -15,6 +15,17 @@ static const u2 MAIN_ACCESS_FLAGS = (static_cast<u2>(FieldInfoAccessFlags::ACC_P
 static const auto MAIN_NAME = "main";
 static const auto MAIN_DESCRIPTOR = "([Ljava/lang/String;)V";
 
+enum class ArrayPrimitiveTypes {
+    T_BOOLEAN = 4,
+    T_CHAR = 5,
+    T_FLOAT = 6,
+    T_DOUBLE = 7,
+    T_BYTE = 8,
+    T_SHORT = 9,
+    T_INT = 10,
+    T_LONG = 11,
+};
+
 static size_t execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                                   std::unordered_map<std::string_view, ClassFile *> &class_files, bool &shouldExit);
 
@@ -25,6 +36,12 @@ static size_t goto_(const std::vector<u1> &code, size_t pc);
 static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_t &pc, Reference exception);
 
 static inline size_t pop_frame(Thread &thread, Frame &frame);
+
+template <typename Element>
+size_t array_store(Frame &frame, size_t pc);
+
+template <typename Element>
+size_t array_load(Frame &frame, size_t pc);
 
 int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, ClassFile *main) {
     auto main_method_iter = std::find_if(main->methods.begin(), main->methods.end(),
@@ -197,6 +214,14 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
         case OpCodes::aload_3:
             frame.push_a(frame.locals[static_cast<u1>(opcode - static_cast<u1>(OpCodes::aload_0))].reference);
             break;
+        case OpCodes::iaload: return array_load<s4>(frame, pc);
+        case OpCodes::laload: return array_load<s8>(frame, pc);
+        case OpCodes::faload: return array_load<float>(frame, pc);
+        case OpCodes::daload: return array_load<double>(frame, pc);
+//        case OpCodes::aaload: return array_load<>(frame, pc);
+        case OpCodes::baload: return array_load<s1>(frame, pc);
+        case OpCodes::caload: return array_load<u2>(frame, pc);
+        case OpCodes::saload: return array_load<s4>(frame, pc);
 
             /* ======================= Stores ======================= */
         case OpCodes::istore:
@@ -244,6 +269,14 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
         case OpCodes::astore_3:
             frame.locals[opcode - static_cast<u1>(OpCodes::astore_0)] = Value(frame.pop_a());
             break;
+        case OpCodes::iastore: return array_store<s4>(frame, pc);
+         case OpCodes::lastore: return array_store<s8>(frame, pc);
+         case OpCodes::fastore: return array_store<float>(frame, pc);
+         case OpCodes::dastore: return array_store<double>(frame, pc);
+//         case OpCodes::aastore: return array_store<>(frame, pc);
+         case OpCodes::bastore: return array_store<s1>(frame, pc);
+         case OpCodes::castore: return array_store<u2>(frame, pc);
+         case OpCodes::sastore: return array_store<s4>(frame, pc);
 
             /* ======================= Stack =======================*/
         case OpCodes::pop:
@@ -1003,6 +1036,68 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             // TODO: the next two instructions are probably dup+invokespecial. We could optimize for that pattern.
             return pc + 3;
         }
+        case OpCodes::newarray: {
+            s4 count = frame.pop_s4();
+            if (count < 0) {
+                throw std::runtime_error("TODO NegativeArraySizeException");
+            }
+            s4 type = code[pc + 1];
+
+            // TODO actual array class
+            switch (static_cast<ArrayPrimitiveTypes>(type)) {
+                case ArrayPrimitiveTypes::T_INT: {
+                    auto reference = heap.allocate_array<s4>(nullptr, count);
+                    frame.push_a(reference);
+                    break;
+                }
+                case ArrayPrimitiveTypes::T_BOOLEAN: {
+                    // TODO packed? differentiate from byte in load/store via class
+                    auto reference = heap.allocate_array<s1>(nullptr, count);
+                    frame.push_a(reference);
+                    break;
+                }
+                case ArrayPrimitiveTypes::T_CHAR: {
+                    auto reference = heap.allocate_array<u2>(nullptr, count);
+                    frame.push_a(reference);
+                    break;
+                }
+                case ArrayPrimitiveTypes::T_FLOAT: {
+                    auto reference = heap.allocate_array<float>(nullptr, count);
+                    frame.push_a(reference);
+                    break;
+                }
+                case ArrayPrimitiveTypes::T_DOUBLE: {
+                    auto reference = heap.allocate_array<double>(nullptr, count);
+                    frame.push_a(reference);
+                    break;
+                }
+                case ArrayPrimitiveTypes::T_BYTE: {
+                    auto reference = heap.allocate_array<s1>(nullptr, count);
+                    frame.push_a(reference);
+                    break;
+                }
+                case ArrayPrimitiveTypes::T_SHORT: {
+                    auto reference = heap.allocate_array<s4>(nullptr, count);
+                    frame.push_a(reference);
+                    break;
+                }
+                case ArrayPrimitiveTypes::T_LONG: {
+                    auto reference = heap.allocate_array<s8>(nullptr, count);
+                    frame.push_a(reference);
+                    break;
+                }
+            }
+            return pc + 2;
+        }
+//        case OpCodes::anewarray {}
+        case OpCodes::arraylength: {
+            auto arrayref = frame.pop_a();
+            if (arrayref == JAVA_NULL) {
+                throw std::runtime_error("TODO NullPointerException");
+            }
+            frame.push_s4(arrayref.object()->length);
+            break;
+        }
 
         case OpCodes::athrow: {
             auto value = frame.pop_a();
@@ -1224,3 +1319,39 @@ Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand
     // TODO think about value set conversion
     // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-2.html#jvms-2.8.3
 }
+
+template <typename Element>
+size_t array_store(Frame &frame, size_t pc) {
+    auto value = frame.pop<Element>();
+    auto index = frame.pop_s4();
+
+    auto arrayref = frame.pop_a();
+    if (arrayref == JAVA_NULL) {
+        throw std::runtime_error("TODO NullPointerException");
+    }
+
+    if(index < 0 || index >= arrayref.object()->length) {
+        throw std::runtime_error("TODO ArrayIndexOutOfBoundsException");
+    }
+
+    arrayref.data<Element>()[index] = value;
+    return pc + 1;
+}
+
+template <typename Element>
+size_t array_load(Frame &frame, size_t pc) {
+    auto index = frame.pop_s4();
+
+    auto arrayref = frame.pop_a();
+    if (arrayref == JAVA_NULL) {
+        throw std::runtime_error("TODO NullPointerException");
+    }
+
+    if(index < 0 || index >= arrayref.object()->length) {
+        throw std::runtime_error("TODO ArrayIndexOutOfBoundsException");
+    }
+
+    frame.push<Element>(arrayref.data<Element>()[index]);
+    return pc + 1;
+}
+
