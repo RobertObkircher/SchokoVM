@@ -43,6 +43,21 @@ size_t array_store(Frame &frame, size_t pc);
 template<typename Element>
 size_t array_load(Frame &frame, size_t pc);
 
+void fill_multi_array(Heap &heap, Reference &reference, const std::span<s4> &counts) {
+    s4 count = counts.back();
+    // If any count value is zero, no subsequent dimensions are allocated
+    if (count == 0) return;
+
+    for (s4 i = reference.object()->length - 1; i >= 0; i--) {
+        // TODO actual array class
+        auto child = heap.new_array<Reference>(nullptr, count);
+        if (counts.size() > 1) {
+            fill_multi_array(heap, child, counts.subspan(0, counts.size() - 1));
+        }
+        reference.data<Reference>()[i] = child;
+    }
+}
+
 int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, ClassFile *main) {
     auto main_method_iter = std::find_if(main->methods.begin(), main->methods.end(),
                                          [](const method_info &m) {
@@ -1194,7 +1209,33 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             }
             return pc + 4;
         }
+        case OpCodes::multianewarray: {
+            u2 index = static_cast<u2>((code[pc + 1]) << 8 | (code[pc + 2]));
+            auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
+            (void) class_info;
 
+            u1 dimensions = code[pc + 3]; // >= 1
+            // The last entry is the "root" dimension. So reversed compared to int[a][b][c]
+            std::vector<s4> counts;
+            counts.reserve(dimensions);
+            for (size_t i = 0; i < dimensions; i++) {
+                auto count = frame.pop_s4();
+                counts.push_back(count);
+                if (count < 0) {
+                    throw std::runtime_error("TODO NegativeArraySizeException");
+                }
+            }
+
+            // TODO
+            //    The array class referenced via the run-time constant pool may have more dimensions than the dimensions operand of the multianewarray instruction.
+            //    In that case, only the first dimensions of the dimensions of the array are created.
+
+            // TODO actual array class
+            auto reference = heap.new_array<Reference>(nullptr, counts.back());
+            fill_multi_array(heap, reference, std::span(counts).subspan(0, counts.size() - 1));
+            frame.push_a(reference);
+            return pc + 4;
+        }
         case OpCodes::ifnull:
             return execute_comparison(code, pc, frame.pop_a() == JAVA_NULL);
         case OpCodes::ifnonnull:
