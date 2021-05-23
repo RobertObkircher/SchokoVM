@@ -35,9 +35,6 @@ struct Frame {
     Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top);
 
     template<typename Element>
-    void push(Element value);
-
-    template<typename Element>
     Element pop();
 
     inline Value pop() {
@@ -62,105 +59,93 @@ struct Frame {
         operands_top = 0;
     }
 
+
+    template<typename Element>
+    void push(Element value);
+
     // category 1
-
-    inline s4 pop_s4() { return pop().s4; }
-
-    inline float pop_f() { return pop().float_; }
-
-    inline Reference pop_a() { return pop().reference; }
-
-    inline void push_s4(::s4 s4) { push(Value(s4)); }
-
-    inline void push_f(float f) { push(Value(f)); }
-
-    inline void push_a(Reference reference) { push(Value(reference)); }
-
-    // category 2
-
-    inline s8 pop_s8() { return pop2().s8; }
-
-    inline double pop_d() { return pop2().double_; }
-
-    inline void push_s8(::s8 s8) { push2(Value(s8)); }
-
-    inline void push_d(double d) { push2(Value(d)); }
 
     template<>
     void push<bool>(bool value) {
-        push_s4(value);
+        push<s4>(value);
     }
+
     template<>
     void push<s1>(s1 value) {
-        push_s4(value);
+        push<s4>(value);
     }
+
     template<>
     void push<u2>(u2 value) {
-        push_s4(value);
+        push<s4>(value);
     }
 
     template<>
     void push<s4>(s4 value) {
-        push_s4(value);
-    }
-
-    template<>
-    void push<s8>(s8 value) {
-        push_s8(value);
+        push(Value(value));
     }
 
     template<>
     void push<float>(float value) {
-        push_f(value);
-    }
-
-    template<>
-    void push<double>(double value) {
-        push_d(value);
+        push(Value(value));
     }
 
     template<>
     void push<Reference>(Reference value) {
-        push_a(value);
+        push(Value(value));
     }
 
     template<>
     bool pop<bool>() {
-        return static_cast<bool>(pop_s4());
-    }
-    template<>
-    s1 pop<s1>() {
-        return static_cast<s1>(pop_s4());
-    }
-    template<>
-    u2 pop<u2>() {
-        return static_cast<u2>(pop_s4());
-    }
-    template<>
-    s4 pop<s4>() {
-        return pop_s4();
+        return static_cast<bool>(pop<s4>());
     }
 
     template<>
-    s8 pop<s8>() {
-        return pop_s8();
+    s1 pop<s1>() {
+        return static_cast<s1>(pop<s4>());
+    }
+
+    template<>
+    u2 pop<u2>() {
+        return static_cast<u2>(pop<s4>());
+    }
+
+    template<>
+    s4 pop<s4>() {
+        return pop().s4;
     }
 
     template<>
     float pop<float>() {
-        return pop_f();
+        return pop().float_;
+    }
+
+    // category 1
+
+    template<>
+    Reference pop<Reference>() {
+        return pop().reference;
+    }
+
+    template<>
+    void push<s8>(s8 value) {
+        push2(Value(value));
+    }
+
+    template<>
+    void push<double>(double value) {
+        push2(Value(value));
+    }
+
+    template<>
+    s8 pop<s8>() {
+        return pop2().s8;
     }
 
     template<>
     double pop<double>() {
-        return pop_d();
+        return pop2().double_;
     }
-
-    template<>
-    Reference pop<Reference>() {
-        return pop_a();
-    }
-
 };
 
 //struct MethodArea {
