@@ -43,20 +43,7 @@ size_t array_store(Frame &frame, size_t pc);
 template<typename Element>
 size_t array_load(Frame &frame, size_t pc);
 
-void fill_multi_array(Heap &heap, Reference &reference, const std::span<s4> &counts) {
-    s4 count = counts.back();
-    // If any count value is zero, no subsequent dimensions are allocated
-    if (count == 0) return;
-
-    for (s4 i = reference.object()->length - 1; i >= 0; i--) {
-        // TODO actual array class
-        auto child = heap.new_array<Reference>(nullptr, count);
-        if (counts.size() > 1) {
-            fill_multi_array(heap, child, counts.subspan(0, counts.size() - 1));
-        }
-        reference.data<Reference>()[i] = child;
-    }
-}
+void fill_multi_array(Heap &heap, Reference &reference, const std::span<s4> &counts);
 
 int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, ClassFile *main) {
     auto main_method_iter = std::find_if(main->methods.begin(), main->methods.end(),
@@ -591,7 +578,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             auto value = frame.pop<s4>();
             // C++20 always performs arithmetic shifts, so the top bits need to be cleared out afterwards
             frame.push<s4>((value >> shift) &
-                          (future::bit_cast<s4>(std::numeric_limits<u4>::max() >> static_cast<u4>(shift)))
+                           (future::bit_cast<s4>(std::numeric_limits<u4>::max() >> static_cast<u4>(shift)))
             );
             break;
         }
@@ -600,7 +587,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             auto value = frame.pop<s8>();
             // C++20 always performs arithmetic shifts, so the top bits need to be cleared out afterwards
             frame.push<s8>((value >> shift) &
-                          (future::bit_cast<s8>(std::numeric_limits<u8>::max() >> static_cast<u8>(shift)))
+                           (future::bit_cast<s8>(std::numeric_limits<u8>::max() >> static_cast<u8>(shift)))
             );
             break;
         }
@@ -1214,7 +1201,8 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
             (void) class_info;
 
-            u1 dimensions = code[pc + 3]; // >= 1
+            u1 dimensions = code[pc + 3];
+            assert(dimensions >= 1);
             // The last entry is the "root" dimension. So reversed compared to int[a][b][c]
             std::vector<s4> counts;
             counts.reserve(dimensions);
@@ -1430,4 +1418,19 @@ size_t array_load(Frame &frame, size_t pc) {
 
     frame.push<Element>(arrayref.data<Element>()[index]);
     return pc + 1;
+}
+
+void fill_multi_array(Heap &heap, Reference &reference, const std::span<s4> &counts) {
+    s4 count = counts.back();
+    // If any count value is zero, no subsequent dimensions are allocated
+    if (count == 0) return;
+
+    for (s4 i = reference.object()->length - 1; i >= 0; i--) {
+        // TODO actual array class
+        auto child = heap.new_array<Reference>(nullptr, count);
+        if (counts.size() > 1) {
+            fill_multi_array(heap, child, counts.subspan(0, counts.size() - 1));
+        }
+        reference.data<Reference>()[i] = child;
+    }
 }

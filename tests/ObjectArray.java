@@ -1,5 +1,6 @@
 public class ObjectArray {
     public static void println(int i) { System.out.println(i); } 
+    public static void println(long i) { System.out.println(i); }
 
     static class MyObject {
         int i;
@@ -14,11 +15,9 @@ public class ObjectArray {
             arr[i].i = 100 - i;
             arr[i].l = 100 * i;
         }
-        int sum = 0;
         for(int i = arr.length - 1; i >= 0; i--) {
-            sum += arr[i].i;
-            sum += arr[i].l;
+            println(arr[i].i);
+            println(arr[i].l);
         }
-        println(sum);
     }
 }

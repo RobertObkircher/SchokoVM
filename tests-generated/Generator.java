@@ -525,23 +525,19 @@ public class Generator {
             w.println("        for(int i = 0; i < arr.length; i++) {");
             w.println("            arr[i] = ("+type+") (100 - i);");
             w.println("        }");
-            w.println("        int sum = 0;");
             w.println("        for(int i = arr.length - 1; i >= 0; i--) {");
-            w.println("            sum += arr[i];");
+            w.println("            println(arr[i]);");
             w.println("        }");
-            w.println("        println(sum);");
             w.println("    }");
         }
         w.println("    public static void test_boolean(){");
         w.println("        boolean[] arr = new boolean[20];");
         w.println("        for(int i = 0; i < arr.length; i++) {");
-        w.println("            arr[i] = (i % 2) == 0;");
+        w.println("            arr[i] = (i % 3) == 0;");
         w.println("        }");
-        w.println("        int sum = 0;");
         w.println("        for(int i = arr.length - 1; i >= 0; i--) {");
-        w.println("            sum += arr[i] ? 1 : 0;");
+        w.println("            println(arr[i]);");
         w.println("        }");
-        w.println("        println(sum);");
         w.println("    }");
     }
 }
