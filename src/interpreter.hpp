@@ -34,9 +34,6 @@ struct Frame {
 
     Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top);
 
-    template<typename Element>
-    Element pop();
-
     inline Value pop() {
         return operands[--operands_top];
     }
@@ -59,94 +56,96 @@ struct Frame {
         operands_top = 0;
     }
 
+    template<typename Element>
+    Element pop();
 
     template<typename Element>
     void push(Element value);
-
-    // category 1
-
-    template<>
-    void push<bool>(bool value) {
-        push<s4>(value);
-    }
-
-    template<>
-    void push<s1>(s1 value) {
-        push<s4>(value);
-    }
-
-    template<>
-    void push<u2>(u2 value) {
-        push<s4>(value);
-    }
-
-    template<>
-    void push<s4>(s4 value) {
-        push(Value(value));
-    }
-
-    template<>
-    void push<float>(float value) {
-        push(Value(value));
-    }
-
-    template<>
-    void push<Reference>(Reference value) {
-        push(Value(value));
-    }
-
-    template<>
-    bool pop<bool>() {
-        return static_cast<bool>(pop<s4>());
-    }
-
-    template<>
-    s1 pop<s1>() {
-        return static_cast<s1>(pop<s4>());
-    }
-
-    template<>
-    u2 pop<u2>() {
-        return static_cast<u2>(pop<s4>());
-    }
-
-    template<>
-    s4 pop<s4>() {
-        return pop().s4;
-    }
-
-    template<>
-    float pop<float>() {
-        return pop().float_;
-    }
-
-    // category 1
-
-    template<>
-    Reference pop<Reference>() {
-        return pop().reference;
-    }
-
-    template<>
-    void push<s8>(s8 value) {
-        push2(Value(value));
-    }
-
-    template<>
-    void push<double>(double value) {
-        push2(Value(value));
-    }
-
-    template<>
-    s8 pop<s8>() {
-        return pop2().s8;
-    }
-
-    template<>
-    double pop<double>() {
-        return pop2().double_;
-    }
 };
+
+// category 1
+
+template<>
+inline void Frame::push<s4>(s4 value) {
+    push(Value(value));
+}
+
+template<>
+inline void Frame::push<bool>(bool value) {
+    push<s4>(value);
+}
+
+template<>
+inline void Frame::push<s1>(s1 value) {
+    push<s4>(value);
+}
+
+template<>
+inline void Frame::push<u2>(u2 value) {
+    push<s4>(value);
+}
+
+template<>
+inline void Frame::push<float>(float value) {
+    push(Value(value));
+}
+
+template<>
+inline void Frame::push<Reference>(Reference value) {
+    push(Value(value));
+}
+
+template<>
+inline s4 Frame::pop<s4>() {
+    return pop().s4;
+}
+
+template<>
+inline bool Frame::pop<bool>() {
+    return static_cast<bool>(pop<s4>());
+}
+
+template<>
+inline s1 Frame::pop<s1>() {
+    return static_cast<s1>(pop<s4>());
+}
+
+template<>
+inline u2 Frame::pop<u2>() {
+    return static_cast<u2>(pop<s4>());
+}
+
+template<>
+inline float Frame::pop<float>() {
+    return pop().float_;
+}
+
+// category 2
+
+template<>
+inline Reference Frame::pop<Reference>() {
+    return pop().reference;
+}
+
+template<>
+inline void Frame::push<s8>(s8 value) {
+    push2(Value(value));
+}
+
+template<>
+inline void Frame::push<double>(double value) {
+    push2(Value(value));
+}
+
+template<>
+inline s8 Frame::pop<s8>() {
+    return pop2().s8;
+}
+
+template<>
+inline double Frame::pop<double>() {
+    return pop2().double_;
+}
 
 //struct MethodArea {
 //    // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-2.html#jvms-2.5.4
