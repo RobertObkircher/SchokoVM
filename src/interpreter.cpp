@@ -1204,6 +1204,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             u1 dimensions = code[pc + 3];
             assert(dimensions >= 1);
             // The last entry is the "root" dimension. So reversed compared to int[a][b][c]
+            // TODO cache the vector in the current thread or create the span directly from frame.operands (with a stride of 2) to avoid memory allocations
             std::vector<s4> counts;
             counts.reserve(dimensions);
             for (size_t i = 0; i < dimensions; i++) {
