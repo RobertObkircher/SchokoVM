@@ -523,6 +523,9 @@ public class Generator {
             w.println("    public static void test_" + type + "(){");
             w.println("        "+type+"[] arr = new "+type+"[20];");
             w.println("        for(int i = 0; i < arr.length; i++) {");
+            w.println("            println(arr[i]);");
+            w.println("        }");
+            w.println("        for(int i = 0; i < arr.length; i++) {");
             w.println("            arr[i] = ("+type+") (100 - i);");
             w.println("        }");
             w.println("        for(int i = arr.length - 1; i >= 0; i--) {");
@@ -532,6 +535,9 @@ public class Generator {
         }
         w.println("    public static void test_boolean(){");
         w.println("        boolean[] arr = new boolean[20];");
+        w.println("        for(int i = 0; i < arr.length; i++) {");
+        w.println("            println(arr[i]);");
+        w.println("        }");
         w.println("        for(int i = 0; i < arr.length; i++) {");
         w.println("            arr[i] = (i % 3) == 0;");
         w.println("        }");

@@ -1,5 +1,6 @@
 public class ObjectArray {
-    public static void println(int i) { System.out.println(i); } 
+    public static void println(boolean i) { System.out.println(i); }
+    public static void println(int i) { System.out.println(i); }
     public static void println(long i) { System.out.println(i); }
 
     static class MyObject {
@@ -9,6 +10,10 @@ public class ObjectArray {
 
     public static void main(String[] args) {
         MyObject[] arr = new MyObject[10];
+
+        for(int i = 0; i < arr.length; i++) {
+            println(arr == null);
+        }
 
         for(int i = 0; i < arr.length; i++) {
             arr[i] = new MyObject();
