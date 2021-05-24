@@ -56,30 +56,96 @@ struct Frame {
         operands_top = 0;
     }
 
-    // category 1
+    template<typename Element>
+    Element pop();
 
-    inline s4 pop_s4() { return pop().s4; }
-
-    inline float pop_f() { return pop().float_; }
-
-    inline Reference pop_a() { return pop().reference; }
-
-    inline void push_s4(::s4 s4) { push(Value(s4)); }
-
-    inline void push_f(float f) { push(Value(f)); }
-
-    inline void push_a(Reference reference) { push(Value(reference)); }
-
-    // category 2
-
-    inline s8 pop_s8() { return pop2().s8; }
-
-    inline double pop_d() { return pop2().double_; }
-
-    inline void push_s8(::s8 s8) { push2(Value(s8)); }
-
-    inline void push_d(double d) { push2(Value(d)); }
+    template<typename Element>
+    void push(Element value);
 };
+
+// category 1
+
+template<>
+inline void Frame::push<s4>(s4 value) {
+    push(Value(value));
+}
+
+template<>
+inline void Frame::push<bool>(bool value) {
+    push<s4>(value);
+}
+
+template<>
+inline void Frame::push<s1>(s1 value) {
+    push<s4>(value);
+}
+
+template<>
+inline void Frame::push<u2>(u2 value) {
+    push<s4>(value);
+}
+
+template<>
+inline void Frame::push<float>(float value) {
+    push(Value(value));
+}
+
+template<>
+inline void Frame::push<Reference>(Reference value) {
+    push(Value(value));
+}
+
+template<>
+inline s4 Frame::pop<s4>() {
+    return pop().s4;
+}
+
+template<>
+inline bool Frame::pop<bool>() {
+    return static_cast<bool>(pop<s4>());
+}
+
+template<>
+inline s1 Frame::pop<s1>() {
+    return static_cast<s1>(pop<s4>());
+}
+
+template<>
+inline u2 Frame::pop<u2>() {
+    return static_cast<u2>(pop<s4>());
+}
+
+template<>
+inline float Frame::pop<float>() {
+    return pop().float_;
+}
+
+// category 2
+
+template<>
+inline Reference Frame::pop<Reference>() {
+    return pop().reference;
+}
+
+template<>
+inline void Frame::push<s8>(s8 value) {
+    push2(Value(value));
+}
+
+template<>
+inline void Frame::push<double>(double value) {
+    push2(Value(value));
+}
+
+template<>
+inline s8 Frame::pop<s8>() {
+    return pop2().s8;
+}
+
+template<>
+inline double Frame::pop<double>() {
+    return pop2().double_;
+}
 
 //struct MethodArea {
 //    // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-2.html#jvms-2.5.4

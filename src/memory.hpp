@@ -94,6 +94,11 @@ struct Heap {
 
     Reference new_instance(ClassFile *clazz);
 
+    template<typename Element>
+    Reference new_array(ClassFile *clazz, s4 length) {
+        return allocate_array<Element>(clazz, length);
+    }
+
     template<class Element>
     Reference allocate_array(ClassFile *clazz, s4 length) {
         assert(length >= 0);
