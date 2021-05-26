@@ -34,6 +34,20 @@ struct Frame {
 
     Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top);
 
+    inline u1 consume_u1() {
+        return (*code)[++pc];
+    }
+
+    inline u2 read_u2() {
+        return static_cast<u2>(((*code)[pc + 1] << 8) | (*code)[pc + 2]);
+    }
+
+    inline u2 consume_u2() {
+        u2 value = static_cast<u2>(((*code)[pc + 1] << 8) | (*code)[pc + 2]);
+        pc += 2;
+        return value;
+    }
+
     inline Value pop() {
         return operands[--operands_top];
     }

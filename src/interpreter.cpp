@@ -26,22 +26,22 @@ enum class ArrayPrimitiveTypes {
     T_LONG = 11,
 };
 
-static size_t execute_instruction(Heap &heap, Thread &thread, Frame &frame,
+static void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                                   std::unordered_map<std::string_view, ClassFile *> &class_files, bool &shouldExit);
 
-static size_t execute_comparison(const std::vector<u1> &code, size_t pc, bool condition);
+static void execute_comparison(Frame &frame, bool condition);
 
-static size_t goto_(const std::vector<u1> &code, size_t pc);
+static void goto_(Frame &frame);
 
-static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_t &pc, Reference exception);
+static void handle_throw(Thread &thread, Frame &frame, bool &shouldExit, Reference exception);
 
-static inline size_t pop_frame(Thread &thread, Frame &frame);
-
-template<typename Element>
-size_t array_store(Frame &frame, size_t pc);
+static inline void pop_frame(Thread &thread, Frame &frame);
 
 template<typename Element>
-size_t array_load(Frame &frame, size_t pc);
+void array_store(Frame &frame);
+
+template<typename Element>
+void array_load(Frame &frame);
 
 void fill_multi_array(Heap &heap, Reference &reference, const std::span<s4> &counts);
 
@@ -75,7 +75,7 @@ int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, Cl
 
     bool shouldExit = false;
     while (!shouldExit) {
-        frame.pc = execute_instruction(heap, thread, frame, class_files, shouldExit);
+        execute_instruction(heap, thread, frame, class_files, shouldExit);
     }
 
     // print exit code
@@ -86,12 +86,11 @@ int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, Cl
     }
 }
 
-static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &frame,
+static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                                          std::unordered_map<std::string_view, ClassFile *> &class_files,
                                          bool &shouldExit) {
-    size_t pc = frame.pc;
     std::vector<u1> &code = *frame.code;
-    auto opcode = code[pc];
+    auto opcode = code[frame.pc];
     // TODO implement remaining opcodes. The ones that are currently commented/missing out have no test coverage whatsoever
     switch (static_cast<OpCodes>(opcode)) {
         /* ======================= Constants ======================= */
@@ -124,16 +123,16 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             frame.push<double>(static_cast<double>(opcode - static_cast<u1>(OpCodes::dconst_0)));
             break;
         case OpCodes::bipush: {
-            frame.push<s4>(static_cast<s4>(static_cast<s2>(future::bit_cast<s1>(code[pc + 1]))));
-            return pc + 2;
+            frame.push<s4>(static_cast<s4>(static_cast<s2>(future::bit_cast<s1>(frame.consume_u1()))));
+            break;
         }
         case OpCodes::sipush: {
-            u2 value = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
+            u2 value = frame.consume_u2();
             frame.push<s4>(future::bit_cast<s2>(value));
-            return pc + 3;
+            break;
         }
         case OpCodes::ldc: {
-            auto index = code[pc + 1];
+            auto index = frame.consume_u1();
             auto &entry = frame.clazz->constant_pool.table[index];
             if (auto i = std::get_if<CONSTANT_Integer_info>(&entry.variant)) {
                 frame.push<s4>(i->value);
@@ -142,10 +141,10 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             } else {
                 throw std::runtime_error("ldc refers to invalid/unimplemented type");
             }
-            return pc + 2;
+            break;
         }
         case OpCodes::ldc_w: {
-            size_t index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
+            size_t index = frame.consume_u2();
             auto &entry = frame.clazz->constant_pool.table[index];
             if (auto i = std::get_if<CONSTANT_Integer_info>(&entry.variant)) {
                 frame.push<s4>(i->value);
@@ -154,10 +153,10 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             } else {
                 throw std::runtime_error("ldc_w refers to invalid/unimplemented type");
             }
-            return pc + 3;
+            break;
         }
         case OpCodes::ldc2_w: {
-            size_t index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
+            size_t index = frame.consume_u2();
             auto &entry = frame.clazz->constant_pool.table[index];
             if (auto l = std::get_if<CONSTANT_Long_info>(&entry.variant)) {
                 frame.push<s8>(l->value);
@@ -166,25 +165,25 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             } else {
                 throw std::runtime_error("ldc2_w refers to invalid/unimplemented type");
             }
-            return pc + 3;
+            break;
         }
 
             /* ======================= Loads ======================= */
         case OpCodes::iload:
-            frame.push<s4>(frame.locals[code[pc + 1]].s4);
-            return pc + 2;
+            frame.push<s4>(frame.locals[frame.consume_u1()].s4);
+            break;
         case OpCodes::lload:
-            frame.push<s8>(frame.locals[code[pc + 1]].s8);
-            return pc + 2;
+            frame.push<s8>(frame.locals[frame.consume_u1()].s8);
+            break;
         case OpCodes::fload:
-            frame.push<float>(frame.locals[code[pc + 1]].float_);
-            return pc + 2;
+            frame.push<float>(frame.locals[frame.consume_u1()].float_);
+            break;
         case OpCodes::dload:
-            frame.push<double>(frame.locals[code[pc + 1]].double_);
-            return pc + 2;
+            frame.push<double>(frame.locals[frame.consume_u1()].double_);
+            break;
         case OpCodes::aload:
-            frame.push<Reference>(frame.locals[code[pc + 1]].reference);
-            return pc + 2;
+            frame.push<Reference>(frame.locals[frame.consume_u1()].reference);
+            break;
 
         case OpCodes::iload_0:
         case OpCodes::iload_1:
@@ -217,38 +216,46 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             frame.push<Reference>(frame.locals[static_cast<u1>(opcode - static_cast<u1>(OpCodes::aload_0))].reference);
             break;
         case OpCodes::iaload:
-            return array_load<s4>(frame, pc);
+            array_load<s4>(frame);
+            break;
         case OpCodes::laload:
-            return array_load<s8>(frame, pc);
+            array_load<s8>(frame);
+            break;
         case OpCodes::faload:
-            return array_load<float>(frame, pc);
+            array_load<float>(frame);
+            break;
         case OpCodes::daload:
-            return array_load<double>(frame, pc);
+            array_load<double>(frame);
+            break;
         case OpCodes::aaload:
-            return array_load<Reference>(frame, pc);
+            array_load<Reference>(frame);
+            break;
         case OpCodes::baload:
-            return array_load<s1>(frame, pc);
+            array_load<s1>(frame);
+            break;
         case OpCodes::caload:
-            return array_load<u2>(frame, pc);
+            array_load<u2>(frame);
+            break;
         case OpCodes::saload:
-            return array_load<s4>(frame, pc);
+            array_load<s4>(frame);
+            break;
 
             /* ======================= Stores ======================= */
         case OpCodes::istore:
-            frame.locals[code[pc + 1]] = Value(frame.pop<s4>());
-            return pc + 2;
+            frame.locals[frame.consume_u1()] = Value(frame.pop<s4>());
+            break;
         case OpCodes::lstore:
-            frame.locals[code[pc + 1]] = Value(frame.pop<s8>());
-            return pc + 2;
+            frame.locals[frame.consume_u1()] = Value(frame.pop<s8>());
+            break;
         case OpCodes::fstore:
-            frame.locals[code[pc + 1]] = Value(frame.pop<float>());
-            return pc + 2;
+            frame.locals[frame.consume_u1()] = Value(frame.pop<float>());
+            break;
         case OpCodes::dstore:
-            frame.locals[code[pc + 1]] = Value(frame.pop<double>());
-            return pc + 2;
+            frame.locals[frame.consume_u1()] = Value(frame.pop<double>());
+            break;
         case OpCodes::astore:
-            frame.locals[code[pc + 1]] = Value(frame.pop<Reference>());
-            return pc + 2;
+            frame.locals[frame.consume_u1()] = Value(frame.pop<Reference>());
+            break;
         case OpCodes::istore_0:
         case OpCodes::istore_1:
         case OpCodes::istore_2:
@@ -280,21 +287,29 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             frame.locals[opcode - static_cast<u1>(OpCodes::astore_0)] = Value(frame.pop<Reference>());
             break;
         case OpCodes::iastore:
-            return array_store<s4>(frame, pc);
+            array_store<s4>(frame);
+            break;
         case OpCodes::lastore:
-            return array_store<s8>(frame, pc);
+            array_store<s8>(frame);
+            break;
         case OpCodes::fastore:
-            return array_store<float>(frame, pc);
+            array_store<float>(frame);
+            break;
         case OpCodes::dastore:
-            return array_store<double>(frame, pc);
+            array_store<double>(frame);
+            break;
         case OpCodes::aastore:
-            return array_store<Reference>(frame, pc);
+            array_store<Reference>(frame);
+            break;
         case OpCodes::bastore:
-            return array_store<s1>(frame, pc);
+            array_store<s1>(frame);
+            break;
         case OpCodes::castore:
-            return array_store<u2>(frame, pc);
+            array_store<u2>(frame);
+            break;
         case OpCodes::sastore:
-            return array_store<s4>(frame, pc);
+            array_store<s4>(frame);
+            break;
 
             /* ======================= Stack =======================*/
         case OpCodes::pop:
@@ -610,11 +625,11 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             frame.push<s8>(frame.pop<s8>() ^ frame.pop<s8>());
             break;
         case OpCodes::iinc: {
-            auto local = code[pc + 1];
-            auto value = static_cast<s4>(static_cast<s2>(future::bit_cast<s1>(code[pc + 2])));
+            auto local = frame.consume_u1();
+            auto value = static_cast<s4>(static_cast<s2>(future::bit_cast<s1>(frame.consume_u1())));
             auto result = add_overflow(frame.locals[local].s4, value);
             frame.locals[local] = Value(result);
-            return pc + 3;
+            break;
         }
 
             /* ======================= Conversions ======================= */
@@ -713,41 +728,57 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             break;
         }
         case OpCodes::ifeq:
-            return execute_comparison(code, pc, frame.pop<s4>() == 0);
+            execute_comparison(frame, frame.pop<s4>() == 0);
+            return;
         case OpCodes::ifne:
-            return execute_comparison(code, pc, frame.pop<s4>() != 0);
+            execute_comparison(frame, frame.pop<s4>() != 0);
+            return;
         case OpCodes::iflt:
-            return execute_comparison(code, pc, frame.pop<s4>() < 0);
+            execute_comparison(frame, frame.pop<s4>() < 0);
+            return;
         case OpCodes::ifge:
-            return execute_comparison(code, pc, frame.pop<s4>() >= 0);
+            execute_comparison(frame, frame.pop<s4>() >= 0);
+            return;
         case OpCodes::ifgt:
-            return execute_comparison(code, pc, frame.pop<s4>() > 0);
+            execute_comparison(frame, frame.pop<s4>() > 0);
+            return;
         case OpCodes::ifle:
-            return execute_comparison(code, pc, frame.pop<s4>() <= 0);
+            execute_comparison(frame, frame.pop<s4>() <= 0);
+            return;
         case OpCodes::if_icmpeq:
-            return execute_comparison(code, pc, frame.pop<s4>() == frame.pop<s4>());
+            execute_comparison(frame, frame.pop<s4>() == frame.pop<s4>());
+            return;
         case OpCodes::if_icmpne:
-            return execute_comparison(code, pc, frame.pop<s4>() != frame.pop<s4>());
+            execute_comparison(frame, frame.pop<s4>() != frame.pop<s4>());
+            return;
         case OpCodes::if_icmplt:
-            return execute_comparison(code, pc, frame.pop<s4>() > frame.pop<s4>());
+            execute_comparison(frame, frame.pop<s4>() > frame.pop<s4>());
+            return;
         case OpCodes::if_icmpge:
-            return execute_comparison(code, pc, frame.pop<s4>() <= frame.pop<s4>());
+            execute_comparison(frame, frame.pop<s4>() <= frame.pop<s4>());
+            return;
         case OpCodes::if_icmpgt:
-            return execute_comparison(code, pc, frame.pop<s4>() < frame.pop<s4>());
+            execute_comparison(frame, frame.pop<s4>() < frame.pop<s4>());
+            return;
         case OpCodes::if_icmple:
-            return execute_comparison(code, pc, frame.pop<s4>() >= frame.pop<s4>());
+            execute_comparison(frame, frame.pop<s4>() >= frame.pop<s4>());
+            return;
         case OpCodes::if_acmpeq:
-            return execute_comparison(code, pc, frame.pop<Reference>() == frame.pop<Reference>());
+            execute_comparison(frame, frame.pop<Reference>() == frame.pop<Reference>());
+            return;
         case OpCodes::if_acmpne:
-            return execute_comparison(code, pc, frame.pop<Reference>() != frame.pop<Reference>());
+            execute_comparison(frame, frame.pop<Reference>() != frame.pop<Reference>());
+            return;
 
             /* ======================= Control =======================*/
         case OpCodes::goto_:
-            return goto_(code, pc);
+            goto_(frame);
+            return;
         case OpCodes::jsr:
         case OpCodes::ret:
             throw std::runtime_error("jsr and ret are unsupported");
         case OpCodes::tableswitch: {
+            auto pc = frame.pc;
             size_t opcode_address = pc;
 
             // skip 0-3 bytes of padding
@@ -772,9 +803,11 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                 offset = static_cast<s4>((code[pc] << 24) | (code[pc + 1] << 16) | (code[pc + 2] << 8) | code[pc + 3]);
             }
 
-            return opcode_address + static_cast<size_t>(static_cast<ssize_t>(offset));
+            frame.pc = opcode_address + static_cast<size_t>(static_cast<ssize_t>(offset));
+            return;
         }
         case OpCodes::lookupswitch: {
+            auto pc = frame.pc;
             size_t opcode_address = pc;
 
             // skip 0-3 bytes of padding
@@ -801,7 +834,8 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                 pc += 4;
             }
 
-            return opcode_address + static_cast<size_t>(static_cast<ssize_t>(offset));
+            frame.pc = opcode_address + static_cast<size_t>(static_cast<ssize_t>(offset));
+            return;
         }
 
         case OpCodes::ireturn:
@@ -820,9 +854,9 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                 shouldExit = true;
             } else {
                 pop_frame(thread, frame);
-                return frame.pc + frame.invoke_length;
+                frame.pc += frame.invoke_length;
             }
-            break;
+            return;
         }
 
 
@@ -831,7 +865,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
         case OpCodes::putstatic:
         case OpCodes::getfield:
         case OpCodes::putfield: {
-            u2 index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
+            u2 index = frame.consume_u2();
             auto field = frame.clazz->constant_pool.get<CONSTANT_Fieldref_info>(index);
 
             if (!field.resolved) {
@@ -839,7 +873,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                     case ClassResolution::OK:
                         break;
                     case ClassResolution::PUSHED_INITIALIZER:
-                        return 0;
+                        return;
                     case ClassResolution::NOT_FOUND:
                         throw std::runtime_error("class not found: '" + field.class_->name->value + "'");
                 }
@@ -914,18 +948,19 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                     assert(false);
             }
 
-            return pc + 3;
+            break;
         }
         case OpCodes::invokespecial: {
-            u2 index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
+            u2 index = frame.read_u2();
             (void) index;
             frame.pop<Reference>(); // this arguemnt for constructor
             // TODO implement invokespecial
             // frame.invoke_length = 3;
-            return pc + 3;
+            frame.pc += 2;
+            break;
         }
         case OpCodes::invokestatic: {
-            u2 method_index = static_cast<u2>((code[pc + 1] << 8) | code[pc + 2]);
+            u2 method_index = frame.read_u2();
             auto method_ref = std::get<CONSTANT_Methodref_info>(frame.clazz->constant_pool.table[method_index].variant);
 
             // TODO this is hardcoded for now
@@ -933,15 +968,17 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                 method_ref.name_and_type->name->value == "exit" &&
                 method_ref.name_and_type->descriptor->value == "(I)V") {
                 shouldExit = true;
-                return pc;
+                return;
             } else if (method_ref.name_and_type->name->value == "println" &&
                        method_ref.name_and_type->descriptor->value == "(I)V") {
                 std::cout << frame.pop<s4>() << "\n";
-                return pc + 3;
+                frame.pc += 2;
+                break;
             } else if (method_ref.name_and_type->name->value == "println" &&
                        method_ref.name_and_type->descriptor->value == "(J)V") {
                 std::cout << frame.pop<s8>() << "\n";
-                return pc + 3;
+                frame.pc += 2;
+                break;
             } else if (method_ref.name_and_type->name->value == "println" &&
                        method_ref.name_and_type->descriptor->value == "(F)V") {
                 // floatToIntBits
@@ -952,7 +989,8 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                     i = future::bit_cast<s4>(0x7fc00000);
                 }
                 std::cout << i << "\n";
-                return pc + 3;
+                frame.pc += 2;
+                break;
             } else if (method_ref.name_and_type->name->value == "println" &&
                        method_ref.name_and_type->descriptor->value == "(D)V") {
                 // doubleToLongBits
@@ -963,19 +1001,23 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                     i = future::bit_cast<s8>(0x7ff8000000000000L);
                 }
                 std::cout << i << "\n";
-                return pc + 3;
+                frame.pc += 2;
+                break;
             } else if (method_ref.name_and_type->name->value == "println" &&
                        method_ref.name_and_type->descriptor->value == "(C)V") {
                 std::cout << frame.pop<s4>() << "\n";
-                return pc + 3;
+                frame.pc += 2;
+                break;
             } else if (method_ref.name_and_type->name->value == "println" &&
                        method_ref.name_and_type->descriptor->value == "(S)V") {
                 std::cout << frame.pop<s4>() << "\n";
-                return pc + 3;
+                frame.pc += 2;
+                break;
             } else if (method_ref.name_and_type->name->value == "println" &&
                        method_ref.name_and_type->descriptor->value == "(B)V") {
                 std::cout << frame.pop<s4>() << "\n";
-                return pc + 3;
+                frame.pc += 2;
+                break;
             } else if (method_ref.name_and_type->name->value == "println" &&
                        method_ref.name_and_type->descriptor->value == "(Z)V") {
                 auto value = frame.pop<s4>();
@@ -986,7 +1028,8 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                 } else {
                     abort();
                 }
-                return pc + 3;
+                frame.pc += 2;
+                break;
             }
 
             method_info *method = method_ref.method;
@@ -997,7 +1040,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                     case ClassResolution::OK:
                         break;
                     case ClassResolution::PUSHED_INITIALIZER:
-                        return 0;
+                        return;
                     case ClassResolution::NOT_FOUND:
                         // TODO this prints "A not found" if A was found but a superclass/interface wasn't
                         throw std::runtime_error("class not found: '" + method_ref.class_->name->value + "'");
@@ -1026,7 +1069,8 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
 
             if (method->access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_NATIVE)) {
                 abort();
-                return pc + 3;
+                frame.pc += 3;
+                return;
             } else {
                 size_t operand_stack_top = frame.first_operand_index + frame.operands_top;
                 frame.operands_top += -method->stack_slots_for_parameters + method->return_size;
@@ -1037,35 +1081,36 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                 frame = {thread.stack, clazz, method, operand_stack_top};
                 if (thread.stack.memory_used > thread.stack.memory.size())
                     throw std::runtime_error("stack overflow");
-                return 0; // will be set on the new frame
+                return;
             }
         }
         case OpCodes::new_: {
-            u2 index = static_cast<u2>((code[pc + 1]) << 8 | (code[pc + 2]));
+            u2 index = frame.read_u2();
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
 
             switch (resolve_class(class_files, &class_info, thread, frame)) {
                 case ClassResolution::OK:
                     break;
                 case ClassResolution::PUSHED_INITIALIZER:
-                    return 0;
+                    return;
                 case ClassResolution::NOT_FOUND:
                     throw std::runtime_error("class not found: '" + class_info.name->value + "'");
             }
+            frame.pc += 2;
             auto clazz = class_info.clazz;
 
             auto reference = heap.new_instance(clazz);
             frame.push<Reference>(reference);
 
             // TODO: the next two instructions are probably dup+invokespecial. We could optimize for that pattern.
-            return pc + 3;
+            break;
         }
         case OpCodes::newarray: {
             s4 count = frame.pop<s4>();
             if (count < 0) {
                 throw std::runtime_error("TODO NegativeArraySizeException");
             }
-            s4 type = code[pc + 1];
+            s4 type = frame.consume_u1();
 
             // TODO actual array class
             switch (static_cast<ArrayPrimitiveTypes>(type)) {
@@ -1111,7 +1156,7 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                     break;
                 }
             }
-            return pc + 2;
+            break;
         }
         case OpCodes::anewarray: {
             s4 count = frame.pop<s4>();
@@ -1119,14 +1164,14 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                 throw std::runtime_error("TODO NegativeArraySizeException");
             }
 
-            u2 index = static_cast<u2>((code[pc + 1]) << 8 | (code[pc + 2]));
+            u2 index = frame.consume_u2();
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
             // TODO actual array class
             (void) class_info;
 
             auto reference = heap.new_array<Reference>(nullptr, count);
             frame.push<Reference>(reference);
-            return pc + 3;
+            break;
         }
         case OpCodes::arraylength: {
             auto arrayref = frame.pop<Reference>();
@@ -1143,14 +1188,16 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                 // TODO If objectref is null, athrow throws a NullPointerException instead of objectref.
                 throw std::runtime_error("TODO NullPointerException");
             }
-            return handle_throw(thread, frame, shouldExit, pc, value);
+            handle_throw(thread, frame, shouldExit, value);
+            return;
         }
 
         case OpCodes::wide: {
-            u2 index = static_cast<u2>((code[pc + 2] << 8) | code[pc + 3]);
+            u1 type = frame.consume_u1();
+            u2 index = frame.consume_u2();
             auto &local = frame.locals[index];
 
-            switch (static_cast<OpCodes>(code[pc + 1])) {
+            switch (static_cast<OpCodes>(type)) {
                 case OpCodes::iload:
                     frame.push<s4>(local.s4);
                     break;
@@ -1184,9 +1231,10 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                     break;
 
                 case OpCodes::iinc: {
-                    s4 constant = future::bit_cast<s2>(static_cast<u2>((code[pc + 4] << 8) | code[pc + 5]));
+                    s4 constant = future::bit_cast<s2>(frame.consume_u2());
                     local.s4 += constant;
-                    return pc + 6;
+                    frame.pc++;
+                    return;
                 }
 
                 case OpCodes::ret:
@@ -1194,14 +1242,14 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
                 default:
                     abort();
             }
-            return pc + 4;
+            break;
         }
         case OpCodes::multianewarray: {
-            u2 index = static_cast<u2>((code[pc + 1]) << 8 | (code[pc + 2]));
+            u2 index = frame.consume_u2();
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
             (void) class_info;
 
-            u1 dimensions = code[pc + 3];
+            u1 dimensions = frame.consume_u1();
             assert(dimensions >= 1);
             // The last entry is the "root" dimension. So reversed compared to int[a][b][c]
             // TODO cache the vector in the current thread or create the span directly from frame.operands (with a stride of 2) to avoid memory allocations
@@ -1223,44 +1271,48 @@ static inline size_t execute_instruction(Heap &heap, Thread &thread, Frame &fram
             auto reference = heap.new_array<Reference>(nullptr, counts.back());
             fill_multi_array(heap, reference, std::span(counts).subspan(0, counts.size() - 1));
             frame.push<Reference>(reference);
-            return pc + 4;
+            break;
         }
         case OpCodes::ifnull:
-            return execute_comparison(code, pc, frame.pop<Reference>() == JAVA_NULL);
+            execute_comparison(frame, frame.pop<Reference>() == JAVA_NULL);
+            return;
         case OpCodes::ifnonnull:
-            return execute_comparison(code, pc, frame.pop<Reference>() != JAVA_NULL);
+            execute_comparison(frame, frame.pop<Reference>() != JAVA_NULL);
+            return;
         case OpCodes::goto_w: {
+            auto pc = frame.pc;
             s4 offset = static_cast<s4>((code[pc + 1] << 24) | (code[pc + 2] << 16) | (code[pc + 3] << 8) |
                                         code[pc + 4]);
-            return pc + static_cast<size_t>(static_cast<ssize_t>(offset));
+            frame.pc += static_cast<size_t>(static_cast<ssize_t>(offset));
+            return;
         }
         case OpCodes::jsr_w:
             throw std::runtime_error("jsr and ret are unsupported");
 
         default:
             throw std::runtime_error(
-                    "Unimplemented/unknown opcode " + std::to_string(opcode) + " at " + std::to_string(pc)
+                    "Unimplemented/unknown opcode " + std::to_string(opcode) + " at " + std::to_string(frame.pc)
             );
     }
 
-    return pc + 1;
+    frame.pc++;
 }
 
-static size_t execute_comparison(const std::vector<u1> &code, size_t pc, bool condition) {
+static void execute_comparison(Frame &frame, bool condition) {
     if (condition) {
-        return goto_(code, pc);
+        return goto_(frame);
     } else {
-        return pc + 3;
+        frame.pc += 3;
     }
 }
 
-static size_t goto_(const std::vector<u1> &code, size_t pc) {
-    u2 offset_u = static_cast<u2>((code[pc + 1]) << 8 | (code[pc + 2]));
+static void goto_(Frame &frame) {
+    u2 offset_u = frame.read_u2();
     auto offset = future::bit_cast<s2>(offset_u);
-    return static_cast<size_t>(static_cast<long>(pc) + offset);
+    frame.pc = static_cast<size_t>(static_cast<long>(frame.pc) + offset);
 }
 
-static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_t &pc, Reference exception) {
+static void handle_throw(Thread &thread, Frame &frame, bool &shouldExit, Reference exception) {
     auto obj = exception.object();
     // TODO this is actually wrong, the stack should be generated when the Throwable is constructed
     std::vector<Frame> stack_trace;
@@ -1271,8 +1323,8 @@ static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_
 
         auto handler_iter = std::find_if(exception_table.begin(),
                                          exception_table.end(),
-                                         [pc, &frame, obj](const ExceptionTableEntry &e) {
-                                             if (e.start_pc <= pc && pc < e.end_pc) {
+                                         [&frame, obj](const ExceptionTableEntry &e) {
+                                             if (e.start_pc <= frame.pc && frame.pc < e.end_pc) {
                                                  if (e.catch_type == 0) {
                                                      // "any"
                                                      return true;
@@ -1340,9 +1392,9 @@ static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_
                 frame.clear();
                 frame.push<s4>(1);
                 shouldExit = true;
-                return pc;
+                return;
             } else {
-                pc = pop_frame(thread, frame);
+                pop_frame(thread, frame);
                 frame.clear();
                 continue;
             }
@@ -1350,17 +1402,16 @@ static size_t handle_throw(Thread &thread, Frame &frame, bool &shouldExit, size_
             // Push exception back on stack, continue normal execution.
             frame.clear();
             frame.push<Reference>(exception);
-            return handler_iter->handler_pc;
+            frame.pc = handler_iter->handler_pc;
+            return;
         }
     }
 }
 
-static inline size_t pop_frame(Thread &thread, Frame &frame) {
+static inline void pop_frame(Thread &thread, Frame &frame) {
     thread.stack.memory_used = frame.previous_stack_memory_usage;
     frame = thread.stack.parent_frames.back();
     thread.stack.parent_frames.pop_back();
-
-    return frame.pc;
 }
 
 Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top)
@@ -1387,7 +1438,7 @@ Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand
 }
 
 template<typename Element>
-size_t array_store(Frame &frame, size_t pc) {
+void array_store(Frame &frame) {
     auto value = frame.pop<Element>();
     auto index = frame.pop<s4>();
 
@@ -1401,11 +1452,10 @@ size_t array_store(Frame &frame, size_t pc) {
     }
 
     arrayref.data<Element>()[index] = value;
-    return pc + 1;
 }
 
 template<typename Element>
-size_t array_load(Frame &frame, size_t pc) {
+void array_load(Frame &frame) {
     auto index = frame.pop<s4>();
 
     auto arrayref = frame.pop<Reference>();
@@ -1418,7 +1468,6 @@ size_t array_load(Frame &frame, size_t pc) {
     }
 
     frame.push<Element>(arrayref.data<Element>()[index]);
-    return pc + 1;
 }
 
 void fill_multi_array(Heap &heap, Reference &reference, const std::span<s4> &counts) {
