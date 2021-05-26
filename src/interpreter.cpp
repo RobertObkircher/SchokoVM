@@ -865,7 +865,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
         case OpCodes::putstatic:
         case OpCodes::getfield:
         case OpCodes::putfield: {
-            u2 index = frame.consume_u2();
+            u2 index = frame.read_u2();
             auto field = frame.clazz->constant_pool.get<CONSTANT_Fieldref_info>(index);
 
             if (!field.resolved) {
@@ -884,6 +884,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                             " " + field.name_and_type->descriptor->value);
                 assert(field.resolved);
             }
+            frame.pc += 2;
 
             switch (static_cast<OpCodes>(opcode)) {
                 case OpCodes::getstatic: {
