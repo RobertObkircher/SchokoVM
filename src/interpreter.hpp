@@ -48,6 +48,10 @@ struct Frame {
         return value;
     }
 
+    inline Value peek_at(size_t offset) {
+        return operands[operands_top - 1 - offset];
+    }
+
     inline Value pop() {
         return operands[--operands_top];
     }

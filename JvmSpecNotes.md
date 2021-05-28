@@ -1,5 +1,6 @@
 http://www.javaseiten.de/jvmisi.html#iload_1
 https://jvilk.com/blog/java-8-wtf-ambiguous-method-lookup/
+https://stackoverflow.com/questions/13978355/on-signature-polymorphic-methods-in-java-7/14000576#14000576
 
 # Chapter 2: The Structure of the Java Virtual Machine 
 

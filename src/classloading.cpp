@@ -141,7 +141,7 @@ bool resolve_field_recursive(ClassFile *clazz, CONSTANT_Fieldref_info *field_inf
 
         // 2.
         assert(!field_info->resolved);
-        for (auto const &interface : field_info->class_->clazz->interfaces) {
+        for (auto const &interface : clazz->interfaces) {
             if (resolve_field_recursive(interface->clazz, field_info))
                 return true;
         }
