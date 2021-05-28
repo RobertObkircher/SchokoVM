@@ -955,7 +955,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
         }
         case OpCodes::invokestatic: {
             u2 method_index = frame.read_u2();
-            auto method_ref = std::get<CONSTANT_Methodref_info>(frame.clazz->constant_pool.table[method_index].variant);
+            auto &method_ref = frame.clazz->constant_pool.get<ClassInterface_Methodref>(method_index);
 
             // TODO this is hardcoded for now
             if (method_ref.class_->name->value == "java/lang/System" &&

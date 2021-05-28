@@ -1,4 +1,5 @@
 http://www.javaseiten.de/jvmisi.html#iload_1
+https://jvilk.com/blog/java-8-wtf-ambiguous-method-lookup/
 
 # Chapter 2: The Structure of the Java Virtual Machine 
 

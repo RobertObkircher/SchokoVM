@@ -106,7 +106,8 @@ struct CONSTANT_Fieldref_info {
     size_t index;
 };
 
-struct CONSTANT_Methodref_info {
+
+struct ClassInterface_Methodref {
     u2 class_index;
     u2 name_and_type_index;
     CONSTANT_Class_info *class_;
@@ -114,11 +115,12 @@ struct CONSTANT_Methodref_info {
     method_info *method;
 };
 
+struct CONSTANT_Methodref_info {
+    ClassInterface_Methodref method;
+};
+
 struct CONSTANT_InterfaceMethodref_info {
-    u2 class_index;
-    u2 name_and_type_index;
-    CONSTANT_Class_info *class_;
-    CONSTANT_NameAndType_info *name_and_type;
+    ClassInterface_Methodref method;
 };
 
 struct CONSTANT_String_info {
@@ -737,6 +739,18 @@ struct ConstantPool {
     template<class T>
     inline T &get(u2 index) {
         return std::get<T>(table[index].variant);
+    }
+
+    template <>
+    inline ClassInterface_Methodref &get(u2 index) {
+        auto &variant = table[index].variant;
+        if (auto m = std::get_if<CONSTANT_Methodref_info>(&variant)) {
+            return m->method;
+        } else if (auto m = std::get_if<CONSTANT_InterfaceMethodref_info>(&variant)) {
+            return m->method;
+        } else {
+            throw std::runtime_error("not a method");
+        }
     }
 };
 
