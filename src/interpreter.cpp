@@ -45,10 +45,11 @@ void array_load(Frame &frame);
 
 void fill_multi_array(Heap &heap, Reference &reference, const std::span<s4> &counts);
 
-static void resolve_method_static(ClassInterface_Methodref &method);
+[[nodiscard]] static bool resolve_method_static(ClassInterface_Methodref &method);
 
-static void resolve_method_virtual(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
-                                   ClassFile **out_class, method_info **out_method);
+[[nodiscard]] static bool
+resolve_method_virtual(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
+                       ClassFile *&out_class, method_info *&out_method);
 
 int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, ClassFile *main) {
     auto main_method_iter = std::find_if(main->methods.begin(), main->methods.end(),
@@ -960,7 +961,9 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                     return;
                 }
 
-                resolve_method_static(declared_method_ref);
+                if (resolve_method_static(declared_method_ref)) {
+                    return;
+                }
                 declared_method = declared_method_ref.method;
             }
 
@@ -968,8 +971,10 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
 
             ClassFile *clazz;
             method_info *method;
-            resolve_method_virtual(object.object()->clazz, declared_method_ref.class_->clazz, declared_method, &clazz,
-                                   &method);
+            if (resolve_method_virtual(object.object()->clazz, declared_method_ref.class_->clazz, declared_method,
+                                        clazz, method)) {
+                return;
+            }
 
             size_t operand_stack_top = frame.first_operand_index + frame.operands_top;
             frame.operands_top += -method->stack_slots_for_parameters + method->return_size;
@@ -1004,7 +1009,9 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
 
                 clazz = method_ref.class_->clazz;
 
-                resolve_method_static(method_ref);
+                if (resolve_method_static(method_ref)) {
+                    return;
+                }
                 method = method_ref.method;
             }
 
@@ -1102,7 +1109,9 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
 
                 clazz = method_ref.class_->clazz;
 
-                resolve_method_static(method_ref);
+                if (resolve_method_static(method_ref)) {
+                    return;
+                }
                 method = method_ref.method;
             }
 
@@ -1535,7 +1544,7 @@ resolve_method_interfaces(std::vector<std::pair<ClassFile *, method_info *>> &in
     }
 }
 
-static void resolve_method_static(ClassInterface_Methodref &method) {
+[[nodiscard]] static bool resolve_method_static(ClassInterface_Methodref &method) {
     const auto &name = method.name_and_type->name->value;
     const auto &descriptor = method.name_and_type->descriptor->value;
     // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.4.3.3
@@ -1546,7 +1555,7 @@ static void resolve_method_static(ClassInterface_Methodref &method) {
             if (m.name_index->value == name &&
                 m.descriptor_index->value == descriptor) {
                 method.method = &m;
-                return;
+                return false;
             }
         }
         if (c->super_class == nullptr) { break; }
@@ -1559,21 +1568,23 @@ static void resolve_method_static(ClassInterface_Methodref &method) {
     // TODO prefer "maximally-specific superinterface methods"
     if (!interface_candidates.empty()) {
         method.method = interface_candidates[0].second;
-        return;
+        return false;
     }
 
+    // TODO throw the appropriate JVM exception instead
     throw std::runtime_error(
             "Couldn't find method (static): " + name + descriptor + " in class " + method.class_->name->value);
 }
 
-static void resolve_method_virtual(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
-                                   ClassFile **out_class, method_info **out_method) {
+[[nodiscard]] static bool
+resolve_method_virtual(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
+                       ClassFile *&out_class, method_info *&out_method) {
     // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.4.6
     // 1.
     if (declared_method->is_private()) {
-        *out_method = declared_method;
-        *out_class = declared_class;
-        return;
+        out_method = declared_method;
+        out_class = declared_class;
+        return false;
     }
 
     const auto &name = declared_method->name_index->value;
@@ -1588,9 +1599,9 @@ static void resolve_method_virtual(ClassFile *dynamic_class, ClassFile *declared
                 // TODO there is one missing case here (the very last bullet point of the spec paragraph)
                 //  because we currently don't store the package of classes
                     ) {
-                *out_method = &m;
-                *out_class = clazz;
-                return;
+                out_method = &m;
+                out_class = clazz;
+                return false;
             }
         }
 
@@ -1603,10 +1614,11 @@ static void resolve_method_virtual(ClassFile *dynamic_class, ClassFile *declared
 
     // TODO prefer "maximally-specific superinterface methods"
     if (!interface_candidates.empty()) {
-        *out_class = interface_candidates[0].first;
-        *out_method = interface_candidates[0].second;
-        return;
+        out_class = interface_candidates[0].first;
+        out_method = interface_candidates[0].second;
+        return false;
     }
 
+    // TODO throw the appropriate JVM exception instead
     throw std::runtime_error("Couldn't find method (virtual): " + name + descriptor);
 }
