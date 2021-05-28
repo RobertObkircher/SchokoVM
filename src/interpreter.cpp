@@ -27,7 +27,7 @@ enum class ArrayPrimitiveTypes {
 };
 
 static void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
-                                  std::unordered_map<std::string_view, ClassFile *> &class_files, bool &shouldExit);
+                                std::unordered_map<std::string_view, ClassFile *> &class_files, bool &shouldExit);
 
 static void execute_comparison(Frame &frame, bool condition);
 
@@ -69,9 +69,7 @@ int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, Cl
     Frame frame{thread.stack, main, main_method, thread.stack.memory_used};
 
     // push the class initializer if necessary
-    ClassResolution resolved = resolve_class(class_files, main->this_class, thread, frame);
-    if (resolved == ClassResolution::NOT_FOUND)
-        abort();
+    resolve_class(class_files, main->this_class, thread, frame);
 
     bool shouldExit = false;
     while (!shouldExit) {
@@ -87,8 +85,8 @@ int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, Cl
 }
 
 static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
-                                         std::unordered_map<std::string_view, ClassFile *> &class_files,
-                                         bool &shouldExit) {
+                                       std::unordered_map<std::string_view, ClassFile *> &class_files,
+                                       bool &shouldExit) {
     std::vector<u1> &code = *frame.code;
     auto opcode = code[frame.pc];
     // TODO implement remaining opcodes. The ones that are currently commented/missing out have no test coverage whatsoever
@@ -869,13 +867,8 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             auto field = frame.clazz->constant_pool.get<CONSTANT_Fieldref_info>(index);
 
             if (!field.resolved) {
-                switch (resolve_class(class_files, field.class_, thread, frame)) {
-                    case ClassResolution::OK:
-                        break;
-                    case ClassResolution::PUSHED_INITIALIZER:
-                        return;
-                    case ClassResolution::NOT_FOUND:
-                        throw std::runtime_error("class not found: '" + field.class_->name->value + "'");
+                if (resolve_class(class_files, field.class_, thread, frame)) {
+                    return;
                 }
 
                 if (!resolve_field_recursive(field.class_->clazz, &field))
@@ -1037,14 +1030,8 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             ClassFile *clazz = method_ref.class_->clazz;
 
             if (method == nullptr) {
-                switch (resolve_class(class_files, method_ref.class_, thread, frame)) {
-                    case ClassResolution::OK:
-                        break;
-                    case ClassResolution::PUSHED_INITIALIZER:
-                        return;
-                    case ClassResolution::NOT_FOUND:
-                        // TODO this prints "A not found" if A was found but a superclass/interface wasn't
-                        throw std::runtime_error("class not found: '" + method_ref.class_->name->value + "'");
+                if (resolve_class(class_files, method_ref.class_, thread, frame)) {
+                    return;
                 }
 
                 clazz = method_ref.class_->clazz;
@@ -1089,13 +1076,8 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             u2 index = frame.read_u2();
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
 
-            switch (resolve_class(class_files, &class_info, thread, frame)) {
-                case ClassResolution::OK:
-                    break;
-                case ClassResolution::PUSHED_INITIALIZER:
-                    return;
-                case ClassResolution::NOT_FOUND:
-                    throw std::runtime_error("class not found: '" + class_info.name->value + "'");
+            if (resolve_class(class_files, &class_info, thread, frame)) {
+                return;
             }
             frame.pc += 2;
             auto clazz = class_info.clazz;
