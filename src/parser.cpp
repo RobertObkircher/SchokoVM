@@ -86,7 +86,7 @@ ClassFile Parser::parse() {
             throw ParseError("Invalid method descriptor");
 
         method_info.parameter_count = 0;
-        method_info.stack_slots_for_parameters = 0;
+        method_info.stack_slots_for_parameters = method_info.is_static() ? 0 : 1;
 
         bool skip_class_name = false;
         for (char c : descriptor) {

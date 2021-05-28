@@ -947,13 +947,41 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             break;
         }
         case OpCodes::invokespecial: {
-            u2 index = frame.read_u2();
-            (void) index;
-            frame.pop<Reference>(); // this arguemnt for constructor
-            // TODO implement invokespecial
-            // frame.invoke_length = 3;
-            frame.pc += 2;
-            break;
+            u2 method_index = frame.read_u2();
+            auto &method_ref = frame.clazz->constant_pool.get<ClassInterface_Methodref>(method_index);
+
+            // TODO until we have stdlib
+            if ((method_ref.class_->name->value == "java/lang/Object" ||
+                 method_ref.class_->name->value == "java/lang/Exception") &&
+                method_ref.name_and_type->name->value == "<init>") {
+                frame.pc += 2;
+                break;
+            }
+
+            method_info *method = method_ref.method;
+            ClassFile *clazz = method_ref.class_->clazz;
+
+            if (method == nullptr) {
+                if (resolve_class(class_files, method_ref.class_, thread, frame)) {
+                    return;
+                }
+
+                clazz = method_ref.class_->clazz;
+
+                method = resolve_method_static(clazz, method_ref.name_and_type);
+                method_ref.method = method;
+            }
+
+            size_t operand_stack_top = frame.first_operand_index + frame.operands_top;
+            frame.operands_top += -method->stack_slots_for_parameters + method->return_size;
+
+            frame.invoke_length = 3;
+            thread.stack.parent_frames.push_back(frame);
+
+            frame = {thread.stack, clazz, method, operand_stack_top};
+            if (thread.stack.memory_used > thread.stack.memory.size())
+                throw std::runtime_error("stack overflow");
+            return;
         }
         case OpCodes::invokestatic: {
             u2 method_index = frame.read_u2();
@@ -1042,7 +1070,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 method_ref.method = method;
             }
 
-            if (method->access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_NATIVE)) {
+            if (method->is_native()) {
                 abort();
                 frame.pc += 3;
                 return;
@@ -1467,9 +1495,16 @@ static method_info *resolve_method_static(ClassFile *clazz, CONSTANT_NameAndType
                                                 ;
                                     });
 
-    if (method_iter == std::end(clazz->methods) && clazz->super_class != nullptr) {
-        return resolve_method_static(clazz->super_class->clazz, name);
+    if (method_iter == std::end(clazz->methods)) {
+        if (clazz->super_class != nullptr) {
+            return resolve_method_static(clazz->super_class->clazz, name);
+        } else {
+            throw std::runtime_error(
+                    "Couldn't find method: '" + name->name->value + "' " +
+                    name->descriptor->value + " in class " +
+                    clazz->this_class->name->value);
+        }
+    } else {
+        return &*method_iter;
     }
-
-    return &*method_iter;
 }

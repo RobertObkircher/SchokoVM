@@ -277,6 +277,22 @@ struct method_info {
     [[nodiscard]] inline bool is_static() const {
         return (access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_STATIC)) != 0;
     }
+
+    [[nodiscard]] inline bool is_private() const {
+        return (access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_PRIVATE)) != 0;
+    }
+
+    [[nodiscard]] inline bool is_protected() const {
+        return (access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_PROTECTED)) != 0;
+    }
+
+    [[nodiscard]] inline bool is_public() const {
+        return (access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_PUBLIC)) != 0;
+    }
+
+    [[nodiscard]] inline bool is_native() const {
+        return (access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_NATIVE)) != 0;
+    }
 };
 
 // attribute_info...
