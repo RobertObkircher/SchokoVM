@@ -52,9 +52,8 @@ static bool initialize_class(ClassFile *clazz, Thread &thread, Frame &frame) {
 }
 
 
-ClassResolution
-resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CONSTANT_Class_info *class_info,
-              Thread &thread, Frame &frame) {
+bool resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CONSTANT_Class_info *class_info,
+                   Thread &thread, Frame &frame) {
     if (class_info->clazz == nullptr) {
         auto &name = class_info->name->value;
 
@@ -64,13 +63,15 @@ resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CO
         // TODO we also need to deal with array classes here. They also load the class for the elements.
 
         auto result = class_files.find(name);
-        if (result == class_files.end())
-            return ClassResolution::NOT_FOUND;
+        if (result == class_files.end()) {
+            // TODO this prints "A not found" if A was found but a superclass/interface wasn't
+            throw std::runtime_error("class not found: '" + name + "'");
+        }
         ClassFile *clazz = result->second;
 
         if (clazz->resolved) {
             class_info->clazz = clazz;
-            return ClassResolution::OK;
+            return false;
         }
 
         for (const auto &field : clazz->fields) {
@@ -82,9 +83,9 @@ resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CO
         // TODO use stdlib
         if (clazz->super_class != nullptr && clazz->super_class->name->value != "java/lang/Object" &&
             clazz->super_class->name->value != "java/lang/Exception") {
-            auto resolution = resolve_class(class_files, clazz->super_class, thread, frame);
-            if (resolution != ClassResolution::OK)
-                return resolution;
+            auto runInitializer = resolve_class(class_files, clazz->super_class, thread, frame);
+            if (runInitializer)
+                return runInitializer;
             parent_instance_field_count = clazz->super_class->clazz->total_instance_field_count;
         }
 
@@ -104,18 +105,18 @@ resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CO
         clazz->static_field_values.resize(clazz->fields.size() - clazz->declared_instance_field_count);
 
         for (auto &interface : clazz->interfaces) {
-            auto resolution = resolve_class(class_files, interface, thread, frame);
-            if (resolution != ClassResolution::OK)
-                return resolution;
+            auto runInitializer = resolve_class(class_files, interface, thread, frame);
+            if (runInitializer)
+                return true;
         }
 
         clazz->resolved = true;
         class_info->clazz = clazz;
 
         if (initialize_class(clazz, thread, frame))
-            return ClassResolution::PUSHED_INITIALIZER;
+            return true;
     }
-    return ClassResolution::OK;
+    return false;
 }
 
 bool resolve_field_recursive(ClassFile *clazz, CONSTANT_Fieldref_info *field_info) {
