@@ -45,6 +45,8 @@ void array_load(Frame &frame);
 
 void fill_multi_array(Heap &heap, Reference &reference, const std::span<s4> &counts);
 
+static method_info *resolve_method_static(ClassFile *clazz, CONSTANT_NameAndType_info *name);
+
 int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, ClassFile *main) {
     auto main_method_iter = std::find_if(main->methods.begin(), main->methods.end(),
                                          [](const method_info &m) {
@@ -1036,23 +1038,8 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
 
                 clazz = method_ref.class_->clazz;
 
-                auto method_iter = std::find_if(clazz->methods.begin(), clazz->methods.end(),
-                                                [method_ref](const method_info &m) {
-                                                    return m.name_index->value ==
-                                                           method_ref.name_and_type->name->value &&
-                                                           m.descriptor_index->value ==
-                                                           method_ref.name_and_type->descriptor->value
-                                                        // TODO m.access_flags
-                                                            ;
-                                                });
-                if (method_iter == std::end(clazz->methods)) {
-                    throw std::runtime_error(
-                            "Couldn't find method_ref: '" + method_ref.name_and_type->name->value + "' " +
-                            method_ref.name_and_type->descriptor->value + " in class " +
-                            method_ref.class_->name->value);
-                }
-
-                method_ref.method = method = &*method_iter;
+                method = resolve_method_static(clazz, method_ref.name_and_type);
+                method_ref.method = method;
             }
 
             if (method->access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_NATIVE)) {
@@ -1466,4 +1453,23 @@ void fill_multi_array(Heap &heap, Reference &reference, const std::span<s4> &cou
         }
         reference.data<Reference>()[i] = child;
     }
+}
+
+static method_info *resolve_method_static(ClassFile *clazz, CONSTANT_NameAndType_info *name) {
+    // §5.4.3.3, §5.4.3.4
+    auto method_iter = std::find_if(clazz->methods.begin(), clazz->methods.end(),
+                                    [&name](const method_info &m) {
+                                        return m.name_index->value ==
+                                               name->name->value &&
+                                               m.descriptor_index->value ==
+                                               name->descriptor->value
+                                            // TODO m.access_flags
+                                                ;
+                                    });
+
+    if (method_iter == std::end(clazz->methods) && clazz->super_class != nullptr) {
+        return resolve_method_static(clazz->super_class->clazz, name);
+    }
+
+    return &*method_iter;
 }
