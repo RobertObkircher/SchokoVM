@@ -976,15 +976,8 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 return;
             }
 
-            size_t operand_stack_top = frame.first_operand_index + frame.operands_top;
-            frame.operands_top += -method->stack_slots_for_parameters + method->return_size;
-
             frame.invoke_length = 3;
-            thread.stack.parent_frames.push_back(frame);
-
-            frame = {thread.stack, clazz, method, operand_stack_top};
-            if (thread.stack.memory_used > thread.stack.memory.size())
-                throw std::runtime_error("stack overflow");
+            thread.stack.push_frame(frame, clazz, method);
             return;
         }
         case OpCodes::invokespecial: {
@@ -1015,15 +1008,8 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 method = method_ref.method;
             }
 
-            size_t operand_stack_top = frame.first_operand_index + frame.operands_top;
-            frame.operands_top += -method->stack_slots_for_parameters + method->return_size;
-
             frame.invoke_length = 3;
-            thread.stack.parent_frames.push_back(frame);
-
-            frame = {thread.stack, clazz, method, operand_stack_top};
-            if (thread.stack.memory_used > thread.stack.memory.size())
-                throw std::runtime_error("stack overflow");
+            thread.stack.push_frame(frame, clazz, method);
             return;
         }
         case OpCodes::invokestatic: {
@@ -1120,15 +1106,8 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 frame.pc += 3;
                 return;
             } else {
-                size_t operand_stack_top = frame.first_operand_index + frame.operands_top;
-                frame.operands_top += -method->stack_slots_for_parameters + method->return_size;
-
                 frame.invoke_length = 3;
-                thread.stack.parent_frames.push_back(frame);
-
-                frame = {thread.stack, clazz, method, operand_stack_top};
-                if (thread.stack.memory_used > thread.stack.memory.size())
-                    throw std::runtime_error("stack overflow");
+                thread.stack.push_frame(frame, clazz, method);
                 return;
             }
         }
