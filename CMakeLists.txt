@@ -77,8 +77,7 @@ endfunction(add_sanitizers)
 # Executables and libraries
 #
 
-# I'm not entirely sure how to use add_subdirectory(src) and we only have one executable anyway
-add_executable(SchokoVM
+set(COMMON_SOURCES
         src/main.cpp
         src/types.hpp
         src/classfile.hpp
@@ -92,13 +91,32 @@ add_executable(SchokoVM
         src/math.hpp
         src/classloading.cpp src/classloading.hpp
         )
+
+# I'm not entirely sure how to use add_subdirectory(src) and we only have one executable anyway
+add_executable(SchokoVM ${COMMON_SOURCES})
 add_sanitizers(SchokoVM)
+
+add_library(libjvm
+        ${COMMON_SOURCES}
+        src/libjvm/cds.h
+        src/libjvm/jmm.h
+        src/libjvm/jvm.h
+        src/libjvm/jvm_md.h
+        src/libjvm/jvm_constants.h
+        src/libjvm/jvm_io.h
+        src/libjvm/classfile_constants.h.template
+        src/libjvm/jni.h
+        src/libjvm/jni_md.h
+        src/libjvm/jvmticmlr.h
+        )
 
 if (libzip_FOUND)
     target_link_libraries(SchokoVM libzip::zip)
+    target_link_libraries(libjvm libzip::zip)
 else ()
     # hope that it's on the standard search paths
     target_link_libraries(SchokoVM zip)
+    target_link_libraries(libjvm libzip::zip)
 endif ()
 
 #
