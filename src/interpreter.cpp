@@ -952,7 +952,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
         }
         case OpCodes::invokevirtual: {
             u2 method_index = frame.read_u2();
-            auto &declared_method_ref = frame.clazz->constant_pool.get<ClassInterface_Methodref>(method_index);
+            auto &declared_method_ref = frame.clazz->constant_pool.get<CONSTANT_Methodref_info>(method_index).method;
 
             method_info *declared_method = declared_method_ref.method;
 
@@ -982,30 +982,36 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
         }
         case OpCodes::invokespecial: {
             u2 method_index = frame.read_u2();
-            auto &method_ref = frame.clazz->constant_pool.get<ClassInterface_Methodref>(method_index);
+            auto &ref = frame.clazz->constant_pool.table[method_index].variant;
+            ClassInterface_Methodref *method_ref;
+            if (auto m = std::get_if<CONSTANT_Methodref_info>(&ref)) {
+                method_ref = &m->method;
+            } else  {
+                method_ref = &std::get_if<CONSTANT_InterfaceMethodref_info>(&ref)->method;
+            }
 
             // TODO until we have stdlib
-            if ((method_ref.class_->name->value == "java/lang/Object" ||
-                 method_ref.class_->name->value == "java/lang/Exception") &&
-                method_ref.name_and_type->name->value == "<init>") {
+            if ((method_ref->class_->name->value == "java/lang/Object" ||
+                 method_ref->class_->name->value == "java/lang/Exception") &&
+                method_ref->name_and_type->name->value == "<init>") {
                 frame.pc += 2;
                 break;
             }
 
-            method_info *method = method_ref.method;
-            ClassFile *clazz = method_ref.class_->clazz;
+            method_info *method = method_ref->method;
+            ClassFile *clazz = method_ref->class_->clazz;
 
             if (method == nullptr) {
-                if (resolve_class(class_files, method_ref.class_, thread, frame)) {
+                if (resolve_class(class_files, method_ref->class_, thread, frame)) {
                     return;
                 }
 
-                clazz = method_ref.class_->clazz;
+                clazz = method_ref->class_->clazz;
 
-                if (resolve_method_static(method_ref)) {
+                if (resolve_method_static(*method_ref)) {
                     return;
                 }
-                method = method_ref.method;
+                method = method_ref->method;
             }
 
             frame.invoke_length = 3;
@@ -1014,26 +1020,32 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
         }
         case OpCodes::invokestatic: {
             u2 method_index = frame.read_u2();
-            auto &method_ref = frame.clazz->constant_pool.get<ClassInterface_Methodref>(method_index);
+            auto &ref = frame.clazz->constant_pool.table[method_index].variant;
+            ClassInterface_Methodref *method_ref;
+            if (auto m = std::get_if<CONSTANT_Methodref_info>(&ref)) {
+                method_ref = &m->method;
+            } else  {
+                method_ref = &std::get_if<CONSTANT_InterfaceMethodref_info>(&ref)->method;
+            }
 
             // TODO this is hardcoded for now
-            if (method_ref.class_->name->value == "java/lang/System" &&
-                method_ref.name_and_type->name->value == "exit" &&
-                method_ref.name_and_type->descriptor->value == "(I)V") {
+            if (method_ref->class_->name->value == "java/lang/System" &&
+                method_ref->name_and_type->name->value == "exit" &&
+                method_ref->name_and_type->descriptor->value == "(I)V") {
                 shouldExit = true;
                 return;
-            } else if (method_ref.name_and_type->name->value == "println" &&
-                       method_ref.name_and_type->descriptor->value == "(I)V") {
+            } else if (method_ref->name_and_type->name->value == "println" &&
+                       method_ref->name_and_type->descriptor->value == "(I)V") {
                 std::cout << frame.pop<s4>() << "\n";
                 frame.pc += 2;
                 break;
-            } else if (method_ref.name_and_type->name->value == "println" &&
-                       method_ref.name_and_type->descriptor->value == "(J)V") {
+            } else if (method_ref->name_and_type->name->value == "println" &&
+                       method_ref->name_and_type->descriptor->value == "(J)V") {
                 std::cout << frame.pop<s8>() << "\n";
                 frame.pc += 2;
                 break;
-            } else if (method_ref.name_and_type->name->value == "println" &&
-                       method_ref.name_and_type->descriptor->value == "(F)V") {
+            } else if (method_ref->name_and_type->name->value == "println" &&
+                       method_ref->name_and_type->descriptor->value == "(F)V") {
                 // floatToIntBits
                 float f = frame.pop<float>();
                 s4 i = future::bit_cast<s4>(f);
@@ -1044,8 +1056,8 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 std::cout << i << "\n";
                 frame.pc += 2;
                 break;
-            } else if (method_ref.name_and_type->name->value == "println" &&
-                       method_ref.name_and_type->descriptor->value == "(D)V") {
+            } else if (method_ref->name_and_type->name->value == "println" &&
+                       method_ref->name_and_type->descriptor->value == "(D)V") {
                 // doubleToLongBits
                 double d = frame.pop<double>();
                 s8 i = future::bit_cast<s8>(d);
@@ -1056,23 +1068,23 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 std::cout << i << "\n";
                 frame.pc += 2;
                 break;
-            } else if (method_ref.name_and_type->name->value == "println" &&
-                       method_ref.name_and_type->descriptor->value == "(C)V") {
+            } else if (method_ref->name_and_type->name->value == "println" &&
+                       method_ref->name_and_type->descriptor->value == "(C)V") {
                 std::cout << frame.pop<s4>() << "\n";
                 frame.pc += 2;
                 break;
-            } else if (method_ref.name_and_type->name->value == "println" &&
-                       method_ref.name_and_type->descriptor->value == "(S)V") {
+            } else if (method_ref->name_and_type->name->value == "println" &&
+                       method_ref->name_and_type->descriptor->value == "(S)V") {
                 std::cout << frame.pop<s4>() << "\n";
                 frame.pc += 2;
                 break;
-            } else if (method_ref.name_and_type->name->value == "println" &&
-                       method_ref.name_and_type->descriptor->value == "(B)V") {
+            } else if (method_ref->name_and_type->name->value == "println" &&
+                       method_ref->name_and_type->descriptor->value == "(B)V") {
                 std::cout << frame.pop<s4>() << "\n";
                 frame.pc += 2;
                 break;
-            } else if (method_ref.name_and_type->name->value == "println" &&
-                       method_ref.name_and_type->descriptor->value == "(Z)V") {
+            } else if (method_ref->name_and_type->name->value == "println" &&
+                       method_ref->name_and_type->descriptor->value == "(Z)V") {
                 auto value = frame.pop<s4>();
                 if (value == 1) {
                     std::cout << "true\n";
@@ -1085,20 +1097,20 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 break;
             }
 
-            method_info *method = method_ref.method;
-            ClassFile *clazz = method_ref.class_->clazz;
+            method_info *method = method_ref->method;
+            ClassFile *clazz = method_ref->class_->clazz;
 
             if (method == nullptr) {
-                if (resolve_class(class_files, method_ref.class_, thread, frame)) {
+                if (resolve_class(class_files, method_ref->class_, thread, frame)) {
                     return;
                 }
 
-                clazz = method_ref.class_->clazz;
+                clazz = method_ref->class_->clazz;
 
-                if (resolve_method_static(method_ref)) {
+                if (resolve_method_static(*method_ref)) {
                     return;
                 }
-                method = method_ref.method;
+                method = method_ref->method;
             }
 
             if (method->is_native()) {
@@ -1620,7 +1632,7 @@ resolve_method_virtual(ClassFile *dynamic_class, ClassFile *declared_class, meth
     }
 
     // 2. (3)
-    ClassFile *out_clazz_max_specific = nullptr;
+    ClassFile *out_clazz_max_specific;
     method_info *out_method_max_specific = nullptr;
     ClassFile *out_clazz_fallback = nullptr;
     method_info *out_method_fallback = nullptr;

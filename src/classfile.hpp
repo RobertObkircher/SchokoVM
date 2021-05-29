@@ -760,18 +760,6 @@ struct ConstantPool {
     inline T &get(u2 index) {
         return std::get<T>(table[index].variant);
     }
-
-    template<>
-    inline ClassInterface_Methodref &get(u2 index) {
-        auto &variant = table[index].variant;
-        if (auto m = std::get_if<CONSTANT_Methodref_info>(&variant)) {
-            return m->method;
-        } else if (auto m = std::get_if<CONSTANT_InterfaceMethodref_info>(&variant)) {
-            return m->method;
-        } else {
-            throw std::runtime_error("not a method");
-        }
-    }
 };
 
 enum class ClassFileAccessFlags : u2 {
