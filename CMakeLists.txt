@@ -121,6 +121,7 @@ set(JAVA_TEST_SOURCES
         # tests/KarelTheRobot.java
         tests/Methods.java
         tests/MethodsStatic.java
+        tests/MethodsVirtualInterface.java
         tests/MultiArrays.java
         tests/ObjectArray.java
         tests/ReferenceComparisons.java

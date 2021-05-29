@@ -282,6 +282,10 @@ struct method_info {
         return (access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_PRIVATE)) != 0;
     }
 
+    [[nodiscard]] inline bool is_abstract() const {
+        return (access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_ABSTRACT)) != 0;
+    }
+
     [[nodiscard]] inline bool is_protected() const {
         return (access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_PROTECTED)) != 0;
     }
@@ -757,7 +761,7 @@ struct ConstantPool {
         return std::get<T>(table[index].variant);
     }
 
-    template <>
+    template<>
     inline ClassInterface_Methodref &get(u2 index) {
         auto &variant = table[index].variant;
         if (auto m = std::get_if<CONSTANT_Methodref_info>(&variant)) {
@@ -768,6 +772,18 @@ struct ConstantPool {
             throw std::runtime_error("not a method");
         }
     }
+};
+
+enum class ClassFileAccessFlags : u2 {
+    ACC_PUBLIC = 0x0001,
+    ACC_FINAL = 0x0010,
+    ACC_SUPER = 0x0020,
+    ACC_INTERFACE = 0x0200,
+    ACC_ABSTRACT = 0x0400,
+    ACC_SYNTHETIC = 0x1000,
+    ACC_ANNOTATION = 0x2000,
+    ACC_ENUM = 0x4000,
+    ACC_MODULE = 0x8000,
 };
 
 struct ClassFile {
@@ -791,6 +807,29 @@ struct ClassFile {
     std::vector<Value> static_field_values;
 
     bool resolved;
+
+    // Computes whether `this` is a subclass of `other`
+    // Note that `x.is_subclass_of(x) == false`
+    bool is_subclass_of(ClassFile *other) {
+        for (auto &i: interfaces) {
+            if (i->clazz == other) {
+                return true;
+            }
+        }
+        if(this->super_class != nullptr && this->super_class->clazz->is_subclass_of(other)) {
+            return true;
+        }
+        for (auto &i: interfaces) {
+            if (i->clazz->is_subclass_of(other)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    [[nodiscard]] inline bool is_interface() const {
+        return (access_flags & static_cast<u2>(ClassFileAccessFlags::ACC_INTERFACE)) != 0;
+    }
 };
 
 

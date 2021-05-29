@@ -972,7 +972,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             ClassFile *clazz;
             method_info *method;
             if (resolve_method_virtual(object.object()->clazz, declared_method_ref.class_->clazz, declared_method,
-                                        clazz, method)) {
+                                       clazz, method)) {
                 return;
             }
 
@@ -1508,18 +1508,43 @@ void fill_multi_array(Heap &heap, Reference &reference, const std::span<s4> &cou
 }
 
 static void
-resolve_method_interfaces(std::vector<std::pair<ClassFile *, method_info *>> &interface_candidates, ClassFile *clazz,
-                          const std::string &name, const std::string &descriptor) {
-    for (auto &m : clazz->methods) {
-        if (m.name_index->value == name &&
-            m.descriptor_index->value == descriptor &&
-            !m.is_private() && !m.is_static()) {
-            interface_candidates.emplace_back(clazz, &m);
+resolve_method_interfaces(ClassFile *clazz, const std::string &name, const std::string &descriptor,
+                          ClassFile *&out_clazz_max_specific, method_info *&out_method_max_specific,
+                          ClassFile *&out_clazz_fallback, method_info *&out_method_fallback) {
+    if (clazz->is_interface()) {
+        for (auto &m : clazz->methods) {
+            if (m.name_index->value == name &&
+                m.descriptor_index->value == descriptor &&
+                !m.is_private() && !m.is_static()) {
+                // arbitrarily use the last matching method as a fallback
+                out_method_fallback = &m;
+                out_clazz_fallback = clazz;
+
+                if (!m.is_abstract()) {
+                    if (out_method_max_specific == nullptr) {
+                        out_method_max_specific = &m;
+                        out_clazz_max_specific = clazz;
+                    } else {
+                        if (clazz->is_subclass_of(out_clazz_max_specific)) {
+                            // more specific class found
+                            out_method_max_specific = &m;
+                            out_clazz_max_specific = clazz;
+                        }
+                    }
+                }
+            }
         }
     }
 
     for (auto &interface : clazz->interfaces) {
-        resolve_method_interfaces(interface_candidates, interface->clazz, name, descriptor);
+        resolve_method_interfaces(interface->clazz, name, descriptor,
+                                  out_clazz_max_specific, out_method_max_specific,
+                                  out_clazz_fallback, out_method_fallback);
+    }
+    if (clazz->super_class) {
+        resolve_method_interfaces(clazz->super_class->clazz, name, descriptor,
+                                  out_clazz_max_specific, out_method_max_specific,
+                                  out_clazz_fallback, out_method_fallback);
     }
 }
 
@@ -1541,12 +1566,19 @@ resolve_method_interfaces(std::vector<std::pair<ClassFile *, method_info *>> &in
     }
 
     // 3.
-    std::vector<std::pair<ClassFile *, method_info *>> interface_candidates;
-    resolve_method_interfaces(interface_candidates, method.class_->clazz, name, descriptor);
+    ClassFile *out_clazz_max_specific = nullptr;
+    method_info *out_method_max_specific = nullptr;
+    ClassFile *out_clazz_fallback = nullptr;
+    method_info *out_method_fallback = nullptr;
+    resolve_method_interfaces(method.class_->clazz, name, descriptor,
+                              out_clazz_max_specific, out_method_max_specific,
+                              out_clazz_fallback, out_method_fallback);
 
-    // TODO prefer "maximally-specific superinterface methods"
-    if (!interface_candidates.empty()) {
-        method.method = interface_candidates[0].second;
+    if (out_method_max_specific != nullptr) {
+        method.method = out_method_max_specific;
+        return false;
+    } else if (out_method_fallback != nullptr) {
+        method.method = out_method_fallback;
         return false;
     }
 
@@ -1588,13 +1620,21 @@ resolve_method_virtual(ClassFile *dynamic_class, ClassFile *declared_class, meth
     }
 
     // 2. (3)
-    std::vector<std::pair<ClassFile *, method_info *>> interface_candidates;
-    resolve_method_interfaces(interface_candidates, dynamic_class, name, descriptor);
+    ClassFile *out_clazz_max_specific = nullptr;
+    method_info *out_method_max_specific = nullptr;
+    ClassFile *out_clazz_fallback = nullptr;
+    method_info *out_method_fallback = nullptr;
+    resolve_method_interfaces(dynamic_class, name, descriptor,
+                              out_clazz_max_specific, out_method_max_specific,
+                              out_clazz_fallback, out_method_fallback);
 
-    // TODO prefer "maximally-specific superinterface methods"
-    if (!interface_candidates.empty()) {
-        out_class = interface_candidates[0].first;
-        out_method = interface_candidates[0].second;
+    if (out_method_max_specific != nullptr && !out_method_max_specific->is_abstract()) {
+        out_class = out_clazz_max_specific;
+        out_method = out_method_max_specific;
+        return false;
+    } else if (out_method_fallback != nullptr) {
+        out_class = out_clazz_fallback;
+        out_method = out_method_fallback;
         return false;
     }
 
