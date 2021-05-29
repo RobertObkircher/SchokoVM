@@ -45,10 +45,10 @@ void array_load(Frame &frame);
 
 void fill_multi_array(Heap &heap, Reference &reference, const std::span<s4> &counts);
 
-[[nodiscard]] static bool resolve_method_static(ClassInterface_Methodref &method);
+[[nodiscard]] static bool method_resolution(ClassInterface_Methodref &method);
 
 [[nodiscard]] static bool
-resolve_method_virtual(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
+method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
                        ClassFile *&out_class, method_info *&out_method);
 
 int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, ClassFile *main) {
@@ -961,7 +961,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                     return;
                 }
 
-                if (resolve_method_static(declared_method_ref)) {
+                if (method_resolution(declared_method_ref)) {
                     return;
                 }
                 declared_method = declared_method_ref.method;
@@ -971,7 +971,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
 
             ClassFile *clazz;
             method_info *method;
-            if (resolve_method_virtual(object.object()->clazz, declared_method_ref.class_->clazz, declared_method,
+            if (method_selection(object.object()->clazz, declared_method_ref.class_->clazz, declared_method,
                                        clazz, method)) {
                 return;
             }
@@ -1008,7 +1008,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
 
                 clazz = method_ref->class_->clazz;
 
-                if (resolve_method_static(*method_ref)) {
+                if (method_resolution(*method_ref)) {
                     return;
                 }
                 method = method_ref->method;
@@ -1107,7 +1107,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
 
                 clazz = method_ref->class_->clazz;
 
-                if (resolve_method_static(*method_ref)) {
+                if (method_resolution(*method_ref)) {
                     return;
                 }
                 method = method_ref->method;
@@ -1560,7 +1560,7 @@ resolve_method_interfaces(ClassFile *clazz, const std::string &name, const std::
     }
 }
 
-[[nodiscard]] static bool resolve_method_static(ClassInterface_Methodref &method) {
+[[nodiscard]] static bool method_resolution(ClassInterface_Methodref &method) {
     const auto &name = method.name_and_type->name->value;
     const auto &descriptor = method.name_and_type->descriptor->value;
     // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.4.3.3
@@ -1600,7 +1600,7 @@ resolve_method_interfaces(ClassFile *clazz, const std::string &name, const std::
 }
 
 [[nodiscard]] static bool
-resolve_method_virtual(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
+method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
                        ClassFile *&out_class, method_info *&out_method) {
     // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.4.6
     // 1.
