@@ -11,6 +11,9 @@ public class Methods {
         SubOther subObj = new SubOther();
         println(subObj.runInterface1(19));
         println(subObj.runInterface2(19));
+
+        InvokeInterface i = (InvokeInterface) new InvokeInterfaceSub();
+        i.foo();
     }
 
     static class Other {
@@ -38,7 +41,6 @@ public class Methods {
             return 1;
         }
     }
-
     static interface OtherInterface {
         public default int runInterface1(int i) {
             return i + 1;
@@ -48,7 +50,6 @@ public class Methods {
             return i + 2;
         }
     }
-
     static class SubOther extends Other implements OtherInterface {
         private int priv() {
             return 2;
@@ -60,6 +61,15 @@ public class Methods {
 
         public int runInterface2(int i) {
             return i + 20;
+        }
+    }
+
+    static interface InvokeInterface {
+        public void foo();
+    }
+    static class InvokeInterfaceSub implements InvokeInterface {
+        public void foo(){
+            println(1);
         }
     }
 }

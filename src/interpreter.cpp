@@ -1123,6 +1123,38 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 return;
             }
         }
+        case OpCodes::invokeinterface: {
+            u2 method_index = frame.read_u2();
+            auto &declared_method_ref = frame.clazz->constant_pool.get<CONSTANT_InterfaceMethodref_info>(method_index).method;
+
+            method_info *declared_method = declared_method_ref.method;
+
+            if (declared_method == nullptr) {
+                if (resolve_class(class_files, declared_method_ref.class_, thread, frame)) {
+                    return;
+                }
+
+                // TODO we will need some special handling for methods on Object here
+                if (method_resolution(declared_method_ref)) {
+                    return;
+                }
+                declared_method = declared_method_ref.method;
+            }
+
+            auto object = frame.peek_at(declared_method->stack_slots_for_parameters - 1).reference;
+
+            ClassFile *clazz;
+            method_info *method;
+            if (method_selection(object.object()->clazz, declared_method_ref.class_->clazz, declared_method,
+                                 clazz, method)) {
+                return;
+            }
+
+            // The two bytes after the method index in the bytecode are irrelevant and unused
+            frame.invoke_length = 5;
+            thread.stack.push_frame(frame, clazz, method);
+            return;
+        }
         case OpCodes::new_: {
             u2 index = frame.read_u2();
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
