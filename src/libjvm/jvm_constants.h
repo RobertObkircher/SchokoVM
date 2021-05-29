@@ -26,7 +26,7 @@
 #ifndef _JVM_CONSTANTS_H_
 #define _JVM_CONSTANTS_H_
 
-#include "classfile_constants.h"
+#include "classfile_constants.h.template"
 
 #define JVM_RECOGNIZED_CLASS_MODIFIERS (JVM_ACC_PUBLIC | \
                                         JVM_ACC_FINAL | \

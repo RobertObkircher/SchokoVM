@@ -96,27 +96,30 @@ set(COMMON_SOURCES
 add_executable(SchokoVM ${COMMON_SOURCES})
 add_sanitizers(SchokoVM)
 
-add_library(libjvm
+add_library(jvm SHARED
         ${COMMON_SOURCES}
         src/libjvm/cds.h
         src/libjvm/jmm.h
         src/libjvm/jvm.h
+        src/libjvm/jvm.cpp
         src/libjvm/jvm_md.h
         src/libjvm/jvm_constants.h
         src/libjvm/jvm_io.h
         src/libjvm/classfile_constants.h.template
         src/libjvm/jni.h
+        src/libjvm/jni.cpp
         src/libjvm/jni_md.h
         src/libjvm/jvmticmlr.h
         )
+target_compile_options(jvm PRIVATE -Wno-unused-parameter)
 
 if (libzip_FOUND)
     target_link_libraries(SchokoVM libzip::zip)
-    target_link_libraries(libjvm libzip::zip)
+    target_link_libraries(jvm libzip::zip)
 else ()
     # hope that it's on the standard search paths
     target_link_libraries(SchokoVM zip)
-    target_link_libraries(libjvm libzip::zip)
+    target_link_libraries(jvm libzip::zip)
 endif ()
 
 #
