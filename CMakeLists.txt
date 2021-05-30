@@ -119,7 +119,7 @@ if (libzip_FOUND)
 else ()
     # hope that it's on the standard search paths
     target_link_libraries(SchokoVM zip)
-    target_link_libraries(jvm libzip::zip)
+    target_link_libraries(jvm zip)
 endif ()
 
 #
