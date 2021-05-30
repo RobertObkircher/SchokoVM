@@ -1,6 +1,7 @@
 #ifndef SCHOKOVM_ZIP_HPP
 #define SCHOKOVM_ZIP_HPP
 
+#include <memory>
 #include <unordered_map>
 #include <zip.h>
 
@@ -19,16 +20,20 @@ struct ZipEntry {
     size_t size;
 };
 
+struct ZipDeleter {
+    void operator()(zip_t *pointer) noexcept {
+        zip_discard(pointer);
+    }
+};
+
 struct ZipArchive {
-    zip_t *archive;
+    std::unique_ptr<zip_t, ZipDeleter> archive;
     std::string path;
     std::unordered_map<std::string, ZipEntry> entries;
 
+    ZipArchive();
+
     explicit ZipArchive(std::string path);
-
-    ~ZipArchive();
-
-    void close();
 };
 
 #endif //SCHOKOVM_ZIP_HPP
