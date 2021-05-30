@@ -91,6 +91,7 @@ add_executable(SchokoVM
         src/memory.cpp src/memory.hpp
         src/math.hpp
         src/classloading.cpp src/classloading.hpp
+        src/util.cpp src/util.hpp
         )
 add_sanitizers(SchokoVM)
 
