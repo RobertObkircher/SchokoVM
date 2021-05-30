@@ -21,9 +21,6 @@ struct membuf : std::streambuf {
 
 void read_entire_jar(const char *path, std::vector<char> &buffer, std::vector<ClassFile> &class_files) {
     ZipArchive zip{path};
-    if (buffer.size() < zip.max_size) {
-        buffer.resize(zip.max_size);
-    }
 
     for (const auto &item : zip.entries) {
         auto const &name = item.first;
@@ -32,7 +29,10 @@ void read_entire_jar(const char *path, std::vector<char> &buffer, std::vector<Cl
         if (!name.ends_with(".class")) {
             continue;
         }
-        assert(entry.stat_size <= zip.max_size);
+
+        if (buffer.size() < entry.size) {
+            buffer.resize(std::max((size_t) entry.size, buffer.size() * 2));
+        }
 
         zip_file_t *file = zip_fopen_index(zip.archive, entry.index, 0);
         if (file == nullptr) {
@@ -58,10 +58,10 @@ void read_entire_jar(const char *path, std::vector<char> &buffer, std::vector<Cl
     zip.close();
 }
 
-ZipArchive::ZipArchive(std::string path) : path(std::move(path)) {
+ZipArchive::ZipArchive(std::string path) : path(std::move(path)), entries() {
     int error = 0;
     archive = zip_open(this->path.c_str(), ZIP_RDONLY, &error);
-    if (!archive) {
+    if (archive == nullptr) {
         throw ZipException("zip_open: " + std::to_string(error));
     }
 
@@ -82,8 +82,6 @@ ZipArchive::ZipArchive(std::string path) : path(std::move(path)) {
 
         entries.insert({{stat.name},
                         {index, stat.size}});
-
-        max_size = std::max(max_size, stat.size);
     }
 }
 

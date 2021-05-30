@@ -16,14 +16,13 @@ struct ZipException : std::exception {
 
 struct ZipEntry {
     zip_uint64_t index;
-    size_t stat_size;
+    size_t size;
 };
 
 struct ZipArchive {
     zip_t *archive;
     std::string path;
     std::unordered_map<std::string, ZipEntry> entries;
-    size_t max_size;
 
     explicit ZipArchive(std::string path);
 
