@@ -106,7 +106,8 @@ struct CONSTANT_Fieldref_info {
     size_t index;
 };
 
-struct CONSTANT_Methodref_info {
+
+struct ClassInterface_Methodref {
     u2 class_index;
     u2 name_and_type_index;
     CONSTANT_Class_info *class_;
@@ -114,11 +115,12 @@ struct CONSTANT_Methodref_info {
     method_info *method;
 };
 
+struct CONSTANT_Methodref_info {
+    ClassInterface_Methodref method;
+};
+
 struct CONSTANT_InterfaceMethodref_info {
-    u2 class_index;
-    u2 name_and_type_index;
-    CONSTANT_Class_info *class_;
-    CONSTANT_NameAndType_info *name_and_type;
+    ClassInterface_Methodref method;
 };
 
 struct CONSTANT_String_info {
@@ -274,6 +276,26 @@ struct method_info {
 
     [[nodiscard]] inline bool is_static() const {
         return (access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_STATIC)) != 0;
+    }
+
+    [[nodiscard]] inline bool is_private() const {
+        return (access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_PRIVATE)) != 0;
+    }
+
+    [[nodiscard]] inline bool is_abstract() const {
+        return (access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_ABSTRACT)) != 0;
+    }
+
+    [[nodiscard]] inline bool is_protected() const {
+        return (access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_PROTECTED)) != 0;
+    }
+
+    [[nodiscard]] inline bool is_public() const {
+        return (access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_PUBLIC)) != 0;
+    }
+
+    [[nodiscard]] inline bool is_native() const {
+        return (access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_NATIVE)) != 0;
     }
 };
 
@@ -740,6 +762,18 @@ struct ConstantPool {
     }
 };
 
+enum class ClassFileAccessFlags : u2 {
+    ACC_PUBLIC = 0x0001,
+    ACC_FINAL = 0x0010,
+    ACC_SUPER = 0x0020,
+    ACC_INTERFACE = 0x0200,
+    ACC_ABSTRACT = 0x0400,
+    ACC_SYNTHETIC = 0x1000,
+    ACC_ANNOTATION = 0x2000,
+    ACC_ENUM = 0x4000,
+    ACC_MODULE = 0x8000,
+};
+
 struct ClassFile {
     u4 magic;
     u2 minor_version;
@@ -761,6 +795,30 @@ struct ClassFile {
     std::vector<Value> static_field_values;
 
     bool resolved;
+
+    // Computes whether `this` is a subclass of `other` (regarding both `extends` and `implements`).
+    // Note that `x.is_subclass_of(x) == false`
+    bool is_subclass_of(ClassFile *other) {
+        for (auto &i: interfaces) {
+            if (i->clazz == other) {
+                return true;
+            }
+        }
+        if (this->super_class != nullptr &&
+            (this->super_class->clazz == other || this->super_class->clazz->is_subclass_of(other))) {
+            return true;
+        }
+        for (auto &i: interfaces) {
+            if (i->clazz == other || i->clazz->is_subclass_of(other)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    [[nodiscard]] inline bool is_interface() const {
+        return (access_flags & static_cast<u2>(ClassFileAccessFlags::ACC_INTERFACE)) != 0;
+    }
 };
 
 

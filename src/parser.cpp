@@ -86,7 +86,7 @@ ClassFile Parser::parse() {
             throw ParseError("Invalid method descriptor");
 
         method_info.parameter_count = 0;
-        method_info.stack_slots_for_parameters = 0;
+        method_info.stack_slots_for_parameters = method_info.is_static() ? 0 : 1;
 
         bool skip_class_name = false;
         for (char c : descriptor) {
@@ -224,15 +224,15 @@ ConstantPool Parser::parse_constant_pool(u2 major_version) {
             }
             case CONSTANT_Methodref: {
                 CONSTANT_Methodref_info info{};
-                info.class_index = eat_cp_index();
-                info.name_and_type_index = eat_cp_index();
+                info.method.class_index = eat_cp_index();
+                info.method.name_and_type_index = eat_cp_index();
                 cpi.variant = info;
                 break;
             }
             case CONSTANT_InterfaceMethodref: {
                 CONSTANT_InterfaceMethodref_info info{};
-                info.class_index = eat_cp_index();
-                info.name_and_type_index = eat_cp_index();
+                info.method.class_index = eat_cp_index();
+                info.method.name_and_type_index = eat_cp_index();
                 cpi.variant = info;
                 break;
             }
@@ -318,11 +318,11 @@ ConstantPool Parser::parse_constant_pool(u2 major_version) {
             it->class_ = &result.get<CONSTANT_Class_info>(it->class_index);
             it->name_and_type = &result.get<CONSTANT_NameAndType_info>(it->name_and_type_index);
         } else if (auto it = std::get_if<CONSTANT_Methodref_info>(&constant.variant)) {
-            it->class_ = &result.get<CONSTANT_Class_info>(it->class_index);
-            it->name_and_type = &result.get<CONSTANT_NameAndType_info>(it->name_and_type_index);
+            it->method.class_ = &result.get<CONSTANT_Class_info>(it->method.class_index);
+            it->method.name_and_type = &result.get<CONSTANT_NameAndType_info>(it->method.name_and_type_index);
         } else if (auto it = std::get_if<CONSTANT_InterfaceMethodref_info>(&constant.variant)) {
-            it->class_ = &result.get<CONSTANT_Class_info>(it->class_index);
-            it->name_and_type = &result.get<CONSTANT_NameAndType_info>(it->name_and_type_index);
+            it->method.class_ = &result.get<CONSTANT_Class_info>(it->method.class_index);
+            it->method.name_and_type = &result.get<CONSTANT_NameAndType_info>(it->method.name_and_type_index);
         } else if (auto it = std::get_if<CONSTANT_String_info>(&constant.variant)) {
             it->string = &result.get<CONSTANT_Utf8_info>(it->string_index);
         } else if (auto it = std::get_if<CONSTANT_NameAndType_info>(&constant.variant)) {
