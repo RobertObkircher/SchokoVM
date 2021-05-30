@@ -84,7 +84,7 @@ add_executable(SchokoVM
         src/classfile.hpp
         src/parser.cpp src/parser.hpp
         src/args.cpp src/args.hpp
-        src/jar.cpp src/jar.hpp
+        src/zip.cpp src/zip.hpp
         src/interpreter.cpp src/interpreter.hpp
         src/opcodes.hpp
         src/future.hpp

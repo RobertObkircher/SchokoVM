@@ -1,5 +1,5 @@
-#ifndef SCHOKOVM_JAR_HPP
-#define SCHOKOVM_JAR_HPP
+#ifndef SCHOKOVM_ZIP_HPP
+#define SCHOKOVM_ZIP_HPP
 
 #include <unordered_map>
 #include <zip.h>
@@ -32,4 +32,4 @@ struct ZipArchive {
     void close();
 };
 
-#endif //SCHOKOVM_JAR_HPP
+#endif //SCHOKOVM_ZIP_HPP

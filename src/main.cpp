@@ -4,7 +4,7 @@
 
 #include "args.hpp"
 #include "classfile.hpp"
-#include "jar.hpp"
+#include "zip.hpp"
 #include "interpreter.hpp"
 #include "parser.hpp"
 #include "util.hpp"

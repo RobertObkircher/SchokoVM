@@ -3,7 +3,7 @@
 #include <zip.h>
 
 #include "classfile.hpp"
-#include "jar.hpp"
+#include "zip.hpp"
 #include "parser.hpp"
 
 ZipException::ZipException(std::string message) : message(std::move(message)) {}
