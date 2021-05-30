@@ -34,7 +34,7 @@ void read_entire_jar(const char *path, std::vector<char> &buffer, std::vector<Cl
             buffer.resize(std::max((size_t) entry.size, buffer.size() * 2));
         }
 
-        zip_file_t *file = zip_fopen_index(zip.archive, entry.index, 0);
+        zip_file_t *file = zip_fopen_index(zip.archive.get(), entry.index, 0);
         if (file == nullptr) {
             throw ZipException("zip_fopen_index");
         }
@@ -55,22 +55,24 @@ void read_entire_jar(const char *path, std::vector<char> &buffer, std::vector<Cl
         Parser parser{in};
         class_files.push_back(parser.parse());
     }
-    zip.close();
 }
 
-ZipArchive::ZipArchive(std::string path) : path(std::move(path)), entries() {
+ZipArchive::ZipArchive() : archive(), path(), entries() {
+}
+
+ZipArchive::ZipArchive(std::string path) : archive(), path(std::move(path)), entries() {
     int error = 0;
-    archive = zip_open(this->path.c_str(), ZIP_RDONLY, &error);
+    archive.reset(zip_open(this->path.c_str(), ZIP_RDONLY, &error));
     if (archive == nullptr) {
         throw ZipException("zip_open: " + std::to_string(error));
     }
 
-    zip_int64_t num_entries = zip_get_num_entries(archive, 0);
+    zip_int64_t num_entries = zip_get_num_entries(archive.get(), 0);
 
     for (zip_uint64_t index = 0; index < (zip_uint64_t) num_entries; index++) {
         zip_stat_t stat;
         zip_stat_init(&stat);
-        zip_stat_index(archive, index, 0, &stat);
+        zip_stat_index(archive.get(), index, 0, &stat);
 
         if ((stat.valid & ZIP_STAT_NAME) == 0) {
             throw ZipException("zip_stat name");
@@ -80,28 +82,6 @@ ZipArchive::ZipArchive(std::string path) : path(std::move(path)), entries() {
             throw ZipException("zip_stat size");
         }
 
-        entries.insert({{stat.name},
-                        {index, stat.size}});
-    }
-}
-
-void ZipArchive::close() {
-    if (archive == nullptr) {
-        return;
-    }
-
-    int result = zip_close(archive);
-    archive = nullptr;
-    if (result != 0) {
-        throw ZipException("zip_close: " + std::to_string(result));
-    }
-}
-
-ZipArchive::~ZipArchive() {
-    if (archive != nullptr) {
-        int result = zip_close(archive);
-        // if this fails there is nothing that we can do
-        assert(result == 0);
-        (void) result; // supress unused variable warning in release builds
+        entries.insert({{stat.name}, {index, stat.size}});
     }
 }
