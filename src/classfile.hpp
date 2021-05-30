@@ -796,7 +796,7 @@ struct ClassFile {
 
     bool resolved;
 
-    // Computes whether `this` is a subclass of `other`
+    // Computes whether `this` is a subclass of `other` (regarding both `extends` and `implements`).
     // Note that `x.is_subclass_of(x) == false`
     bool is_subclass_of(ClassFile *other) {
         for (auto &i: interfaces) {
@@ -804,11 +804,12 @@ struct ClassFile {
                 return true;
             }
         }
-        if(this->super_class != nullptr && this->super_class->clazz->is_subclass_of(other)) {
+        if (this->super_class != nullptr &&
+            (this->super_class->clazz == other || this->super_class->clazz->is_subclass_of(other))) {
             return true;
         }
         for (auto &i: interfaces) {
-            if (i->clazz->is_subclass_of(other)) {
+            if (i->clazz == other || i->clazz->is_subclass_of(other)) {
                 return true;
             }
         }
