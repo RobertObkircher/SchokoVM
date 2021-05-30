@@ -4,21 +4,10 @@
 
 #include "args.hpp"
 #include "classfile.hpp"
-#include "jar.hpp"
+#include "zip.hpp"
 #include "interpreter.hpp"
 #include "parser.hpp"
-
-std::vector<std::string> split(std::string const &string, char separator) {
-    std::vector<std::string> parts{};
-    size_t start = 0;
-    size_t end;
-    while ((end = string.find(separator, start)) != std::string::npos) {
-        parts.push_back(string.substr(start, end - start));
-        start = end + 1;
-    }
-    parts.push_back(string.substr(start));
-    return parts;
-}
+#include "util.hpp"
 
 int run(const Arguments &arguments) {
     std::vector<ClassFile> class_files_list;
@@ -29,13 +18,14 @@ int run(const Arguments &arguments) {
 
         for (auto &path : split(arguments.classpath, ':')) {
             if (path.ends_with(".jar") || path.ends_with(".zip")) {
-                auto error_message = read_entire_jar(path.c_str(), buffer, class_files_list);
-                if (error_message) {
-                    std::cerr << "Could not read jar file " << path << " error: " << *error_message << "\n";
+                try {
+                    read_entire_jar(path.c_str(), buffer, class_files_list);
+                } catch (ZipException &e) {
+                    std::cerr << "Could not read jar file " << path << " error: " << e.what() << "\n";
                     return 23;
                 }
             } else {
-                for (const auto& directory_entry : std::filesystem::recursive_directory_iterator(path)) {
+                for (const auto &directory_entry : std::filesystem::recursive_directory_iterator(path)) {
                     if (directory_entry.is_regular_file() && directory_entry.path().extension() == ".class") {
                         std::ifstream in{directory_entry.path(), std::ios::in | std::ios::binary};
                         if (in) {
