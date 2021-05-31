@@ -4,6 +4,10 @@ A Java Bytecode interpreter.
 
 [![Run tests](https://github.com/RobertObkircher/SchokoVM/actions/workflows/tests.yml/badge.svg)](https://github.com/RobertObkircher/SchokoVM/actions/workflows/tests.yml)
 
+# OpenJDK
+
+You need to download an OpenJDK release and the sources: `cd jdk && ./download.sh`
+
 # GDB
 
 You need a ~/.gdbinit in your home directory or the project .gdbinit file will be ignored:

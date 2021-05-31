@@ -6,6 +6,8 @@
       <file path="$PROJECT_DIR$/src" />
     </sourceRoots>
     <excludeRoots>
+      <file path="$PROJECT_DIR$/jdk/jdk" />
+      <file path="$PROJECT_DIR$/jdk/jdk-11.0.11+9" />
       <file path="$PROJECT_DIR$/tests-generated/out" />
     </excludeRoots>
   </component>
