@@ -235,6 +235,8 @@ struct Thread {
     Stack stack{};
 };
 
-int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, ClassFile *main);
+struct BootstrapClassLoader;
+
+int interpret(BootstrapClassLoader &bootstrap_class_loader, ClassFile *main);
 
 #endif //SCHOKOVM_INTERPRETER_HPP

@@ -782,7 +782,9 @@ struct ClassFile {
     u2 access_flags;
     CONSTANT_Class_info *this_class;
     // nullptr for class Object
-    CONSTANT_Class_info *super_class;
+    CONSTANT_Class_info *super_class_ref;
+    // nullptr for class Object and before resolution
+    ClassFile *super_class;
     std::vector<CONSTANT_Class_info *> interfaces;
     std::vector<field_info> fields;
     std::vector<method_info> methods;
@@ -799,17 +801,19 @@ struct ClassFile {
     // Computes whether `this` is a subclass of `other` (regarding both `extends` and `implements`).
     // Note that `x.is_subclass_of(x) == false`
     bool is_subclass_of(ClassFile *other) {
+        if (this->super_class == other) {
+            return true;
+        }
         for (auto &i: interfaces) {
             if (i->clazz == other) {
                 return true;
             }
         }
-        if (this->super_class != nullptr &&
-            (this->super_class->clazz == other || this->super_class->clazz->is_subclass_of(other))) {
+        if (this->super_class != nullptr && this->super_class->is_subclass_of(other)) {
             return true;
         }
         for (auto &i: interfaces) {
-            if (i->clazz == other || i->clazz->is_subclass_of(other)) {
+            if (i->clazz->is_subclass_of(other)) {
                 return true;
             }
         }
@@ -819,6 +823,8 @@ struct ClassFile {
     [[nodiscard]] inline bool is_interface() const {
         return (access_flags & static_cast<u2>(ClassFileAccessFlags::ACC_INTERFACE)) != 0;
     }
+
+    [[nodiscard]] inline std::string const &name() const { return this_class->name->value; }
 };
 
 

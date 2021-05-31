@@ -27,7 +27,7 @@ enum class ArrayPrimitiveTypes {
 };
 
 static void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
-                                std::unordered_map<std::string_view, ClassFile *> &class_files, bool &shouldExit);
+                                BootstrapClassLoader &bootstrap_class_loader, bool &shouldExit);
 
 static void execute_comparison(Frame &frame, bool condition);
 
@@ -51,7 +51,7 @@ void fill_multi_array(Heap &heap, Reference &reference, const std::span<s4> &cou
 method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
                        ClassFile *&out_class, method_info *&out_method);
 
-int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, ClassFile *main) {
+int interpret(BootstrapClassLoader &bootstrap_class_loader, ClassFile *main) {
     auto main_method_iter = std::find_if(main->methods.begin(), main->methods.end(),
                                          [](const method_info &m) {
                                              return m.name_index->value == MAIN_NAME &&
@@ -75,11 +75,11 @@ int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, Cl
     Frame frame{thread.stack, main, main_method, thread.stack.memory_used};
 
     // push the class initializer if necessary
-    resolve_class(class_files, main->this_class, thread, frame);
+    resolve_class(bootstrap_class_loader, main->this_class, thread, frame);
 
     bool shouldExit = false;
     while (!shouldExit) {
-        execute_instruction(heap, thread, frame, class_files, shouldExit);
+        execute_instruction(heap, thread, frame, bootstrap_class_loader, shouldExit);
     }
 
     // print exit code
@@ -91,7 +91,7 @@ int interpret(std::unordered_map<std::string_view, ClassFile *> &class_files, Cl
 }
 
 static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
-                                       std::unordered_map<std::string_view, ClassFile *> &class_files,
+                                       BootstrapClassLoader &bootstrap_class_loader,
                                        bool &shouldExit) {
     std::vector<u1> &code = *frame.code;
     auto opcode = code[frame.pc];
@@ -873,7 +873,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             auto field = frame.clazz->constant_pool.get<CONSTANT_Fieldref_info>(index);
 
             if (!field.resolved) {
-                if (resolve_class(class_files, field.class_, thread, frame)) {
+                if (resolve_class(bootstrap_class_loader, field.class_, thread, frame)) {
                     return;
                 }
 
@@ -957,7 +957,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             method_info *declared_method = declared_method_ref.method;
 
             if (declared_method == nullptr) {
-                if (resolve_class(class_files, declared_method_ref.class_, thread, frame)) {
+                if (resolve_class(bootstrap_class_loader, declared_method_ref.class_, thread, frame)) {
                     return;
                 }
 
@@ -1002,7 +1002,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             ClassFile *clazz = method_ref->class_->clazz;
 
             if (method == nullptr) {
-                if (resolve_class(class_files, method_ref->class_, thread, frame)) {
+                if (resolve_class(bootstrap_class_loader, method_ref->class_, thread, frame)) {
                     return;
                 }
 
@@ -1101,7 +1101,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             ClassFile *clazz = method_ref->class_->clazz;
 
             if (method == nullptr) {
-                if (resolve_class(class_files, method_ref->class_, thread, frame)) {
+                if (resolve_class(bootstrap_class_loader, method_ref->class_, thread, frame)) {
                     return;
                 }
 
@@ -1114,7 +1114,9 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             }
 
             if (method->is_native()) {
-                abort();
+                if (method->name_index->value != "registerNatives") {
+                    abort();
+                }
                 frame.pc += 3;
                 return;
             } else {
@@ -1130,7 +1132,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             method_info *declared_method = declared_method_ref.method;
 
             if (declared_method == nullptr) {
-                if (resolve_class(class_files, declared_method_ref.class_, thread, frame)) {
+                if (resolve_class(bootstrap_class_loader, declared_method_ref.class_, thread, frame)) {
                     return;
                 }
 
@@ -1159,7 +1161,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             u2 index = frame.read_u2();
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
 
-            if (resolve_class(class_files, &class_info, thread, frame)) {
+            if (resolve_class(bootstrap_class_loader, &class_info, thread, frame)) {
                 return;
             }
             frame.pc += 2;
@@ -1399,8 +1401,8 @@ static void handle_throw(Thread &thread, Frame &frame, bool &shouldExit, Referen
                                                      // but without running the class initializer.
                                                      auto &clazz_name = frame.clazz->constant_pool.get<CONSTANT_Class_info>(
                                                              e.catch_type).name->value;
-                                                     for (ClassFile *c = obj->clazz;; c = c->super_class->clazz) {
-                                                         if (c->this_class->name->value == clazz_name) { return true; }
+                                                     for (ClassFile *c = obj->clazz;; c = c->super_class) {
+                                                         if (c->name() == clazz_name) { return true; }
                                                          if (c->super_class == nullptr) { break; }
                                                      }
                                                      return false;
@@ -1415,11 +1417,11 @@ static void handle_throw(Thread &thread, Frame &frame, bool &shouldExit, Referen
                 // Bubbled to the top, no exception handler was found, so exit thread
 
                 std::string message = "Exception in thread \"main\" ";
-                message.append(obj->clazz->this_class->name->value);
+                message.append(obj->clazz->name());
                 message.append("\n");
                 for (const Frame &f : stack_trace) {
                     message.append("\tat ");
-                    message.append(f.clazz->this_class->name->value);
+                    message.append(f.clazz->name());
                     message.append(".");
                     message.append(f.method->name_index->value);
 
@@ -1586,7 +1588,7 @@ resolve_method_interfaces(ClassFile *clazz, const std::string &name, const std::
                                   out_clazz_fallback, out_method_fallback);
     }
     if (clazz->super_class) {
-        resolve_method_interfaces(clazz->super_class->clazz, name, descriptor,
+        resolve_method_interfaces(clazz->super_class, name, descriptor,
                                   out_clazz_max_specific, out_method_max_specific,
                                   out_clazz_fallback, out_method_fallback);
     }
@@ -1598,7 +1600,7 @@ resolve_method_interfaces(ClassFile *clazz, const std::string &name, const std::
     // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.4.3.3
 
     // 2.
-    for (ClassFile *c = method.class_->clazz;; c = c->super_class->clazz) {
+    for (ClassFile *c = method.class_->clazz; c != nullptr; c = c->super_class) {
         for (auto &m : c->methods) {
             if (m.name_index->value == name &&
                 m.descriptor_index->value == descriptor) {
@@ -1606,7 +1608,6 @@ resolve_method_interfaces(ClassFile *clazz, const std::string &name, const std::
                 return false;
             }
         }
-        if (c->super_class == nullptr) { break; }
     }
 
     // 3.
@@ -1645,7 +1646,7 @@ method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_inf
     const auto &name = declared_method->name_index->value;
     const auto &descriptor = declared_method->descriptor_index->value;
     // 2. (1 + 2)
-    for (ClassFile *clazz = dynamic_class;; clazz = clazz->super_class->clazz) {
+    for (ClassFile *clazz = dynamic_class; clazz != nullptr; clazz = clazz->super_class) {
         for (auto &m : clazz->methods) {
             // "can override" according to §5.4.5
             if (m.name_index->value == name &&
@@ -1659,8 +1660,6 @@ method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_inf
                 return false;
             }
         }
-
-        if (clazz->super_class == nullptr) { break; }
     }
 
     // 2. (3)

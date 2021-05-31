@@ -9,6 +9,8 @@ else
   wget "https://github.com/AdoptOpenJDK/openjdk11-binaries/releases/download/jdk-11.0.11%2B9/$ARCHIVE"
   tar -xf "$ARCHIVE"
   rm "$ARCHIVE"
+
+  jimage extract --dir exploded-modules jdk-11.0.11+9/lib/modules
 fi
 
 if [ -d "jdk" ]; then
