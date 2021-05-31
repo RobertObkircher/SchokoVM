@@ -41,14 +41,14 @@ ClassFile Parser::parse() {
     u2 super_class = eat_u2();
     if (super_class == 0) {
         // class Object
-        result.super_class = nullptr;
+        result.super_class_ref = nullptr;
     } else {
-        result.super_class = &check_cp_range_and_type<CONSTANT_Class_info>(result.constant_pool, super_class);
-        if (result.super_class->name->value == "java/lang/Object" ||
-            // TODO remove once we have a stdlib
-            result.super_class->name->value == "java/lang/Exception")
-            result.super_class = nullptr;
+        result.super_class_ref = &check_cp_range_and_type<CONSTANT_Class_info>(result.constant_pool, super_class);
+        // TODO remove once we have strings
+        if (result.super_class_ref->name->value == "java/lang/Exception")
+            result.super_class_ref = nullptr;
     }
+    result.super_class = nullptr; // resolved later
 
     u2 interfaces_count = eat_u2();
     for (int i = 0; i < interfaces_count; ++i)

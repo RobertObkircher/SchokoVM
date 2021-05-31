@@ -1,4 +1,76 @@
+#include <filesystem>
+#include <utility>
+
 #include "classloading.hpp"
+#include "parser.hpp"
+#include "util.hpp"
+#include "zip.hpp"
+
+BootstrapClassLoader::BootstrapClassLoader(const std::string &bootclasspath) : class_path_entries(), buffer() {
+    // TODO fix hardcoded path
+    class_path_entries.push_back({"java.base", {}, "../jdk/exploded-modules/java.base", {}});
+
+    for (auto &path : split(bootclasspath, ':')) {
+        if (path.ends_with(".jar") || path.ends_with(".zip")) {
+            class_path_entries.push_back({"", {}, "", ZipArchive(path)});
+        } else {
+            class_path_entries.push_back({path, {}, path, {}});
+        }
+    }
+}
+
+// https://stackoverflow.com/a/7782037
+struct membuf : std::streambuf {
+    membuf(char *begin, char *end) {
+        this->setg(begin, begin, end);
+    }
+};
+
+ClassFile *BootstrapClassLoader::load(std::string const &name) {
+    for (auto &cp_entry : class_path_entries) {
+        if (auto loaded = cp_entry.class_files.find(name); loaded != cp_entry.class_files.end()) {
+            if (loaded->second == nullptr) {
+                continue;
+            }
+            return loaded->second.get();
+        }
+
+        std::unique_ptr<ClassFile> parsed{};
+
+        if (!cp_entry.directory.empty()) {
+            auto path = cp_entry.directory + "/" + name + ".class";
+            std::ifstream in{path, std::ios::in | std::ios::binary};
+
+            if (in) {
+                Parser parser{in};
+                parsed = std::make_unique<ClassFile>(parser.parse());
+            }
+        } else if (!cp_entry.zip.path.empty()) {
+            auto path = name + ".class";
+
+            if (ZipEntry const *zip_entry = cp_entry.zip.entry_for_path(path); zip_entry != nullptr) {
+                cp_entry.zip.read(*zip_entry, buffer);
+
+                membuf buf{buffer.data(), buffer.data() + buffer.size()};
+                std::istream in{&buf};
+
+                Parser parser{in};
+                parsed = std::make_unique<ClassFile>(parser.parse());
+            }
+        }
+
+        ClassFile *result = parsed.get();
+        cp_entry.class_files.insert({name, std::move(parsed)});
+
+        if (result != nullptr) {
+            if (name != result->name()) {
+                throw ParseError("unexpected name");
+            }
+            return result;
+        }
+    }
+    return nullptr;
+}
 
 static bool initialize_class(ClassFile *clazz, Thread &thread, Frame &frame) {
     for (const auto &field : clazz->fields) {
@@ -52,7 +124,7 @@ static bool initialize_class(ClassFile *clazz, Thread &thread, Frame &frame) {
 }
 
 
-bool resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_files, CONSTANT_Class_info *class_info,
+bool resolve_class(BootstrapClassLoader &bootstrap_class_loader, CONSTANT_Class_info *class_info,
                    Thread &thread, Frame &frame) {
     if (class_info->clazz == nullptr) {
         auto &name = class_info->name->value;
@@ -62,12 +134,11 @@ bool resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_file
 
         // TODO we also need to deal with array classes here. They also load the class for the elements.
 
-        auto result = class_files.find(name);
-        if (result == class_files.end()) {
+        ClassFile *clazz = bootstrap_class_loader.load(name);
+        if (clazz == nullptr) {
             // TODO this prints "A not found" if A was found but a superclass/interface wasn't
             throw std::runtime_error("class not found: '" + name + "'");
         }
-        ClassFile *clazz = result->second;
 
         if (clazz->resolved) {
             class_info->clazz = clazz;
@@ -80,13 +151,12 @@ bool resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_file
         }
 
         size_t parent_instance_field_count = 0;
-        // TODO use stdlib
-        if (clazz->super_class != nullptr && clazz->super_class->name->value != "java/lang/Object" &&
-            clazz->super_class->name->value != "java/lang/Exception") {
-            auto runInitializer = resolve_class(class_files, clazz->super_class, thread, frame);
-            if (runInitializer)
-                return runInitializer;
-            parent_instance_field_count = clazz->super_class->clazz->total_instance_field_count;
+        if (clazz->super_class == nullptr && clazz->super_class_ref != nullptr) {
+            if (resolve_class(bootstrap_class_loader, clazz->super_class_ref, thread, frame))
+                return true;
+
+            clazz->super_class = clazz->super_class_ref->clazz;
+            parent_instance_field_count = clazz->super_class->total_instance_field_count;
         }
 
         // instance and static fields
@@ -105,7 +175,7 @@ bool resolve_class(std::unordered_map<std::string_view, ClassFile *> &class_file
         clazz->static_field_values.resize(clazz->fields.size() - clazz->declared_instance_field_count);
 
         for (auto &interface : clazz->interfaces) {
-            auto runInitializer = resolve_class(class_files, interface, thread, frame);
+            auto runInitializer = resolve_class(bootstrap_class_loader, interface, thread, frame);
             if (runInitializer)
                 return true;
         }
@@ -150,7 +220,7 @@ bool resolve_field_recursive(ClassFile *clazz, CONSTANT_Fieldref_info *field_inf
 
         if (clazz->super_class != nullptr) {
             // 3.
-            clazz = clazz->super_class->clazz;
+            clazz = clazz->super_class;
         } else {
             break;
         }

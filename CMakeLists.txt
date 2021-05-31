@@ -9,7 +9,8 @@ project(SchokoVM)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-find_package(Java 1.8 REQUIRED)
+find_package(Java 11 EXACT REQUIRED COMPONENTS Runtime Development)
+find_package(JNI 11 EXACT REQUIRED)
 include(UseJava)
 
 find_package(libzip)
@@ -101,6 +102,31 @@ else ()
     # hope that it's on the standard search paths
     target_link_libraries(SchokoVM zip)
 endif ()
+
+
+#
+# OpenJDK
+#
+
+file(REAL_PATH ${Java_JAVAC_EXECUTABLE} JDK_HOME)
+get_filename_component(JDK_HOME ${JDK_HOME} DIRECTORY)
+get_filename_component(JDK_HOME ${JDK_HOME} DIRECTORY)
+message(STATUS "jdk: ${JDK_HOME}")
+
+set(JDK_BIN ${CMAKE_CURRENT_SOURCE_DIR}/jdk/bin)
+if(NOT IS_DIRECTORY ${JDK_BIN})
+    message(STATUS "Copying ${JDK_HOME} to ${JDK_BIN}")
+#    file(COPY ${JDK_HOME} DESTINATION ${JDK_BIN})
+    # this renames the target folder:
+    execute_process(COMMAND cp -r "${JDK_HOME}" "${JDK_BIN}")
+endif()
+
+set(JDK_EXPLODED ${CMAKE_CURRENT_SOURCE_DIR}/jdk/exploded-modules)
+if(NOT IS_DIRECTORY ${JDK_EXPLODED})
+    message(STATUS "Exploding")
+    execute_process(COMMAND ${JDK_HOME}/bin/jimage extract --dir "${JDK_EXPLODED}" "${JDK_BIN}/lib/modules")
+endif()
+
 
 #
 # Tests

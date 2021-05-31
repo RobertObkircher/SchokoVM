@@ -2,10 +2,9 @@
 #define SCHOKOVM_ZIP_HPP
 
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <zip.h>
-
-void read_entire_jar(const char *path, std::vector<char> &buffer, std::vector<ClassFile> &class_files);
 
 struct ZipException : std::exception {
     std::string message;
@@ -34,6 +33,10 @@ struct ZipArchive {
     ZipArchive();
 
     explicit ZipArchive(std::string path);
+
+    ZipEntry const *entry_for_path(std::string const &filepath) const;
+
+    void read(ZipEntry const &entry, std::vector<char> &buffer) const;
 };
 
 #endif //SCHOKOVM_ZIP_HPP
