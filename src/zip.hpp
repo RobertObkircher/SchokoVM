@@ -2,6 +2,7 @@
 #define SCHOKOVM_ZIP_HPP
 
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <zip.h>
 
@@ -33,7 +34,7 @@ struct ZipArchive {
 
     explicit ZipArchive(std::string path);
 
-    ZipEntry const *entry_for_path(std::string &filepath) const;
+    ZipEntry const *entry_for_path(std::string const &filepath) const;
 
     void read(ZipEntry const &entry, std::vector<char> &buffer) const;
 };

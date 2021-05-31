@@ -39,7 +39,7 @@ ZipArchive::ZipArchive(std::string path) : archive(), path(std::move(path)), ent
     }
 }
 
-ZipEntry const *ZipArchive::entry_for_path(std::string &filepath) const {
+ZipEntry const *ZipArchive::entry_for_path(std::string const &filepath) const {
     if (auto found = entries.find(filepath); found != entries.end()) {
         return &found->second;
     } else {
