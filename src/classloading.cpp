@@ -114,21 +114,26 @@ ClassFile *BootstrapClassLoader::load(std::string const &name) {
 ClassFile *BootstrapClassLoader::make_array_class(std::string name) {
     auto clazz = std::make_unique<ClassFile>();
 
-    // TODO if we ever add string interning we need to do that here
-    clazz->constant_pool.table.resize(2);
-    clazz->constant_pool.table[0].variant = CONSTANT_Utf8_info{name};
-    clazz->constant_pool.table[1].variant = CONSTANT_Class_info{
-            0,
-            &clazz->constant_pool.get<CONSTANT_Utf8_info>(0),
-            clazz.get(), // TODO maybe call resolve class instead?
+    auto add_name_and_class = [&clazz, &name](u2 index, ClassFile *c) -> CONSTANT_Class_info * {
+        assert(c);
+        clazz->constant_pool.table[index].variant = CONSTANT_Utf8_info{
+                c == clazz.get() ? name : c->name()
+        };
+        clazz->constant_pool.table[index + 1].variant = CONSTANT_Class_info{
+                index,
+                &clazz->constant_pool.get<CONSTANT_Utf8_info>(index),
+                c,
+        };
+        return &clazz->constant_pool.get<CONSTANT_Class_info>(index + 1);
     };
-    clazz->this_class = &clazz->constant_pool.get<CONSTANT_Class_info>(1);
 
-    // TODO instanceof/checkcast behave as if arrays had Object as superclass and implemented interfaces from JLS §4.10.3
-    // Is this the right place to add them or should they only exists for those instructions
-    // Check what the invoke* instructions would do
-    // Also add some testcases for instanceof/checkcast
-    clazz->super_class = load("java/lang/Object");
+    clazz->constant_pool.table.resize(4 * 2);
+    clazz->this_class = add_name_and_class(0, clazz.get());
+    clazz->super_class_ref = add_name_and_class(2, clazz->super_class = load("java/lang/Object"));
+    clazz->interfaces.push_back(add_name_and_class(4, load("java/lang/Cloneable")));
+    clazz->interfaces.push_back(add_name_and_class(6, load("java/io/Serializable")));
+
+    // TODO add array clone method here?
 
     ClassFile *result = clazz.get();
     array_classes.insert({std::move(name), std::move(clazz)});

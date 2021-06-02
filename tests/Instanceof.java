@@ -11,10 +11,13 @@ public class Instanceof {
         check(new boolean[3]);
         check(new A[3]);
         check(new B[3]);
+        check(new boolean[3][3]);
+        check(new A[3][3]);
+        check(new B[3][3]);
     }
 
     static void check(Object o) {
-        if (o instanceof Object) { println(1); }
+        if (o instanceof Object) { println(0); }
         if (o instanceof A) { println(1); }
         if (o instanceof B) { println(2); }
         if (o instanceof C) { println(3); }
@@ -35,6 +38,10 @@ public class Instanceof {
         if (o instanceof L[]) { println(18); }
         if (o instanceof X[]) { println(19); }
         if (o instanceof Object[]) { println(20); }
+        if (o instanceof Cloneable[]) { println(21); }
+        if (o instanceof java.io.Serializable[]) { println(22); }
+        if (o instanceof Cloneable) { println(23); }
+        if (o instanceof java.io.Serializable) { println(24); }
 
         // checkcast fail
         try {
