@@ -855,6 +855,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             }
             // fallthrough
         case OpCodes::return_: {
+            return_label:
             if (thread.stack.parent_frames.empty()) {
                 shouldExit = true;
             } else {
@@ -979,6 +980,11 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
 
             frame.invoke_length = 3;
             thread.stack.push_frame(frame, clazz, method);
+
+            if (method->is_native()) {
+                abort();
+                goto return_label;
+            }
             return;
         }
         case OpCodes::invokespecial: {
@@ -991,10 +997,10 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 method_ref = &std::get_if<CONSTANT_InterfaceMethodref_info>(&ref)->method;
             }
 
-            // TODO until we have stdlib
-            if ((method_ref->class_->name->value == "java/lang/Object" ||
-                 method_ref->class_->name->value == "java/lang/Exception") &&
+            // TODO we can't run this until we have strings (and whatever else Exception requires)
+            if (method_ref->class_->name->value == "java/lang/Exception" &&
                 method_ref->name_and_type->name->value == "<init>") {
+                frame.pop<Reference>();
                 frame.pc += 2;
                 break;
             }
@@ -1017,6 +1023,11 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
 
             frame.invoke_length = 3;
             thread.stack.push_frame(frame, clazz, method);
+
+            if (method->is_native()) {
+                abort();
+                goto return_label;
+            }
             return;
         }
         case OpCodes::invokestatic: {
@@ -1114,17 +1125,16 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 method = method_ref->method;
             }
 
+            frame.invoke_length = 3;
+            thread.stack.push_frame(frame, clazz, method);
+
             if (method->is_native()) {
                 if (method->name_index->value != "registerNatives") {
                     abort();
                 }
-                frame.pc += 3;
-                return;
-            } else {
-                frame.invoke_length = 3;
-                thread.stack.push_frame(frame, clazz, method);
-                return;
+                goto return_label;
             }
+            return;
         }
         case OpCodes::invokeinterface: {
             u2 method_index = frame.read_u2();
@@ -1156,6 +1166,11 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             // The two bytes after the method index in the bytecode are irrelevant and unused
             frame.invoke_length = 5;
             thread.stack.push_frame(frame, clazz, method);
+
+            if (method->is_native()) {
+                abort();
+                goto return_label;
+            }
             return;
         }
         case OpCodes::new_: {
@@ -1530,7 +1545,7 @@ static inline void pop_frame(Thread &thread, Frame &frame) {
 Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top)
         : clazz(clazz),
           method(method),
-          code(&method->code_attribute->code),
+          code(nullptr),
           operands_top(0),
           previous_stack_memory_usage(stack.memory_used),
           pc(0),
@@ -1540,11 +1555,24 @@ Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand
     assert(operand_stack_top >= method->stack_slots_for_parameters);
 
     size_t first_local_index = operand_stack_top - method->stack_slots_for_parameters;
-    first_operand_index = first_local_index + method->code_attribute->max_locals;
-    stack.memory_used = first_operand_index + method->code_attribute->max_stack;
 
-    locals = {&stack.memory[first_local_index], method->code_attribute->max_locals};
-    operands = {&stack.memory[first_operand_index], method->code_attribute->max_stack};
+    if (method->code_attribute != nullptr) {
+        code = &method->code_attribute->code;
+
+        first_operand_index = first_local_index + method->code_attribute->max_locals;
+        stack.memory_used = first_operand_index + method->code_attribute->max_stack;
+
+        locals = {&stack.memory[first_local_index], method->code_attribute->max_locals};
+        operands = {&stack.memory[first_operand_index], method->code_attribute->max_stack};
+    } else {
+        assert(method->is_native());
+
+        first_operand_index = operand_stack_top;
+        stack.memory_used = operand_stack_top;
+
+        locals = {&stack.memory[first_local_index], method->stack_slots_for_parameters};
+        operands = {&stack.memory[first_operand_index], 0};
+    }
 
     // TODO think about value set conversion
     // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-2.html#jvms-2.8.3

@@ -6,7 +6,7 @@ public class Instanceof {
         check(new B());
         check(new C());
         check(new D());
-        //check(new Object());
+        check(new Object());
         check(new X());
         check(new boolean[3]);
         check(new A[3]);
