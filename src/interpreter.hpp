@@ -34,6 +34,10 @@ struct Frame {
 
     Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top);
 
+    inline u1 read_u1() {
+        return (*code)[pc + 1];
+    }
+
     inline u1 consume_u1() {
         return (*code)[++pc];
     }

@@ -154,6 +154,7 @@ set(JAVA_TEST_SOURCES
         tests/MultiArrays.java
         tests/ObjectArray.java
         tests/ReferenceComparisons.java
+        tests/Strings.java
         tests/Switch.java
         tests/UnitBoolean.java
         )

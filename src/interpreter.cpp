@@ -137,12 +137,14 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             break;
         }
         case OpCodes::ldc: {
-            auto index = frame.consume_u1();
+            auto index = frame.read_u1();
             auto &entry = frame.clazz->constant_pool.table[index];
             if (auto i = std::get_if<CONSTANT_Integer_info>(&entry.variant)) {
                 frame.push<s4>(i->value);
+                frame.pc++;
             } else if (auto f = std::get_if<CONSTANT_Float_info>(&entry.variant)) {
                 frame.push<float>(f->value);
+                frame.pc++;
             } else if (auto c = std::get_if<CONSTANT_Class_info>(&entry.variant)) {
                 // TODO: handle a special case for to at least initialize classes containing assertions:
                 // 0: ldc           #5                  // class XYZ
@@ -161,7 +163,33 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                     }
                 }
                 throw std::runtime_error("ldc refers to unimplemented type: class");
+            } else if (auto s = std::get_if<CONSTANT_String_info>(&entry.variant)) {
+                // TODO initialize class
+                auto clazz = bootstrap_class_loader.load("java/lang/String");
+                if (resolve_class(bootstrap_class_loader, clazz->this_class, thread, frame)) {
+                    return;
+                }
+                frame.pc++;
+
+                auto &string = s->string->value;
+                size_t string_length = string.size();
+
+                // TODO actual array class
+                auto charArray = heap.new_array<u1>(nullptr, static_cast<s4>(string_length));
+                std::memcpy(charArray.data<u1>(), string.data(), string_length);
+
+                auto reference = heap.new_instance(clazz);
+                for (auto const &field : clazz->fields) {
+                    if (field.name_index->value == "value" &&
+                        field.descriptor_index->value == "[B") {
+                        reference.data<Value>()[field.index] = Value{charArray};
+                        break;
+                    }
+                }
+                frame.push<Reference>(reference);
             } else {
+                // TODO: "a symbolic reference to a class or interface"
+                // TODO: "a symbolic reference to a method type, a method handle, or a dynamically-computed constant." (?)
                 throw std::runtime_error("ldc refers to invalid/unimplemented type");
             }
             break;
@@ -1125,6 +1153,20 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 }
                 frame.pc += 2;
                 break;
+            } else if (method_ref->name_and_type->name->value == "println" &&
+                       method_ref->name_and_type->descriptor->value == "(Ljava/lang/String;)V") {
+                auto reference = frame.pop<Reference>();
+                Reference *byte_array = nullptr;
+                for (auto const &field : reference.object()->clazz->fields) {
+                    if (field.name_index->value == "value" &&
+                        field.descriptor_index->value == "[B") {
+                        byte_array = &reference.data<Value>()[field.index].reference;
+                    }
+                }
+                std::cout << std::string(byte_array->data<char>(),
+                                         static_cast<size_t>(byte_array->object()->length)) << "\n";
+                frame.pc += 2;
+                break;
             }
 
             method_info *method = method_ref->method;
@@ -1743,9 +1785,14 @@ method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_inf
             // "can override" according to §5.4.5
             if (m.name_index->value == name &&
                 m.descriptor_index->value == descriptor &&
-                !m.is_private() && (m.is_protected() || m.is_public())
-                // TODO there is one missing case here (the very last bullet point of the spec paragraph)
-                //  because we currently don't store the package of classes
+                !m.is_private() &&
+                (
+                        m.is_protected() || m.is_public()
+                        ||
+                        // TODO there is one missing case here (the very last bullet point of the spec paragraph)
+                        //  because we currently don't store the package of classes
+                        dynamic_class == clazz
+                )
                     ) {
                 out_method = &m;
                 out_class = clazz;
