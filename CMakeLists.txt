@@ -98,8 +98,12 @@ add_executable(SchokoVM
         src/classloading.cpp src/classloading.hpp
         src/util.cpp src/util.hpp
         src/native.cpp src/native.hpp
+        src/jni.cpp
         )
 add_sanitizers(SchokoVM)
+
+target_include_directories(SchokoVM PRIVATE ${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/jdk/include)
+target_compile_options(SchokoVM PRIVATE -Wno-unused-parameter)
 
 if (libzip_FOUND)
     target_link_libraries(SchokoVM libzip::zip)
