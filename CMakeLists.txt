@@ -99,6 +99,7 @@ add_executable(SchokoVM
         src/util.cpp src/util.hpp
         src/native.cpp src/native.hpp
         src/jni.cpp
+        src/jvm.cpp
         )
 add_sanitizers(SchokoVM)
 
