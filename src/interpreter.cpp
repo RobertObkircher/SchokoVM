@@ -1571,7 +1571,7 @@ Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand
         stack.memory_used = operand_stack_top;
 
         locals = {&stack.memory[first_local_index], method->stack_slots_for_parameters};
-        operands = {&stack.memory[first_operand_index], 0};
+        operands = {&stack.memory[first_operand_index], (size_t) 0};
     }
 
     // TODO think about value set conversion
