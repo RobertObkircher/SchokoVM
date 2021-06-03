@@ -796,11 +796,13 @@ struct ClassFile {
     size_t total_instance_field_count;
     std::vector<Value> static_field_values;
 
-    bool resolved;
+    ClassFile *array_element_type = nullptr; // set iff this is an array of references
+
+    bool resolved = false;
 
     // Computes whether `this` is a subclass of `other` (regarding both `extends` and `implements`).
     // Note that `x.is_subclass_of(x) == false`
-    bool is_subclass_of(ClassFile *other) {
+    bool is_subclass_of(ClassFile *other) const {
         if (this->super_class == other) {
             return true;
         }
@@ -820,11 +822,43 @@ struct ClassFile {
         return false;
     }
 
+    bool is_instance_of(ClassFile *parent) const {
+        if (this == parent || is_subclass_of(parent)) {
+            return true;
+        }
+        if (array_element_type == nullptr || parent->array_element_type == nullptr) {
+            return false;
+        }
+        return array_element_type->is_instance_of(parent->array_element_type);
+    }
+
     [[nodiscard]] inline bool is_interface() const {
         return (access_flags & static_cast<u2>(ClassFileAccessFlags::ACC_INTERFACE)) != 0;
     }
 
     [[nodiscard]] inline std::string const &name() const { return this_class->name->value; }
+
+    [[nodiscard]] bool is_array() const {
+        return !name().empty() && name()[0] == '[';
+    }
+
+    [[nodiscard]] std::string as_array_element() const {
+        std::string const &n = name();
+        if (!n.empty() && n[0] == '[') {
+            return "[" + n;
+        } else {
+            std::string result = "[L";
+            for (auto const &c : n) {
+                if (c == '/') {
+                    result += '.';
+                } else {
+                    result += c;
+                }
+            }
+            result += ';';
+            return result;
+        }
+    }
 };
 
 

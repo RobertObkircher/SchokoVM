@@ -15,6 +15,7 @@ static const u2 MAIN_ACCESS_FLAGS = (static_cast<u2>(FieldInfoAccessFlags::ACC_P
 static const auto MAIN_NAME = "main";
 static const auto MAIN_DESCRIPTOR = "([Ljava/lang/String;)V";
 
+// Table 6.5.newarray-A. Array type codes
 enum class ArrayPrimitiveTypes {
     T_BOOLEAN = 4,
     T_CHAR = 5,
@@ -43,7 +44,7 @@ void array_store(Frame &frame);
 template<typename Element>
 void array_load(Frame &frame);
 
-void fill_multi_array(Heap &heap, Reference &reference, const std::span<s4> &counts);
+void fill_multi_array(Heap &heap, Reference &reference, ClassFile *element_type, const std::span<s4> &counts);
 
 [[nodiscard]] static bool method_resolution(ClassInterface_Methodref &method);
 
@@ -854,6 +855,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             }
             // fallthrough
         case OpCodes::return_: {
+            return_label:
             if (thread.stack.parent_frames.empty()) {
                 shouldExit = true;
             } else {
@@ -978,6 +980,11 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
 
             frame.invoke_length = 3;
             thread.stack.push_frame(frame, clazz, method);
+
+            if (method->is_native()) {
+                abort();
+                goto return_label;
+            }
             return;
         }
         case OpCodes::invokespecial: {
@@ -990,10 +997,10 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 method_ref = &std::get_if<CONSTANT_InterfaceMethodref_info>(&ref)->method;
             }
 
-            // TODO until we have stdlib
-            if ((method_ref->class_->name->value == "java/lang/Object" ||
-                 method_ref->class_->name->value == "java/lang/Exception") &&
+            // TODO we can't run this until we have strings (and whatever else Exception requires)
+            if (method_ref->class_->name->value == "java/lang/Exception" &&
                 method_ref->name_and_type->name->value == "<init>") {
+                frame.pop<Reference>();
                 frame.pc += 2;
                 break;
             }
@@ -1016,6 +1023,11 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
 
             frame.invoke_length = 3;
             thread.stack.push_frame(frame, clazz, method);
+
+            if (method->is_native()) {
+                abort();
+                goto return_label;
+            }
             return;
         }
         case OpCodes::invokestatic: {
@@ -1113,17 +1125,16 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 method = method_ref->method;
             }
 
+            frame.invoke_length = 3;
+            thread.stack.push_frame(frame, clazz, method);
+
             if (method->is_native()) {
                 if (method->name_index->value != "registerNatives") {
                     abort();
                 }
-                frame.pc += 3;
-                return;
-            } else {
-                frame.invoke_length = 3;
-                thread.stack.push_frame(frame, clazz, method);
-                return;
+                goto return_label;
             }
+            return;
         }
         case OpCodes::invokeinterface: {
             u2 method_index = frame.read_u2();
@@ -1155,6 +1166,11 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             // The two bytes after the method index in the bytecode are irrelevant and unused
             frame.invoke_length = 5;
             thread.stack.push_frame(frame, clazz, method);
+
+            if (method->is_native()) {
+                abort();
+                goto return_label;
+            }
             return;
         }
         case OpCodes::new_: {
@@ -1180,46 +1196,44 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             }
             s4 type = frame.consume_u1();
 
-            // TODO actual array class
             switch (static_cast<ArrayPrimitiveTypes>(type)) {
                 case ArrayPrimitiveTypes::T_INT: {
-                    auto reference = heap.new_array<s4>(nullptr, count);
+                    auto reference = heap.new_array<s4>(bootstrap_class_loader.load("[I"), count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_BOOLEAN: {
-                    // TODO packed? differentiate from byte in load/store via class
-                    auto reference = heap.new_array<s1>(nullptr, count);
+                    auto reference = heap.new_array<s1>(bootstrap_class_loader.load("[Z"), count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_CHAR: {
-                    auto reference = heap.new_array<u2>(nullptr, count);
+                    auto reference = heap.new_array<u2>(bootstrap_class_loader.load("[C"), count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_FLOAT: {
-                    auto reference = heap.new_array<float>(nullptr, count);
+                    auto reference = heap.new_array<float>(bootstrap_class_loader.load("[F"), count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_DOUBLE: {
-                    auto reference = heap.new_array<double>(nullptr, count);
+                    auto reference = heap.new_array<double>(bootstrap_class_loader.load("[D"), count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_BYTE: {
-                    auto reference = heap.new_array<s1>(nullptr, count);
+                    auto reference = heap.new_array<s1>(bootstrap_class_loader.load("[B"), count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_SHORT: {
-                    auto reference = heap.new_array<s4>(nullptr, count);
+                    auto reference = heap.new_array<s4>(bootstrap_class_loader.load("[S"), count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_LONG: {
-                    auto reference = heap.new_array<s8>(nullptr, count);
+                    auto reference = heap.new_array<s8>(bootstrap_class_loader.load("[J"), count);
                     frame.push<Reference>(reference);
                     break;
                 }
@@ -1227,17 +1241,22 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             break;
         }
         case OpCodes::anewarray: {
+            u2 index = frame.read_u2();
+            auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
+            if (resolve_class(bootstrap_class_loader, &class_info, thread, frame)) {
+                return;
+            }
+            frame.pc += 2;
+
             s4 count = frame.pop<s4>();
             if (count < 0) {
                 throw std::runtime_error("TODO NegativeArraySizeException");
             }
 
-            u2 index = frame.consume_u2();
-            auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
-            // TODO actual array class
-            (void) class_info;
+            ClassFile *element = class_info.clazz;
+            ClassFile *array_class = bootstrap_class_loader.load(element->as_array_element());
 
-            auto reference = heap.new_array<Reference>(nullptr, count);
+            auto reference = heap.new_array<Reference>(array_class, count);
             frame.push<Reference>(reference);
             break;
         }
@@ -1258,6 +1277,49 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             }
             handle_throw(thread, frame, shouldExit, value);
             return;
+        }
+
+        case OpCodes::checkcast: {
+            u2 index = frame.read_u2();
+            auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
+
+            auto objectref = frame.pop<Reference>();
+            frame.push<Reference>(objectref);
+
+            if (objectref != JAVA_NULL) {
+                if (resolve_class(bootstrap_class_loader, &class_info, thread, frame)) {
+                    return;
+                }
+
+                if (!objectref.object()->clazz->is_instance_of(class_info.clazz)) {
+                    // TODO properly allocate a new exception (initialize clazz)
+                    ClassFile * clazz = bootstrap_class_loader.load("java/lang/ClassCastException");
+                    Reference ref = heap.new_instance(clazz);
+                    return handle_throw(thread, frame, shouldExit, ref);
+                }
+            }
+            frame.pc += 2;
+            break;
+        }
+
+        case OpCodes::instanceof: {
+            u2 index = frame.read_u2();
+            auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
+
+            auto objectref = frame.pop<Reference>();
+            if (objectref == JAVA_NULL) {
+                frame.push<s4>(0);
+            } else {
+                frame.push<Reference>(objectref);
+                if (resolve_class(bootstrap_class_loader, &class_info, thread, frame)) {
+                    return;
+                }
+                frame.pop<Reference>();
+
+                frame.push<bool>(objectref.object()->clazz->is_instance_of(class_info.clazz));
+            }
+            frame.pc += 2;
+            break;
         }
 
         case OpCodes::wide: {
@@ -1313,9 +1375,12 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             break;
         }
         case OpCodes::multianewarray: {
-            u2 index = frame.consume_u2();
+            u2 index = frame.read_u2();
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
-            (void) class_info;
+            if (resolve_class(bootstrap_class_loader, &class_info, thread, frame)) {
+                return;
+            }
+            frame.pc += 2;
 
             u1 dimensions = frame.consume_u1();
             assert(dimensions >= 1);
@@ -1331,13 +1396,8 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 }
             }
 
-            // TODO
-            //    The array class referenced via the run-time constant pool may have more dimensions than the dimensions operand of the multianewarray instruction.
-            //    In that case, only the first dimensions of the dimensions of the array are created.
-
-            // TODO actual array class
-            auto reference = heap.new_array<Reference>(nullptr, counts.back());
-            fill_multi_array(heap, reference, std::span(counts).subspan(0, counts.size() - 1));
+            auto reference = heap.new_array<Reference>(class_info.clazz, counts.back());
+            fill_multi_array(heap, reference, class_info.clazz->array_element_type, std::span(counts).subspan(0, counts.size() - 1));
             frame.push<Reference>(reference);
             break;
         }
@@ -1485,7 +1545,7 @@ static inline void pop_frame(Thread &thread, Frame &frame) {
 Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top)
         : clazz(clazz),
           method(method),
-          code(&method->code_attribute->code),
+          code(nullptr),
           operands_top(0),
           previous_stack_memory_usage(stack.memory_used),
           pc(0),
@@ -1495,11 +1555,24 @@ Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand
     assert(operand_stack_top >= method->stack_slots_for_parameters);
 
     size_t first_local_index = operand_stack_top - method->stack_slots_for_parameters;
-    first_operand_index = first_local_index + method->code_attribute->max_locals;
-    stack.memory_used = first_operand_index + method->code_attribute->max_stack;
 
-    locals = {&stack.memory[first_local_index], method->code_attribute->max_locals};
-    operands = {&stack.memory[first_operand_index], method->code_attribute->max_stack};
+    if (method->code_attribute != nullptr) {
+        code = &method->code_attribute->code;
+
+        first_operand_index = first_local_index + method->code_attribute->max_locals;
+        stack.memory_used = first_operand_index + method->code_attribute->max_stack;
+
+        locals = {&stack.memory[first_local_index], method->code_attribute->max_locals};
+        operands = {&stack.memory[first_operand_index], method->code_attribute->max_stack};
+    } else {
+        assert(method->is_native());
+
+        first_operand_index = operand_stack_top;
+        stack.memory_used = operand_stack_top;
+
+        locals = {&stack.memory[first_local_index], method->stack_slots_for_parameters};
+        operands = {&stack.memory[first_operand_index], (size_t) 0};
+    }
 
     // TODO think about value set conversion
     // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-2.html#jvms-2.8.3
@@ -1538,16 +1611,15 @@ void array_load(Frame &frame) {
     frame.push<Element>(arrayref.data<Element>()[index]);
 }
 
-void fill_multi_array(Heap &heap, Reference &reference, const std::span<s4> &counts) {
+void fill_multi_array(Heap &heap, Reference &reference, ClassFile *element_type, const std::span<s4> &counts) {
     s4 count = counts.back();
     // If any count value is zero, no subsequent dimensions are allocated
     if (count == 0) return;
 
     for (s4 i = reference.object()->length - 1; i >= 0; i--) {
-        // TODO actual array class
-        auto child = heap.new_array<Reference>(nullptr, count);
+        auto child = heap.new_array<Reference>(element_type, count);
         if (counts.size() > 1) {
-            fill_multi_array(heap, child, counts.subspan(0, counts.size() - 1));
+            fill_multi_array(heap, child, element_type->array_element_type, counts.subspan(0, counts.size() - 1));
         }
         reference.data<Reference>()[i] = child;
     }

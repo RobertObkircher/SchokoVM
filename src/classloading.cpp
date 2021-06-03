@@ -6,7 +6,8 @@
 #include "util.hpp"
 #include "zip.hpp"
 
-BootstrapClassLoader::BootstrapClassLoader(const std::string &bootclasspath) : class_path_entries(), buffer() {
+BootstrapClassLoader::BootstrapClassLoader(const std::string &bootclasspath)
+        : class_path_entries(), buffer(), array_classes() {
     // TODO fix hardcoded path
     class_path_entries.push_back({"java.base", {}, "../jdk/exploded-modules/java.base", {}});
 
@@ -17,6 +18,15 @@ BootstrapClassLoader::BootstrapClassLoader(const std::string &bootclasspath) : c
             class_path_entries.push_back({path, {}, path, {}});
         }
     }
+
+    make_array_class("[B");
+    make_array_class("[C");
+    make_array_class("[D");
+    make_array_class("[F");
+    make_array_class("[I");
+    make_array_class("[J");
+    make_array_class("[S");
+    make_array_class("[Z");
 }
 
 // https://stackoverflow.com/a/7782037
@@ -27,6 +37,35 @@ struct membuf : std::streambuf {
 };
 
 ClassFile *BootstrapClassLoader::load(std::string const &name) {
+    if (name.size() >= 2 && name[0] == '[') {
+        if (auto found = array_classes.find(name); found != array_classes.end()) {
+            return found->second.get();
+        }
+
+        std::string element_name;
+        if (name[1] == 'L') {
+            // turn [Ljava.lang.Boolean; into java/lang/Boolean
+            element_name = name.substr(2, name.size() - 3);
+            for (auto &item : element_name) {
+                if (item == '.') {
+                    item = '/';
+                }
+            }
+        } else if (name[1] == '[') {
+            element_name = name.substr(1);
+        } else {
+            abort(); // primitive arrays are in the hashmap
+        }
+
+        ClassFile *element_type = load(element_name);
+        if (element_type == nullptr) {
+            return nullptr;
+        }
+        ClassFile *array_class = make_array_class(name);
+        array_class->array_element_type = element_type;
+        return array_class;
+    }
+
     for (auto &cp_entry : class_path_entries) {
         if (auto loaded = cp_entry.class_files.find(name); loaded != cp_entry.class_files.end()) {
             if (loaded->second == nullptr) {
@@ -71,6 +110,36 @@ ClassFile *BootstrapClassLoader::load(std::string const &name) {
     }
     return nullptr;
 }
+
+ClassFile *BootstrapClassLoader::make_array_class(std::string name) {
+    auto clazz = std::make_unique<ClassFile>();
+
+    auto add_name_and_class = [&clazz, &name](u2 index, ClassFile *c) -> CONSTANT_Class_info * {
+        assert(c);
+        clazz->constant_pool.table[index].variant = CONSTANT_Utf8_info{
+                c == clazz.get() ? name : c->name()
+        };
+        clazz->constant_pool.table[index + 1].variant = CONSTANT_Class_info{
+                index,
+                &clazz->constant_pool.get<CONSTANT_Utf8_info>(index),
+                c,
+        };
+        return &clazz->constant_pool.get<CONSTANT_Class_info>(index + 1);
+    };
+
+    clazz->constant_pool.table.resize(4 * 2);
+    clazz->this_class = add_name_and_class(0, clazz.get());
+    clazz->super_class_ref = add_name_and_class(2, clazz->super_class = load("java/lang/Object"));
+    clazz->interfaces.push_back(add_name_and_class(4, load("java/lang/Cloneable")));
+    clazz->interfaces.push_back(add_name_and_class(6, load("java/io/Serializable")));
+
+    // TODO add array clone method here?
+
+    ClassFile *result = clazz.get();
+    array_classes.insert({std::move(name), std::move(clazz)});
+    return result;
+}
+
 
 static bool initialize_class(ClassFile *clazz, Thread &thread, Frame &frame) {
     for (const auto &field : clazz->fields) {

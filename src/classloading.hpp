@@ -22,10 +22,14 @@ struct ClassPathEntry {
 struct BootstrapClassLoader {
     std::vector<ClassPathEntry> class_path_entries;
     std::vector<char> buffer;
+    std::unordered_map<std::string, std::unique_ptr<ClassFile>> array_classes;
 
     explicit BootstrapClassLoader(const std::string &bootclasspath);
 
     ClassFile *load(std::string const &name);
+
+private:
+    ClassFile *make_array_class(std::string name);
 };
 
 /**

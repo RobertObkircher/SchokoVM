@@ -145,6 +145,7 @@ set(JAVA_TEST_SOURCES
         tests/Fields.java
         # tests/HelloWorld.java
         tests/InvokeStatic.java
+        tests/Instanceof.java
         # tests/KarelTheRobot.java
         tests/Methods.java
         tests/MethodsStatic.java
