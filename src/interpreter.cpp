@@ -1,6 +1,8 @@
 #include "interpreter.hpp"
 
 #include <algorithm>
+#include <locale>
+#include <codecvt>
 #include <limits>
 #include <string>
 #include <iostream>
@@ -149,14 +151,14 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 // TODO: handle a special case for to at least initialize classes containing assertions:
                 // 0: ldc           #5                  // class XYZ
                 // 2: invokevirtual #6                  // Method java/lang/Class.desiredAssertionStatus:()Z
-                if (static_cast<OpCodes>(code[frame.pc + 1]) == OpCodes::invokevirtual) {
-                    auto method_index = static_cast<u2>((code[frame.pc + 2] << 8) | code[frame.pc + 3]);
+                if (static_cast<OpCodes>(code[frame.pc + 2]) == OpCodes::invokevirtual) {
+                    auto method_index = static_cast<u2>((code[frame.pc + 3] << 8) | code[frame.pc + 4]);
                     auto &declared_method_ref = frame.clazz->constant_pool.get<CONSTANT_Methodref_info>(
                             method_index).method;
                     if (declared_method_ref.class_->name->value == "java/lang/Class" &&
                         declared_method_ref.name_and_type->name->value == "desiredAssertionStatus" &&
                         declared_method_ref.name_and_type->descriptor->value == "()Z") {
-                        frame.pc++; // ldc
+                        frame.pc += 2; // ldc
                         frame.pc += 3; // invokevirtual
                         frame.push<s1>(0);
                         return;
@@ -171,21 +173,27 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 }
                 frame.pc++;
 
-                auto &string = s->string->value;
-                size_t string_length = string.size();
+                std::string string_utf8 = s->string->value;
+                std::wstring_convert<std::codecvt_utf8_utf16<char16_t>> converter;
+                std::u16string string_utf16 = std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t>{}.from_bytes(
+                        string_utf8.data());
+                size_t string_utf16_length = string_utf16.size() * sizeof(char16_t);
 
-                // TODO actual array class
-                auto charArray = heap.new_array<u1>(nullptr, static_cast<s4>(string_length));
-                std::memcpy(charArray.data<u1>(), string.data(), string_length);
+                auto charArray = heap.new_array<u1>(bootstrap_class_loader.load("[B"),
+                                                    static_cast<s4>(string_utf16_length));
+                std::memcpy(charArray.data<u1>(), string_utf16.data(), string_utf16_length);
 
                 auto reference = heap.new_instance(clazz);
-                for (auto const &field : clazz->fields) {
-                    if (field.name_index->value == "value" &&
-                        field.descriptor_index->value == "[B") {
-                        reference.data<Value>()[field.index] = Value{charArray};
-                        break;
-                    }
-                }
+
+                auto const &value_field = clazz->fields[0];
+                assert(value_field.name_index->value == "value" && value_field.descriptor_index->value == "[B");
+                reference.data<Value>()[0] = Value{charArray};
+                auto const &coder_field = clazz->fields[1];
+                assert(coder_field.name_index->value == "coder" && coder_field.descriptor_index->value == "B");
+                // as declared in String.java:
+                // LATIN1 = 0, UTF16 = 1;
+                reference.data<Value>()[1] = Value{(s1) 1};
+
                 frame.push<Reference>(reference);
             } else {
                 // TODO: "a symbolic reference to a class or interface"
@@ -1092,6 +1100,12 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 method_ref->name_and_type->descriptor->value == "(I)V") {
                 shouldExit = true;
                 return;
+            } else if (method_ref->class_->name->value == "java/lang/StringUTF16" &&
+                       method_ref->name_and_type->name->value == "isBigEndian" &&
+                       method_ref->name_and_type->descriptor->value == "()Z") {
+                frame.pc += 2;
+                frame.push<s1>(std::endian::native == std::endian::big ? 1 : 0); // NOLINT
+                break;
             } else if (method_ref->name_and_type->name->value == "println" &&
                        method_ref->name_and_type->descriptor->value == "(I)V") {
                 std::cout << frame.pop<s4>() << "\n";
@@ -1163,8 +1177,17 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                         byte_array = &reference.data<Value>()[field.index].reference;
                     }
                 }
-                std::cout << std::string(byte_array->data<char>(),
-                                         static_cast<size_t>(byte_array->object()->length)) << "\n";
+                if (reference.data<Value>()[1].s4 == 1) {
+                    // UTF16
+                    std::u16string string_utf16(byte_array->data<char16_t>(),
+                                                static_cast<size_t>(byte_array->object()->length) / (sizeof(char16_t)));
+
+                    std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> convert;
+                    std::string string_utf8 = convert.to_bytes(string_utf16);
+                    std::cout << string_utf8 << "\n";
+                } else {
+                    throw std::runtime_error("Unimplemented string encoding LATIN1");
+                }
                 frame.pc += 2;
                 break;
             }
