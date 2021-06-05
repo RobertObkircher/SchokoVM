@@ -50,7 +50,7 @@ void fill_multi_array(Heap &heap, Reference &reference, ClassFile *element_type,
 
 [[nodiscard]] static bool
 method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
-                       ClassFile *&out_class, method_info *&out_method);
+                 ClassFile *&out_class, method_info *&out_method);
 
 int interpret(BootstrapClassLoader &bootstrap_class_loader, ClassFile *main) {
     auto main_method_iter = std::find_if(main->methods.begin(), main->methods.end(),
@@ -143,6 +143,24 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 frame.push<s4>(i->value);
             } else if (auto f = std::get_if<CONSTANT_Float_info>(&entry.variant)) {
                 frame.push<float>(f->value);
+            } else if (auto c = std::get_if<CONSTANT_Class_info>(&entry.variant)) {
+                // TODO: handle a special case for to at least initialize classes containing assertions:
+                // 0: ldc           #5                  // class XYZ
+                // 2: invokevirtual #6                  // Method java/lang/Class.desiredAssertionStatus:()Z
+                if (static_cast<OpCodes>(code[frame.pc + 1]) == OpCodes::invokevirtual) {
+                    auto method_index = static_cast<u2>((code[frame.pc + 2] << 8) | code[frame.pc + 3]);
+                    auto &declared_method_ref = frame.clazz->constant_pool.get<CONSTANT_Methodref_info>(
+                            method_index).method;
+                    if (declared_method_ref.class_->name->value == "java/lang/Class" &&
+                        declared_method_ref.name_and_type->name->value == "desiredAssertionStatus" &&
+                        declared_method_ref.name_and_type->descriptor->value == "()Z") {
+                        frame.pc++; // ldc
+                        frame.pc += 3; // invokevirtual
+                        frame.push<s1>(0);
+                        return;
+                    }
+                }
+                throw std::runtime_error("ldc refers to unimplemented type: class");
             } else {
                 throw std::runtime_error("ldc refers to invalid/unimplemented type");
             }
@@ -974,7 +992,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             ClassFile *clazz;
             method_info *method;
             if (method_selection(object.object()->clazz, declared_method_ref.class_->clazz, declared_method,
-                                       clazz, method)) {
+                                 clazz, method)) {
                 return;
             }
 
@@ -993,7 +1011,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             ClassInterface_Methodref *method_ref;
             if (auto m = std::get_if<CONSTANT_Methodref_info>(&ref)) {
                 method_ref = &m->method;
-            } else  {
+            } else {
                 method_ref = &std::get_if<CONSTANT_InterfaceMethodref_info>(&ref)->method;
             }
 
@@ -1036,7 +1054,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             ClassInterface_Methodref *method_ref;
             if (auto m = std::get_if<CONSTANT_Methodref_info>(&ref)) {
                 method_ref = &m->method;
-            } else  {
+            } else {
                 method_ref = &std::get_if<CONSTANT_InterfaceMethodref_info>(&ref)->method;
             }
 
@@ -1138,7 +1156,8 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
         }
         case OpCodes::invokeinterface: {
             u2 method_index = frame.read_u2();
-            auto &declared_method_ref = frame.clazz->constant_pool.get<CONSTANT_InterfaceMethodref_info>(method_index).method;
+            auto &declared_method_ref = frame.clazz->constant_pool.get<CONSTANT_InterfaceMethodref_info>(
+                    method_index).method;
 
             method_info *declared_method = declared_method_ref.method;
 
@@ -1293,7 +1312,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
 
                 if (!objectref.object()->clazz->is_instance_of(class_info.clazz)) {
                     // TODO properly allocate a new exception (initialize clazz)
-                    ClassFile * clazz = bootstrap_class_loader.load("java/lang/ClassCastException");
+                    ClassFile *clazz = bootstrap_class_loader.load("java/lang/ClassCastException");
                     Reference ref = heap.new_instance(clazz);
                     return handle_throw(thread, frame, shouldExit, ref);
                 }
@@ -1397,7 +1416,8 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             }
 
             auto reference = heap.new_array<Reference>(class_info.clazz, counts.back());
-            fill_multi_array(heap, reference, class_info.clazz->array_element_type, std::span(counts).subspan(0, counts.size() - 1));
+            fill_multi_array(heap, reference, class_info.clazz->array_element_type,
+                             std::span(counts).subspan(0, counts.size() - 1));
             frame.push<Reference>(reference);
             break;
         }
@@ -1706,7 +1726,7 @@ resolve_method_interfaces(ClassFile *clazz, const std::string &name, const std::
 
 [[nodiscard]] static bool
 method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
-                       ClassFile *&out_class, method_info *&out_method) {
+                 ClassFile *&out_class, method_info *&out_method) {
     // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.4.6
     // 1.
     if (declared_method->is_private()) {

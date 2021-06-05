@@ -135,6 +135,7 @@ endif()
 # Note: using glob to create this list is not recommended
 #file(GLOB JAVA_TEST_SOURCES CONFIGURE_DEPENDS tests/*.java)
 set(JAVA_TEST_SOURCES
+        tests/Assertions.java
         tests/Bitwise.java
         tests/Empty.java
         tests/Exceptions.java
