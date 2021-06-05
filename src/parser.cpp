@@ -137,13 +137,43 @@ ClassFile Parser::parse() {
 }
 
 std::string Parser::eat_utf8_string(u4 length) {
+    // https://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.4.7
+    std::string data;
+    data.resize(length); // not reserve
+    in.read(data.data(), length);
+
     std::string str;
-    str.resize(length); // not reserve
-    in.read(str.data(), length);
+    str.reserve(length);
     for (size_t i = 0; i < length; ++i) {
-        u1 byte = (u1) str[i];
-        if (byte == 0 || byte >= 0xf0)
-            throw ParseError("Invalid byte in utf8 string: " + std::to_string((int) byte));
+        u1 c = static_cast<u1>(data[i]);
+        if (c == 0b11101101) { // TODO does this have to be more restrictive?
+            u1 v = static_cast<u1>(data[++i]);
+            u1 w = static_cast<u1>(data[++i]);
+            i++;
+            u1 y = static_cast<u1>(data[++i]);
+            u1 z = static_cast<u1>(data[++i]);
+
+            int codepoint = 0x10000 + ((v & 0x0f) << 16) + ((w & 0x3f) << 10) + ((y & 0x0f) << 6) + (z & 0x3f);
+            // convert into the 4-byte utf8 variant
+            str.push_back(static_cast<char>(0b11110000 | ((codepoint >> 18) & 0b1111)));
+            str.push_back(static_cast<char>(0b10000000 | ((codepoint >> 12) & 0b111111)));
+            str.push_back(static_cast<char>(0b10000000 | ((codepoint >> 6) & 0b111111)));
+            str.push_back(static_cast<char>(0b10000000 | ((codepoint) & 0b111111)));
+            continue;
+        }
+
+        if ((c & 0b10000000) == 0) { // copy 1 byte over
+            str.push_back(static_cast<char>(c));
+        } else if ((c & 0b11100000) == 0b11000000) { // copy 2 byte over
+            str.push_back(static_cast<char>(c));
+            str.push_back(data[++i]);
+        } else if ((c & 0b11110000) == 0b11100000) { // copy 3 byte over
+            str.push_back(static_cast<char>(c));
+            str.push_back(data[++i]);
+            str.push_back(data[++i]);
+        } else {
+            throw ParseError("Invalid byte in utf8 string: " + std::to_string((int) c));
+        }
     }
     return str;
 }
