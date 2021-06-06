@@ -82,4 +82,30 @@ public:
     std::vector<attribute_info> parse_attributes(ConstantPool &constant_pool);
 };
 
+struct DescriptorPart {
+    std::string_view type_name{}; // examples:   I   [[I   Ljava.lang.String;
+    size_t array_dimensions = 0; // how many [
+    u1 category = 0; // void=0, category 1, category 2
+    bool is_return = false;
+};
+
+struct MethodDescriptorParts : std::iterator<std::forward_iterator_tag, DescriptorPart> {
+    explicit MethodDescriptorParts(char const *ptr);
+
+    reference operator*() { return m_part; }
+    pointer operator->() { return &m_part; }
+
+    MethodDescriptorParts &operator++();
+
+    bool operator==(const MethodDescriptorParts& other) { return m_start == other.m_start; };
+    bool operator!=(const MethodDescriptorParts& other) { return m_start != other.m_start; };
+
+private:
+    char const  *m_start;
+    size_t m_length;
+    DescriptorPart m_part;
+
+    void token();
+};
+
 #endif //SCHOKOVM_PARSER_HPP

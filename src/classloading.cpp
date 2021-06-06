@@ -179,7 +179,7 @@ static bool initialize_class(ClassFile *clazz, Thread &thread, Frame &frame) {
         method_info *method = &clazz->methods[static_cast<unsigned long>(clazz->clinit_index)];
 
         size_t operand_stack_top = frame.first_operand_index + frame.operands_top;
-        frame.operands_top += -method->stack_slots_for_parameters + method->return_size;
+        frame.operands_top += -method->stack_slots_for_parameters + method->return_category;
 
         frame.invoke_length = 0;
         thread.stack.parent_frames.push_back(frame);

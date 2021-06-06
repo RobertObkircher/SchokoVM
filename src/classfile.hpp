@@ -270,9 +270,7 @@ struct method_info {
     // Some parameters require 2 local variable slots
     u2 stack_slots_for_parameters;
 
-    enum : u1 {
-        Void = 0, Category1 = 1, Category2 = 2
-    } return_size;
+    u1 return_category; // 0, 1, 2
 
     [[nodiscard]] inline bool is_static() const {
         return (access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_STATIC)) != 0;

@@ -1,5 +1,6 @@
 #include "parser.hpp"
 
+#include <iterator>
 #include <utility>
 #include <sstream>
 #include <vector>
@@ -88,30 +89,12 @@ ClassFile Parser::parse() {
         method_info.parameter_count = 0;
         method_info.stack_slots_for_parameters = method_info.is_static() ? 0 : 1;
 
-        bool skip_class_name = false;
-        for (char c : descriptor) {
-            if (skip_class_name) {
-                if (c == ';') skip_class_name = false;
-                continue;
-            }
-            if (c == '(') continue;
-            if (c == ')') break;
-
-            if (c == '[') continue; // don't count array dimensions
-
-            if (c == 'L') skip_class_name = true;
-
-            if (c == 'D' || c == 'J')
-                ++method_info.stack_slots_for_parameters;
-            ++method_info.stack_slots_for_parameters;
+        MethodDescriptorParts parts{descriptor.c_str()};
+        for (; !parts->is_return; ++parts) {
             ++method_info.parameter_count;
+            method_info.stack_slots_for_parameters += parts->category;
         }
-
-        char return_type = descriptor[descriptor.size() - 1];
-        method_info.return_size = (return_type == 'V') ? method_info::Void
-                                                       : ((return_type == 'D' || return_type == 'J')
-                                                          ? method_info::Category2
-                                                          : method_info::Category1);
+        method_info.return_category = parts->category;
 
         if (method_info.name_index->value == "<clinit>") {
             if (result.clinit_index >= 0)
@@ -486,3 +469,90 @@ std::vector<attribute_info> Parser::parse_attributes(ConstantPool &constant_pool
 
     return result;
 }
+
+MethodDescriptorParts::MethodDescriptorParts(const char *ptr) : m_start(ptr), m_length(0), m_part() {
+    if (m_start[0] != '(') {
+        throw ParseError("Descriptor must start with '('");
+    }
+    ++m_start;
+    token();
+    m_part.type_name = {m_start, m_length};
+}
+
+MethodDescriptorParts &MethodDescriptorParts::operator++() {
+    m_start += m_length;
+    m_length = 0;
+    m_part = {};
+    token();
+    m_part.type_name = {m_start, m_length};
+    return *this;
+}
+
+void MethodDescriptorParts::token() {
+    switch (m_start[m_length]) {
+        case '[': {
+            ++m_length; // skip '['
+            token();
+            m_part.category = 1;
+            ++m_part.array_dimensions;
+            return;
+        }
+        case 'L': {
+            ++m_length; // skip 'L'
+            while(m_start[m_length] && m_start[m_length] != ';') {
+                ++m_length;
+            }
+            if (!m_start[m_length]) {
+                throw ParseError("");
+            }
+            ++m_length; // skip ';'
+            m_part.category = 1;
+            return;
+        }
+        case 'D':
+        case 'J': {
+            ++m_length;
+            m_part.category = 2;
+            return;
+        }
+        case 'B':
+        case 'C':
+        case 'F':
+        case 'I':
+        case 'S':
+        case 'Z': {
+            ++m_length;
+            m_part.category = 1;
+            return;
+        }
+        case ')': {
+            if (m_length != 0) {
+                throw ParseError("Unexpected ')'");
+            }
+            ++m_start; // increase pointer instead of length
+
+            if (m_part.is_return) {
+                throw ParseError("Found more than one ')'");
+            }
+            m_part.is_return = true;
+
+            if (m_start[m_length] == 'V') {
+                ++m_length;
+                m_part.category = 0;
+            } else {
+                token();
+            }
+            if (m_start[m_length] != 0) {
+                throw ParseError("Expected end");
+            }
+            return;
+        }
+        case '\0': {
+            throw ParseError("Unexpected end of descriptor");
+        }
+        default: {
+            throw ParseError("Unexpected character");
+        }
+    }
+}
+
