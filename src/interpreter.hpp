@@ -175,10 +175,6 @@ inline double Frame::pop<double>() {
 //    //  a map (class) -> (runtime constant pool, data...)
 //};
 
-//struct Heap {
-//  would be needed for GC?
-//};
-
 /** https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-2.html#jvms-2.5.1 */
 struct Stack {
     // Local variables and the operand stack are stored like this:
