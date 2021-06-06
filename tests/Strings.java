@@ -1,7 +1,14 @@
 public class Strings {
     static void println(int i) { System.out.println(i); }
     static void println(char i) { System.out.println((int) i); }
+    static void println(boolean i) { System.out.println(i); }
     static void println(String i) { System.out.println(i); }
+
+    static class Inner {
+		public static String get(){
+			return "abc";
+		}
+	}
 
     public static void main(String[] args) {
         String s = "ü🐡abcdef";
@@ -20,5 +27,11 @@ public class Strings {
 
         // println(s.length());
         // println(s);
+
+        String a = "abc";
+        String b = Inner.get();
+		println(a);
+		println(b);
+		println(a == b);
     }
 }

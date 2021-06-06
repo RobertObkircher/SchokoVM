@@ -5,6 +5,8 @@
 #include <memory>
 #include <cassert>
 #include <vector>
+#include <unordered_map>
+#include <string>
 
 #include "future.hpp"
 #include "types.hpp"
@@ -91,6 +93,7 @@ struct Heap {
     };
 
     std::vector<std::unique_ptr<void, OperatorDeleter>> allocations;
+    std::unordered_map<std::string, Reference> interned_strings;
 
     Reference new_instance(ClassFile *clazz);
 
@@ -120,7 +123,7 @@ struct Heap {
         return reference;
     }
 
-    Reference make_string(ClassFile *string_clazz, ClassFile *byte_array_clazz, const std::string& value_utf8);
+    Reference make_string(ClassFile *string_clazz, ClassFile *byte_array_clazz, const std::string &value_utf8);
 };
 
 #endif //SCHOKOVM_MEMORY_HPP
