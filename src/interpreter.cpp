@@ -1,6 +1,8 @@
 #include "interpreter.hpp"
 
 #include <algorithm>
+#include <locale>
+#include <codecvt>
 #include <limits>
 #include <string>
 #include <iostream>
@@ -137,31 +139,84 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             break;
         }
         case OpCodes::ldc: {
-            auto index = frame.consume_u1();
+            auto index = frame.read_u1();
             auto &entry = frame.clazz->constant_pool.table[index];
             if (auto i = std::get_if<CONSTANT_Integer_info>(&entry.variant)) {
                 frame.push<s4>(i->value);
+                frame.pc++;
             } else if (auto f = std::get_if<CONSTANT_Float_info>(&entry.variant)) {
                 frame.push<float>(f->value);
+                frame.pc++;
             } else if (auto c = std::get_if<CONSTANT_Class_info>(&entry.variant)) {
                 // TODO: handle a special case for to at least initialize classes containing assertions:
                 // 0: ldc           #5                  // class XYZ
                 // 2: invokevirtual #6                  // Method java/lang/Class.desiredAssertionStatus:()Z
-                if (static_cast<OpCodes>(code[frame.pc + 1]) == OpCodes::invokevirtual) {
-                    auto method_index = static_cast<u2>((code[frame.pc + 2] << 8) | code[frame.pc + 3]);
+                if (static_cast<OpCodes>(code[frame.pc + 2]) == OpCodes::invokevirtual) {
+                    auto method_index = static_cast<u2>((code[frame.pc + 3] << 8) | code[frame.pc + 4]);
                     auto &declared_method_ref = frame.clazz->constant_pool.get<CONSTANT_Methodref_info>(
                             method_index).method;
                     if (declared_method_ref.class_->name->value == "java/lang/Class" &&
                         declared_method_ref.name_and_type->name->value == "desiredAssertionStatus" &&
                         declared_method_ref.name_and_type->descriptor->value == "()Z") {
-                        frame.pc++; // ldc
+                        frame.pc += 2; // ldc
                         frame.pc += 3; // invokevirtual
                         frame.push<s1>(0);
                         return;
                     }
                 }
                 throw std::runtime_error("ldc refers to unimplemented type: class");
+            } else if (auto s = std::get_if<CONSTANT_String_info>(&entry.variant)) {
+                // TODO initialize class
+                auto clazz = bootstrap_class_loader.load("java/lang/String");
+                if (resolve_class(bootstrap_class_loader, clazz->this_class, thread, frame)) {
+                    return;
+                }
+                frame.pc++;
+
+                std::string &modified_utf8 = s->string->value;
+                std::string string_utf8;
+                string_utf8.reserve(modified_utf8.length());
+                for (size_t i = 0; i < modified_utf8.length(); ++i) {
+                    u1 c = static_cast<u1>(modified_utf8[i]);
+
+                    if (c == 0b11101101) {
+                        u1 v = static_cast<u1>(modified_utf8[i + 1]);
+                        u1 w = static_cast<u1>(modified_utf8[i + 2]);
+                        u1 x = static_cast<u1>(modified_utf8[i + 3]);
+                        u1 y = static_cast<u1>(modified_utf8[i + 4]);
+                        u1 z = static_cast<u1>(modified_utf8[i + 5]);
+
+                        if (((v & 0xf0) == 0b10100000) && ((w & 0b11000000) == 0b10000000)
+                            && (x == 0b11101101) && ((y & 0xf0) == 0b10110000) && ((z & 11000000) == 0b10000000)) {
+                            int codepoint =
+                                    0x10000 + ((v & 0x0f) << 16) + ((w & 0x3f) << 10) + ((y & 0x0f) << 6) + (z & 0x3f);
+                            // convert into the 4-byte utf8 variant
+                            string_utf8.push_back(static_cast<char>(0b11110000 | ((codepoint >> 18) & 0b1111)));
+                            string_utf8.push_back(static_cast<char>(0b10000000 | ((codepoint >> 12) & 0b111111)));
+                            string_utf8.push_back(static_cast<char>(0b10000000 | ((codepoint >> 6) & 0b111111)));
+                            string_utf8.push_back(static_cast<char>(0b10000000 | ((codepoint) & 0b111111)));
+                            i += 5;
+                            continue;
+                        }
+                    }
+
+                    if ((c & 0b10000000) == 0) { // copy 1 byte over
+                        string_utf8.push_back(static_cast<char>(c));
+                    } else if ((c & 0b11100000) == 0b11000000) { // copy 2 byte over
+                        string_utf8.push_back(static_cast<char>(c));
+                        string_utf8.push_back(modified_utf8[++i]);
+                    } else if ((c & 0b11110000) == 0b11100000) { // copy 3 byte over
+                        string_utf8.push_back(static_cast<char>(c));
+                        string_utf8.push_back(modified_utf8[++i]);
+                        string_utf8.push_back(modified_utf8[++i]);
+                    } else {
+                        throw std::runtime_error("Invalid byte in modified utf8 string: " + std::to_string((int) c));
+                    }
+                }
+
+                frame.push<Reference>(heap.make_string(clazz, bootstrap_class_loader.load("[B"), string_utf8));
             } else {
+                // TODO: "a symbolic reference to a method type, a method handle, or a dynamically-computed constant." (?)
                 throw std::runtime_error("ldc refers to invalid/unimplemented type");
             }
             break;
@@ -1064,6 +1119,12 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 method_ref->name_and_type->descriptor->value == "(I)V") {
                 shouldExit = true;
                 return;
+            } else if (method_ref->class_->name->value == "java/lang/StringUTF16" &&
+                       method_ref->name_and_type->name->value == "isBigEndian" &&
+                       method_ref->name_and_type->descriptor->value == "()Z") {
+                frame.pc += 2;
+                frame.push<s1>(std::endian::native == std::endian::big ? 1 : 0); // NOLINT
+                break;
             } else if (method_ref->name_and_type->name->value == "println" &&
                        method_ref->name_and_type->descriptor->value == "(I)V") {
                 std::cout << frame.pop<s4>() << "\n";
@@ -1122,6 +1183,29 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                     std::cout << "false\n";
                 } else {
                     abort();
+                }
+                frame.pc += 2;
+                break;
+            } else if (method_ref->name_and_type->name->value == "println" &&
+                       method_ref->name_and_type->descriptor->value == "(Ljava/lang/String;)V") {
+                auto reference = frame.pop<Reference>();
+                Reference *byte_array = nullptr;
+                for (auto const &field : reference.object()->clazz->fields) {
+                    if (field.name_index->value == "value" &&
+                        field.descriptor_index->value == "[B") {
+                        byte_array = &reference.data<Value>()[field.index].reference;
+                    }
+                }
+                if (reference.data<Value>()[1].s4 == 1) {
+                    // UTF16
+                    std::u16string string_utf16(byte_array->data<char16_t>(),
+                                                static_cast<size_t>(byte_array->object()->length) / (sizeof(char16_t)));
+
+                    std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> convert;
+                    std::string string_utf8 = convert.to_bytes(string_utf16);
+                    std::cout << string_utf8 << "\n";
+                } else {
+                    throw std::runtime_error("Unimplemented string encoding LATIN1");
                 }
                 frame.pc += 2;
                 break;
@@ -1743,9 +1827,14 @@ method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_inf
             // "can override" according to §5.4.5
             if (m.name_index->value == name &&
                 m.descriptor_index->value == descriptor &&
-                !m.is_private() && (m.is_protected() || m.is_public())
-                // TODO there is one missing case here (the very last bullet point of the spec paragraph)
-                //  because we currently don't store the package of classes
+                !m.is_private() &&
+                (
+                        m.is_protected() || m.is_public()
+                        ||
+                        // TODO there is one missing case here (the very last bullet point of the spec paragraph)
+                        //  because we currently don't store the package of classes
+                        dynamic_class == clazz
+                )
                     ) {
                 out_method = &m;
                 out_class = clazz;

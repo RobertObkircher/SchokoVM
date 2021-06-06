@@ -34,6 +34,10 @@ struct Frame {
 
     Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top);
 
+    inline u1 read_u1() {
+        return (*code)[pc + 1];
+    }
+
     inline u1 consume_u1() {
         return (*code)[++pc];
     }
@@ -169,10 +173,6 @@ inline double Frame::pop<double>() {
 //    // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-2.html#jvms-2.5.4
 //    // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.1
 //    //  a map (class) -> (runtime constant pool, data...)
-//};
-
-//struct Heap {
-//  would be needed for GC?
 //};
 
 /** https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-2.html#jvms-2.5.1 */
