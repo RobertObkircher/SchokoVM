@@ -120,6 +120,7 @@ struct Heap {
         return reference;
     }
 
+    Reference make_string(ClassFile *string_clazz, ClassFile *byte_array_clazz, const std::string& value_utf8);
 };
 
 #endif //SCHOKOVM_MEMORY_HPP
