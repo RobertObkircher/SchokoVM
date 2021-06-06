@@ -476,7 +476,7 @@ MethodDescriptorParts::MethodDescriptorParts(const char *ptr) : m_ptr(ptr), m_le
     }
     ++m_ptr;
     token();
-    m_part.type_name = {m_ptr - m_length, m_length};
+    m_part.type_name = {m_ptr, m_length};
 }
 
 MethodDescriptorParts &MethodDescriptorParts::operator++() {
@@ -484,7 +484,7 @@ MethodDescriptorParts &MethodDescriptorParts::operator++() {
     m_length = 0;
     m_part = {};
     token();
-    m_part.type_name = {m_ptr - m_length, m_length};
+    m_part.type_name = {m_ptr, m_length};
     return *this;
 }
 
