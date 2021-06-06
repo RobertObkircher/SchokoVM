@@ -221,7 +221,7 @@ struct Stack {
     /// Pushes current_frame onto the list of parent frames and sets to current frame to run `method` in `clazz`
     void push_frame(Frame &current_frame, ClassFile *clazz, method_info *method) {
         size_t operand_stack_top = current_frame.first_operand_index + current_frame.operands_top;
-        current_frame.operands_top += -method->stack_slots_for_parameters + method->return_size;
+        current_frame.operands_top += -method->stack_slots_for_parameters + method->return_category;
         parent_frames.push_back(current_frame);
 
         current_frame = {*this, clazz, method, operand_stack_top};
