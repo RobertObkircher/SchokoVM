@@ -1877,10 +1877,12 @@ void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &f
     }
 
     if (!method->native_function) {
-        method->native_function = NativeFunction::create(clazz, method);
-        if (!method->native_function) {
-            return;
+        auto *function_pointer = get_native_function_pointer(clazz, method);
+        if (function_pointer == nullptr) {
+            // TODO throw an exception and return
+            abort();
         }
+        method->native_function = NativeFunction(method, function_pointer);
     }
     NativeFunction &native = *method->native_function;
 

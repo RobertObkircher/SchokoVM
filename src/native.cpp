@@ -36,7 +36,7 @@ static ffi_type *ffi_type_from_char(char c) {
 // TODO where to put this?
 static void *dlsym_handle = nullptr;
 
-static void *get_native_pointer(ClassFile *clazz, method_info *method) {
+void *get_native_function_pointer(ClassFile *clazz, method_info *method) {
     if (dlsym_handle == nullptr) {
         // TODO we might need different flags
 #ifdef __APPLE__
@@ -66,24 +66,17 @@ static void *get_native_pointer(ClassFile *clazz, method_info *method) {
     return result;
 }
 
-std::optional<NativeFunction> NativeFunction::create(ClassFile *clazz, method_info *method) {
+NativeFunction::NativeFunction(method_info *method, void *function_pointer) : m_function_pointer(function_pointer), m_cif(), m_argument_types(), m_argument_offsets() {
     assert(method->is_native());
 
-    NativeFunction result{};
-    result.m_function_pointer = get_native_pointer(clazz, method);
-    if (result.m_function_pointer == nullptr) {
-        // TODO set exception and return none
-        abort();
-    }
-
-    result.m_argument_types.push_back(&ffi_type_pointer); // JNIEnv *env
-    result.m_argument_types.push_back(&ffi_type_pointer); // jclass or jobject
+    m_argument_types.push_back(&ffi_type_pointer); // JNIEnv *env
+    m_argument_types.push_back(&ffi_type_pointer); // jclass or jobject
 
     ffi_type *return_type;
     try {
         u2 offset = 0;
         if (!method->is_static()) {
-            result.m_argument_offsets.push_back(offset); // "this" is not included in the descriptor
+            m_argument_offsets.push_back(offset); // "this" is not included in the descriptor
             ++offset;
         }
 
@@ -91,8 +84,8 @@ std::optional<NativeFunction> NativeFunction::create(ClassFile *clazz, method_in
         for (; !parts->is_return; ++parts) {
             ffi_type *t = ffi_type_from_char(parts->type_name[0]);
             assert(t);
-            result.m_argument_types.push_back(t);
-            result.m_argument_offsets.push_back(offset);
+            m_argument_types.push_back(t);
+            m_argument_offsets.push_back(offset);
             offset += parts->category;
         }
 
@@ -103,19 +96,17 @@ std::optional<NativeFunction> NativeFunction::create(ClassFile *clazz, method_in
     }
 
     ffi_status status = ffi_prep_cif(
-            &result.m_cif,
+            &m_cif,
             FFI_DEFAULT_ABI,
-            static_cast<unsigned int>(result.m_argument_types.size()),
+            static_cast<unsigned int>(m_argument_types.size()),
             return_type,
-            result.m_argument_types.data()
+            m_argument_types.data()
     );
 
     if (status != FFI_OK) {
         std::cerr << "Failed to prepare ffi call\n";
         abort();
     }
-
-    return {std::move(result)};
 }
 
 void NativeFunction::prepare_argument_pointers(void **arguments, void **jni_env_argument, ClassFile **class_argument,

@@ -16,8 +16,10 @@ union Value;
 struct ClassFile;
 struct method_info;
 
+void *get_native_function_pointer(ClassFile *clazz, method_info *method);
+
 struct NativeFunction {
-    static std::optional<NativeFunction> create(ClassFile *clazz, method_info *method);
+    NativeFunction(method_info *method, void *function_pointer);
 
     void prepare_argument_pointers(void **arguments, void **jni_env_argument, ClassFile **class_argument,
                                    bool use_class_argument, std::span<Value> &locals);
