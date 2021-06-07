@@ -39,7 +39,11 @@ static void *dlsym_handle = nullptr;
 static void *get_native_pointer(ClassFile *clazz, method_info *method) {
     if (dlsym_handle == nullptr) {
         // TODO we might need different flags
+#ifdef __APPLE__
+        dlsym_handle = dlopen("./libNativeLib.dylib", RTLD_LAZY);
+#else
         dlsym_handle = dlopen("./libNativeLib.so", RTLD_LAZY);
+#endif
         if (auto message = dlerror(); message != nullptr) {
             std::cerr << "dlopen failed: " << message << "\n";
             return nullptr;

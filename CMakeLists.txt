@@ -15,6 +15,10 @@ include(UseJava)
 
 find_package(libzip)
 
+if (APPLE)
+    set(CMAKE_SHARED_MODULE_SUFFIX ".dylib")
+endif()
+
 #
 # Common compiler options
 #
