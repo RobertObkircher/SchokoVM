@@ -18,8 +18,8 @@ typedef float jfloat;
 typedef double jdouble;
 typedef jint jsize;
 
-typedef void* jclass;
-typedef void* jobject;
+typedef void *jclass;
+typedef void *jobject;
 
 extern "C" {
 
@@ -88,6 +88,13 @@ Java_Native_second(JNIEnv *, jobject, jint, jint x, jint) {
 JNIEXPORT jint JNICALL
 Java_Native_third(JNIEnv *, jobject, jint, jint, jint x) {
     return x;
+}
+
+JNIEXPORT jint JNICALL
+Java_Native_summm(JNIEnv *, jclass,
+                  jint a1, jint a2, jint a3, jint a4, jint a5, jint a6, jint a7, jint a8, jint a9, jint a10,
+                  jint a11, jint a12, jint a13, jint a14, jint a15, jint a16, jint a17, jint a18, jint a19) {
+    return a1 + +a2 + +a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14 + a15 + a16 + a17 + a18 + a19;
 }
 
 }

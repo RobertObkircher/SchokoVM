@@ -1891,13 +1891,12 @@ void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &f
     bool use_class_argument = method->is_static();
 
     Value return_value;
-    if (native.argument_count() <= 10) {
-        void *arguments[10];
+    if (native.argument_count() <= 13) {
+        void *arguments[13];
         native.prepare_argument_pointers(arguments,
                                          &jni_env_argument, &class_argument, use_class_argument, frame.locals);
         return_value = native.call(arguments);
     } else {
-        // if there are recursive calls then (255 + 2) * sizeof(void*) would be too large for the stack
         std::vector<void *> arguments;
         arguments.resize(native.argument_count());
         native.prepare_argument_pointers(arguments.data(),
