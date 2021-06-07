@@ -5,8 +5,12 @@
 
 #include "jni.h"
 #include "classloading.hpp"
+#include "memory.hpp"
+#include "parser.hpp"
 
 #define UNIMPLEMENTED(x) std::cerr << x; exit(42);
+
+#define LOG(x)
 
 /**
  * The Invocation API
@@ -16,13 +20,53 @@
 
 _JNI_IMPORT_OR_EXPORT_ jint JNICALL
 JNI_GetDefaultJavaVMInitArgs(void *args) {
-    printf("JNI_GetDefaultJavaVMInitArgs\n");
-    return 0;
+    LOG("JNI_GetDefaultJavaVMInitArgs");
+    auto *vm_args = static_cast<JavaVMInitArgs *>(args);
+    if (vm_args->version != JNI_VERSION_10) {
+        return JNI_EVERSION;
+    }
+
+    vm_args->ignoreUnrecognized = false;
+    vm_args->nOptions = 0;
+    vm_args->options = nullptr;
+
+    return JNI_OK;
 }
+
+extern const struct JNIInvokeInterface_ jni_invoke_interface;
+extern const struct JNINativeInterface_ jni_native_interface;
 
 _JNI_IMPORT_OR_EXPORT_ jint JNICALL
 JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
-    printf("JNI_CreateJavaVM\n");
+    auto *vm_args = static_cast<JavaVMInitArgs *>(args);
+
+    std::string bootclasspath_option{"-Xbootclasspath:"};
+    std::string classpath_option{"-Djava.class.path="};
+
+    std::string bootclasspath{};
+    std::string classpath{};
+
+    for (int i = 0; i < vm_args->nOptions; ++i) {
+        std::string option{vm_args->options[i].optionString};
+        if (option.starts_with(bootclasspath_option)) {
+            bootclasspath = option.substr(bootclasspath_option.size());
+        } else if (option.starts_with(classpath_option)) {
+            classpath = option.substr(classpath_option.size());
+        }
+    }
+
+    // TODO remove classpath
+    BootstrapClassLoader::get().initialize_with_boot_classpath(bootclasspath + ":" + classpath);
+
+    auto *thread = new Thread();
+    thread->stack.memory.resize(1024 * 1024 / sizeof(Value)); // 1mb for now
+
+    // TODO should be something like thread.get_jni()
+    auto *native = new JNINativeInterface_{jni_native_interface};
+    native->reserved0 = thread;
+
+    *pvm = new JavaVM{&jni_invoke_interface};
+    *penv = new JNIEnv{native};
     return 0;
 }
 
@@ -37,7 +81,9 @@ JNI_GetCreatedJavaVMs(JavaVM **vmBuf, jsize bufLen, jsize *nVMs) {
 
 jint JNICALL
 DestroyJavaVM(JavaVM *vm) {
-    UNIMPLEMENTED("DestroyJavaVM");
+    LOG("DestroyJavaVM");
+    delete vm;
+    return JNI_OK;
 }
 
 jint JNICALL
@@ -132,7 +178,8 @@ jint ThrowNew
 
 jthrowable ExceptionOccurred
         (JNIEnv *env) {
-    UNIMPLEMENTED("ExceptionOccurred");
+    LOG("ExceptionOccurred");
+    return nullptr;
 }
 
 void ExceptionDescribe
@@ -225,325 +272,172 @@ jmethodID GetMethodID
     UNIMPLEMENTED("GetMethodID");
 }
 
-jobject CallObjectMethod
-        (JNIEnv *env, jobject obj, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallObjectMethod");
+/**
+ *    CallReturntypeMethod
+ *    CallNonvirtualReturntypeMethod
+ *    CallStaticReturntypeMethod
+ */
+
+static jint call(JNIEnv *env, jclass java_class, bool is_virtual, jobject java_object, jmethodID methodID, const jvalue *args, Value &result) {
+    auto *thread = static_cast<Thread *>(env->functions->reserved0);
+    auto *object = (Object *) java_object;
+    auto *clazz = (ClassFile *) java_class;
+    auto *method = (method_info *) methodID;
+
+    size_t saved_operand_stack_top = thread->stack.memory_used;
+    thread->stack.memory_used += method->parameter_count;
+    if (thread->stack.memory_used > thread->stack.memory.size()) {
+        return JNI_ENOMEM;
+    }
+
+    if (is_virtual) {
+        auto *declared_clazz = clazz;
+        auto *declared_method = method;
+
+        if (method_selection(object->clazz, declared_clazz, declared_method, clazz, method)) {
+            return JNI_ERR;
+        }
+    }
+
+    size_t offset = saved_operand_stack_top;
+    assert(method->is_static() == (object == nullptr));
+    if (!method->is_static()) {
+        thread->stack.memory[offset] = Value(Reference{object});
+        ++offset;
+    }
+
+    MethodDescriptorParts parts{method->descriptor_index->value.c_str()};
+    for (; !parts->is_return; ++parts) {
+        thread->stack.memory[offset] = Value(args->j);
+        ++args;
+        offset += parts->category;
+    }
+
+    result = interpret(*thread, clazz, method);
+    thread->stack.memory_used = saved_operand_stack_top;
+    return JNI_OK;
 }
 
-jobject CallObjectMethodV
-        (JNIEnv *env, jobject obj, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallObjectMethodV");
+static jint call_v(JNIEnv *env, jclass java_class, bool is_virtual, jobject java_object, jmethodID methodID, va_list args, Value &result) {
+    auto *thread = static_cast<Thread *>(env->functions->reserved0);
+    auto *object = (Object *) java_object;
+    auto *clazz = (ClassFile *) java_class;
+    auto *method = (method_info *) methodID;
+
+    size_t saved_operand_stack_top = thread->stack.memory_used;
+    thread->stack.memory_used += method->parameter_count;
+    if (thread->stack.memory_used > thread->stack.memory.size()) {
+        return JNI_ENOMEM;
+    }
+
+    if (is_virtual) {
+        auto *declared_clazz = clazz;
+        auto *declared_method = method;
+
+        if (method_selection(object->clazz, declared_clazz, declared_method, clazz, method)) {
+            return JNI_ERR;
+        }
+    }
+
+    size_t offset = saved_operand_stack_top;
+    assert(method->is_static() == (object == nullptr));
+    if (!method->is_static()) {
+        thread->stack.memory[offset] = Value(Reference{object});
+        ++offset;
+    }
+
+    MethodDescriptorParts parts{method->descriptor_index->value.c_str()};
+    for (; !parts->is_return; ++parts) {
+        thread->stack.memory[offset] = Value(va_arg(args, jvalue).j);
+        offset += parts->category;
+    }
+
+    result = interpret(*thread, clazz, method);
+    thread->stack.memory_used = saved_operand_stack_top;
+    return JNI_OK;
 }
 
-jobject CallObjectMethodA
-        (JNIEnv *env, jobject obj, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallObjectMethodA");
-}
+// static jint call(JNIEnv *env, jclass java_class, bool is_virtual, jobject java_object, jmethodID methodID, const jvalue *args, Value &result);
+// jobject CallObjectMethod(JNIEnv *env, jobject obj, jmethodID methodID, ...);
+// jobject CallNonvirtualObjectMethod(JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID, ...);
+// jobject CallStaticObjectMethod(JNIEnv *env, jclass clazz, jmethodID methodID, ...);
+#define CALL(ReturnType, Name, Return)                                                                                 \
+ReturnType Call##Name##Method(JNIEnv *env, jobject object, jmethodID methodID, ...) {                            \
+    LOG("Call" #Name "Method");                                                                                  \
+    Value result;                                                                                                      \
+    va_list args;                                                                                                      \
+    va_start(args, methodID);                                                                                          \
+    call_v(env, nullptr, true, object, methodID, args, result);                                                        \
+    va_end(args);                                                                                                      \
+    Return (ReturnType) result.s8;                                                                                     \
+}                                                                                                                      \
+ReturnType Call##Name##MethodV(JNIEnv *env, jobject object, jmethodID methodID, va_list args) {                  \
+    LOG("Call" #Name "MethodV");                                                                                 \
+    Value result;                                                                                                      \
+    call_v(env, nullptr, true, object, methodID, args, result);                                                        \
+    return (ReturnType) result.s8;                                                                                     \
+}                                                                                                                      \
+ReturnType Call##Name##MethodA(JNIEnv *env, jobject object, jmethodID methodID, const jvalue *args) {            \
+    LOG("Call" #Name "MethodA");                                                                                 \
+    Value result;                                                                                                      \
+    call(env, nullptr, true, object, methodID, args, result);                                                          \
+    return (ReturnType) result.s8;                                                                                     \
+}                                                                                                                      \
+ReturnType CallNonvirtual##Name##Method(JNIEnv *env, jobject object, jclass clazz, jmethodID methodID, ...) {                  \
+    LOG("CallNonvirtual" #Name "Method");                                                                        \
+    Value result;                                                                                                      \
+    va_list args;                                                                                                      \
+    va_start(args, methodID);                                                                                          \
+    call_v(env, clazz, false, object, methodID, args, result);                                                       \
+    va_end(args);                                                                                                      \
+    Return (ReturnType) result.s8;                                                                                     \
+}                                                                                                                      \
+ReturnType CallNonvirtual##Name##MethodV(JNIEnv *env, jobject object, jclass clazz, jmethodID methodID, va_list args) {        \
+    LOG("CallNonvirtual" #Name "MethodV");                                                                       \
+    Value result;                                                                                                      \
+    call_v(env, clazz, false, object, methodID, args, result);                                                       \
+    return (ReturnType) result.s8;                                                                                     \
+}                                                                                                                      \
+ReturnType CallNonvirtual##Name##MethodA(JNIEnv *env, jobject object, jclass clazz, jmethodID methodID, const jvalue *args) {  \
+    LOG("CallNonvirtual" #Name "MethodA");                                                                       \
+    Value result;                                                                                                      \
+    call(env, clazz, false, object, methodID, args, result);                                                         \
+    return (ReturnType) result.s8;                                                                                     \
+}                                                                                                                      \
+ReturnType CallStatic##Name##Method(JNIEnv *env, jclass clazz, jmethodID methodID, ...) {                              \
+    LOG("CallStatic" #Name "Method");                                                                                  \
+    Value result;                                                                                                      \
+    va_list args;                                                                                                      \
+    va_start(args, methodID);                                                                                          \
+    call_v(env, clazz, false, nullptr, methodID, args, result);                                                        \
+    va_end(args);                                                                                                      \
+    Return (ReturnType) result.s8;                                                                                     \
+}                                                                                                                      \
+ReturnType CallStatic##Name##MethodV(JNIEnv *env, jclass clazz, jmethodID methodID, va_list args) {                    \
+    LOG("CallStatic" #Name "MethodV");                                                                                 \
+    Value result;                                                                                                      \
+    call_v(env, clazz, false, nullptr, methodID, args, result);                                                        \
+    return (ReturnType) result.s8;                                                                                     \
+}                                                                                                                      \
+ReturnType CallStatic##Name##MethodA(JNIEnv *env, jclass clazz, jmethodID methodID, const jvalue *args) {              \
+    LOG("CallStatic" #Name "MethodA");                                                                                 \
+    Value result;                                                                                                      \
+    call(env, clazz, false, nullptr, methodID, args, result);                                                          \
+    return (ReturnType) result.s8;                                                                                     \
+}                                                                                                                      \
 
-jboolean CallBooleanMethod
-        (JNIEnv *env, jobject obj, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallBooleanMethod");
-}
+CALL(jobject, Object, return);
+CALL(jboolean, Boolean, return);
+CALL(jbyte, Byte, return);
+CALL(jchar, Char, return);
+CALL(jshort, Short, return);
+CALL(jint, Int, return);
+CALL(jlong, Long, return);
+CALL(jfloat, Float, return);
+CALL(jdouble, Double, return);
+CALL(void, Void,);
 
-jboolean CallBooleanMethodV
-        (JNIEnv *env, jobject obj, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallBooleanMethodV");
-}
-
-jboolean CallBooleanMethodA
-        (JNIEnv *env, jobject obj, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallBooleanMethodA");
-}
-
-jbyte CallByteMethod
-        (JNIEnv *env, jobject obj, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallByteMethod");
-}
-
-jbyte CallByteMethodV
-        (JNIEnv *env, jobject obj, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallByteMethodV");
-}
-
-jbyte CallByteMethodA
-        (JNIEnv *env, jobject obj, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallByteMethodA");
-}
-
-jchar CallCharMethod
-        (JNIEnv *env, jobject obj, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallCharMethod");
-}
-
-jchar CallCharMethodV
-        (JNIEnv *env, jobject obj, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallCharMethodV");
-}
-
-jchar CallCharMethodA
-        (JNIEnv *env, jobject obj, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallCharMethodA");
-}
-
-jshort CallShortMethod
-        (JNIEnv *env, jobject obj, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallShortMethod");
-}
-
-jshort CallShortMethodV
-        (JNIEnv *env, jobject obj, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallShortMethodV");
-}
-
-jshort CallShortMethodA
-        (JNIEnv *env, jobject obj, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallShortMethodA");
-}
-
-jint CallIntMethod
-        (JNIEnv *env, jobject obj, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallIntMethod");
-}
-
-jint CallIntMethodV
-        (JNIEnv *env, jobject obj, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallIntMethodV");
-}
-
-jint CallIntMethodA
-        (JNIEnv *env, jobject obj, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallIntMethodA");
-}
-
-jlong CallLongMethod
-        (JNIEnv *env, jobject obj, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallLongMethod");
-}
-
-jlong CallLongMethodV
-        (JNIEnv *env, jobject obj, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallLongMethodV");
-}
-
-jlong CallLongMethodA
-        (JNIEnv *env, jobject obj, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallLongMethodA");
-}
-
-jfloat CallFloatMethod
-        (JNIEnv *env, jobject obj, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallFloatMethod");
-}
-
-jfloat CallFloatMethodV
-        (JNIEnv *env, jobject obj, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallFloatMethodV");
-}
-
-jfloat CallFloatMethodA
-        (JNIEnv *env, jobject obj, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallFloatMethodA");
-}
-
-jdouble CallDoubleMethod
-        (JNIEnv *env, jobject obj, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallDoubleMethod");
-}
-
-jdouble CallDoubleMethodV
-        (JNIEnv *env, jobject obj, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallDoubleMethodV");
-}
-
-jdouble CallDoubleMethodA
-        (JNIEnv *env, jobject obj, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallDoubleMethodA");
-}
-
-void CallVoidMethod
-        (JNIEnv *env, jobject obj, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallVoidMethod");
-}
-
-void CallVoidMethodV
-        (JNIEnv *env, jobject obj, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallVoidMethodV");
-}
-
-void CallVoidMethodA
-        (JNIEnv *env, jobject obj, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallVoidMethodA");
-}
-
-jobject CallNonvirtualObjectMethod
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallNonvirtualObjectMethod");
-}
-
-jobject CallNonvirtualObjectMethodV
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         va_list args) {
-    UNIMPLEMENTED("CallNonvirtualObjectMethodV");
-}
-
-jobject CallNonvirtualObjectMethodA
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         const jvalue *args) {
-    UNIMPLEMENTED("CallNonvirtualObjectMethodA");
-}
-
-jboolean CallNonvirtualBooleanMethod
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallNonvirtualBooleanMethod");
-}
-
-jboolean CallNonvirtualBooleanMethodV
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         va_list args) {
-    UNIMPLEMENTED("CallNonvirtualBooleanMethodV");
-}
-
-jboolean CallNonvirtualBooleanMethodA
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         const jvalue *args) {
-    UNIMPLEMENTED("CallNonvirtualBooleanMethodA");
-}
-
-jbyte CallNonvirtualByteMethod
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallNonvirtualByteMethod");
-}
-
-jbyte CallNonvirtualByteMethodV
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         va_list args) {
-    UNIMPLEMENTED("CallNonvirtualByteMethodV");
-}
-
-jbyte CallNonvirtualByteMethodA
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         const jvalue *args) {
-    UNIMPLEMENTED("CallNonvirtualByteMethodA");
-}
-
-jchar CallNonvirtualCharMethod
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallNonvirtualCharMethod");
-}
-
-jchar CallNonvirtualCharMethodV
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         va_list args) {
-    UNIMPLEMENTED("CallNonvirtualCharMethodV");
-}
-
-jchar CallNonvirtualCharMethodA
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         const jvalue *args) {
-    UNIMPLEMENTED("CallNonvirtualCharMethodA");
-}
-
-jshort CallNonvirtualShortMethod
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallNonvirtualShortMethod");
-}
-
-jshort CallNonvirtualShortMethodV
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         va_list args) {
-    UNIMPLEMENTED("CallNonvirtualShortMethodV");
-}
-
-jshort CallNonvirtualShortMethodA
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         const jvalue *args) {
-    UNIMPLEMENTED("CallNonvirtualShortMethodA");
-}
-
-jint CallNonvirtualIntMethod
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallNonvirtualIntMethod");
-}
-
-jint CallNonvirtualIntMethodV
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         va_list args) {
-    UNIMPLEMENTED("CallNonvirtualIntMethodV");
-}
-
-jint CallNonvirtualIntMethodA
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         const jvalue *args) {
-    UNIMPLEMENTED("CallNonvirtualIntMethodA");
-}
-
-jlong CallNonvirtualLongMethod
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallNonvirtualLongMethod");
-}
-
-jlong CallNonvirtualLongMethodV
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         va_list args) {
-    UNIMPLEMENTED("CallNonvirtualLongMethodV");
-}
-
-jlong CallNonvirtualLongMethodA
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         const jvalue *args) {
-    UNIMPLEMENTED("CallNonvirtualLongMethodA");
-}
-
-jfloat CallNonvirtualFloatMethod
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallNonvirtualFloatMethod");
-}
-
-jfloat CallNonvirtualFloatMethodV
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         va_list args) {
-    UNIMPLEMENTED("CallNonvirtualFloatMethodV");
-}
-
-jfloat CallNonvirtualFloatMethodA
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         const jvalue *args) {
-    UNIMPLEMENTED("CallNonvirtualFloatMethodA");
-}
-
-jdouble CallNonvirtualDoubleMethod
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallNonvirtualDoubleMethod");
-}
-
-jdouble CallNonvirtualDoubleMethodV
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         va_list args) {
-    UNIMPLEMENTED("CallNonvirtualDoubleMethodV");
-}
-
-jdouble CallNonvirtualDoubleMethodA
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         const jvalue *args) {
-    UNIMPLEMENTED("CallNonvirtualDoubleMethodA");
-}
-
-void CallNonvirtualVoidMethod
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallNonvirtualVoidMethod");
-}
-
-void CallNonvirtualVoidMethodV
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         va_list args) {
-    UNIMPLEMENTED("CallNonvirtualVoidMethodV");
-}
-
-void CallNonvirtualVoidMethodA
-        (JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID,
-         const jvalue *args) {
-    UNIMPLEMENTED("CallNonvirtualVoidMethodA");
-}
+#undef CALL
 
 jfieldID GetFieldID
         (JNIEnv *env, jclass clazz, const char *name, const char *sig) {
@@ -640,159 +534,24 @@ void SetDoubleField
     UNIMPLEMENTED("SetDoubleField");
 }
 
-jmethodID GetStaticMethodID
-        (JNIEnv *env, jclass clazz, const char *name, const char *sig) {
-    UNIMPLEMENTED("GetStaticMethodID");
-}
+jmethodID GetStaticMethodID(JNIEnv *env, jclass clazz, const char *name, const char *sig) {
+    LOG("GetStaticMethodID");
 
-jobject CallStaticObjectMethod
-        (JNIEnv *env, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallStaticObjectMethod");
-}
+    auto *clazzz = (ClassFile *) (clazz);
 
-jobject CallStaticObjectMethodV
-        (JNIEnv *env, jclass clazz, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallStaticObjectMethodV");
-}
+    auto method_iter = std::find_if(clazzz->methods.begin(), clazzz->methods.end(),
+                                    [name, sig](const method_info &m) {
+                                        return m.name_index->value == name && m.descriptor_index->value == sig;
+                                    }
+    );
 
-jobject CallStaticObjectMethodA
-        (JNIEnv *env, jclass clazz, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallStaticObjectMethodA");
-}
+    if (method_iter == clazzz->methods.end()) {
+        return nullptr;
+    }
 
-jboolean CallStaticBooleanMethod
-        (JNIEnv *env, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallStaticBooleanMethod");
-}
-
-jboolean CallStaticBooleanMethodV
-        (JNIEnv *env, jclass clazz, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallStaticBooleanMethodV");
-}
-
-jboolean CallStaticBooleanMethodA
-        (JNIEnv *env, jclass clazz, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallStaticBooleanMethodA");
-}
-
-jbyte CallStaticByteMethod
-        (JNIEnv *env, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallStaticByteMethod");
-}
-
-jbyte CallStaticByteMethodV
-        (JNIEnv *env, jclass clazz, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallStaticByteMethodV");
-}
-
-jbyte CallStaticByteMethodA
-        (JNIEnv *env, jclass clazz, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallStaticByteMethodA");
-}
-
-jchar CallStaticCharMethod
-        (JNIEnv *env, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallStaticCharMethod");
-}
-
-jchar CallStaticCharMethodV
-        (JNIEnv *env, jclass clazz, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallStaticCharMethodV");
-}
-
-jchar CallStaticCharMethodA
-        (JNIEnv *env, jclass clazz, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallStaticCharMethodA");
-}
-
-jshort CallStaticShortMethod
-        (JNIEnv *env, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallStaticShortMethod");
-}
-
-jshort CallStaticShortMethodV
-        (JNIEnv *env, jclass clazz, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallStaticShortMethodV");
-}
-
-jshort CallStaticShortMethodA
-        (JNIEnv *env, jclass clazz, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallStaticShortMethodA");
-}
-
-jint CallStaticIntMethod
-        (JNIEnv *env, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallStaticIntMethod");
-}
-
-jint CallStaticIntMethodV
-        (JNIEnv *env, jclass clazz, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallStaticIntMethodV");
-}
-
-jint CallStaticIntMethodA
-        (JNIEnv *env, jclass clazz, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallStaticIntMethodA");
-}
-
-jlong CallStaticLongMethod
-        (JNIEnv *env, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallStaticLongMethod");
-}
-
-jlong CallStaticLongMethodV
-        (JNIEnv *env, jclass clazz, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallStaticLongMethodV");
-}
-
-jlong CallStaticLongMethodA
-        (JNIEnv *env, jclass clazz, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallStaticLongMethodA");
-}
-
-jfloat CallStaticFloatMethod
-        (JNIEnv *env, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallStaticFloatMethod");
-}
-
-jfloat CallStaticFloatMethodV
-        (JNIEnv *env, jclass clazz, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallStaticFloatMethodV");
-}
-
-jfloat CallStaticFloatMethodA
-        (JNIEnv *env, jclass clazz, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallStaticFloatMethodA");
-}
-
-jdouble CallStaticDoubleMethod
-        (JNIEnv *env, jclass clazz, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallStaticDoubleMethod");
-}
-
-jdouble CallStaticDoubleMethodV
-        (JNIEnv *env, jclass clazz, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallStaticDoubleMethodV");
-}
-
-jdouble CallStaticDoubleMethodA
-        (JNIEnv *env, jclass clazz, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallStaticDoubleMethodA");
-}
-
-void CallStaticVoidMethod
-        (JNIEnv *env, jclass cls, jmethodID methodID, ...) {
-    UNIMPLEMENTED("CallStaticVoidMethod");
-}
-
-void CallStaticVoidMethodV
-        (JNIEnv *env, jclass cls, jmethodID methodID, va_list args) {
-    UNIMPLEMENTED("CallStaticVoidMethodV");
-}
-
-void CallStaticVoidMethodA
-        (JNIEnv *env, jclass cls, jmethodID methodID, const jvalue *args) {
-    UNIMPLEMENTED("CallStaticVoidMethodA");
+    assert(method_iter->is_static());
+    method_info *m = &*method_iter;
+    return (jmethodID) m;
 }
 
 jfieldID GetStaticFieldID
@@ -958,7 +717,10 @@ jbooleanArray NewBooleanArray
 
 jbyteArray NewByteArray
         (JNIEnv *env, jsize len) {
-    UNIMPLEMENTED("NewByteArray");
+    LOG("NewByteArray");
+
+    auto *clazz = BootstrapClassLoader::get().load("[B");
+    return (jbyteArray) Heap::get().new_array<u1>(clazz, len).memory;
 }
 
 jcharArray NewCharArray
@@ -1118,7 +880,13 @@ void SetBooleanArrayRegion
 
 void SetByteArrayRegion
         (JNIEnv *env, jbyteArray array, jsize start, jsize len, const jbyte *buf) {
-    UNIMPLEMENTED("SetByteArrayRegion");
+    LOG("SetByteArrayRegion");
+
+    auto *x = (Object *) (array);
+    Reference r{x};
+    u1 *data = r.data<u1>();
+
+    memcpy(data + start, buf, static_cast<size_t>(len));
 }
 
 void SetCharArrayRegion

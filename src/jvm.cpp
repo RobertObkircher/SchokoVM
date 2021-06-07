@@ -2,6 +2,7 @@
 #include <iostream>
 
 #include "jvm.h"
+#include "classloading.hpp"
 
 // This file was created from the function declarations in jvm.h.
 // FIND: (JNICALL\s+)(JVM_[^(\s]*)([^;]*);
@@ -10,6 +11,7 @@
 // }
 
 #define UNIMPLEMENTED(x) std::cerr << x; exit(42);
+#define LOG(x)
 
 JNIEXPORT jint JNICALL
 JVM_GetInterfaceVersion(void) {
@@ -413,7 +415,10 @@ JVM_FindPrimitiveClass(JNIEnv *env, const char *utf) {
  */
 JNIEXPORT jclass JNICALL
 JVM_FindClassFromBootLoader(JNIEnv *env, const char *name) {
-    UNIMPLEMENTED("JVM_FindClassFromBootLoader");
+    LOG("JVM_FindClassFromBootLoader");
+    std::string n(name);
+    ClassFile *clazz = BootstrapClassLoader::get().load(n);
+    return reinterpret_cast<jclass>(clazz);
 }
 
 /*
