@@ -8,6 +8,7 @@
 #include <string>
 
 #include "memory.hpp"
+#include "native.hpp"
 #include "types.hpp"
 
 // Initially generated like this:
@@ -271,6 +272,8 @@ struct method_info {
     u2 stack_slots_for_parameters;
 
     u1 return_category; // 0, 1, 2
+
+    std::optional<NativeFunction> native_function;
 
     [[nodiscard]] inline bool is_static() const {
         return (access_flags & static_cast<u2>(MethodInfoAccessFlags::ACC_STATIC)) != 0;

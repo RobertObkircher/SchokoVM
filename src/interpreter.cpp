@@ -1,16 +1,17 @@
 #include "interpreter.hpp"
 
-#include <algorithm>
 #include <locale>
 #include <codecvt>
 #include <limits>
 #include <string>
 #include <iostream>
 #include <cmath>
+
 #include "opcodes.hpp"
 #include "future.hpp"
 #include "math.hpp"
 #include "classloading.hpp"
+#include "native.hpp"
 
 static const u2 MAIN_ACCESS_FLAGS = (static_cast<u2>(FieldInfoAccessFlags::ACC_PUBLIC) |
                                      static_cast<u2>(FieldInfoAccessFlags::ACC_STATIC));
@@ -40,6 +41,8 @@ static void handle_throw(Thread &thread, Frame &frame, bool &shouldExit, Referen
 
 static inline void pop_frame(Thread &thread, Frame &frame);
 
+static void pop_frame_after_return(Thread &thread, Frame &frame, bool &should_exit);
+
 template<typename Element>
 void array_store(Frame &frame);
 
@@ -53,6 +56,8 @@ void fill_multi_array(Heap &heap, Reference &reference, ClassFile *element_type,
 [[nodiscard]] static bool
 method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
                  ClassFile *&out_class, method_info *&out_method);
+
+static void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &frame, bool &should_exit);
 
 int interpret(BootstrapClassLoader &bootstrap_class_loader, ClassFile *main) {
     auto main_method_iter = std::find_if(main->methods.begin(), main->methods.end(),
@@ -928,13 +933,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             }
             // fallthrough
         case OpCodes::return_: {
-            return_label:
-            if (thread.stack.parent_frames.empty()) {
-                shouldExit = true;
-            } else {
-                pop_frame(thread, frame);
-                frame.pc += frame.invoke_length;
-            }
+            pop_frame_after_return(thread, frame, shouldExit);
             return;
         }
 
@@ -1055,8 +1054,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             thread.stack.push_frame(frame, clazz, method);
 
             if (method->is_native()) {
-                abort();
-                goto return_label;
+                native_call(clazz, method, thread, frame, shouldExit);
             }
             return;
         }
@@ -1098,8 +1096,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             thread.stack.push_frame(frame, clazz, method);
 
             if (method->is_native()) {
-                abort();
-                goto return_label;
+                native_call(clazz, method, thread, frame, shouldExit);
             }
             return;
         }
@@ -1231,10 +1228,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             thread.stack.push_frame(frame, clazz, method);
 
             if (method->is_native()) {
-                if (method->name_index->value != "registerNatives") {
-                    abort();
-                }
-                goto return_label;
+                native_call(clazz, method, thread, frame, shouldExit);
             }
             return;
         }
@@ -1271,8 +1265,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             thread.stack.push_frame(frame, clazz, method);
 
             if (method->is_native()) {
-                abort();
-                goto return_label;
+                native_call(clazz, method, thread, frame, shouldExit);
             }
             return;
         }
@@ -1646,6 +1639,16 @@ static inline void pop_frame(Thread &thread, Frame &frame) {
     thread.stack.parent_frames.pop_back();
 }
 
+static void pop_frame_after_return(Thread &thread, Frame &frame, bool &should_exit) {
+    if (thread.stack.parent_frames.empty()) {
+        should_exit = true;
+    } else {
+        pop_frame(thread, frame);
+        frame.pc += frame.invoke_length;
+    }
+}
+
+
 Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top)
         : clazz(clazz),
           method(method),
@@ -1865,3 +1868,46 @@ method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_inf
     // TODO throw the appropriate JVM exception instead
     throw std::runtime_error("Couldn't find method (virtual): " + name + descriptor);
 }
+
+void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &frame, bool &should_exit) {
+    // TODO remove once we have libjava
+    if (method->name_index->value == "registerNatives") {
+        pop_frame_after_return(thread, frame, should_exit);
+        return;
+    }
+
+    if (!method->native_function) {
+        auto *function_pointer = get_native_function_pointer(clazz, method);
+        if (function_pointer == nullptr) {
+            // TODO throw an exception and return
+            abort();
+        }
+        method->native_function = NativeFunction(method, function_pointer);
+    }
+    NativeFunction &native = *method->native_function;
+
+    void *jni_env_argument = nullptr; // TODO get from thread and fix type
+    ClassFile *class_argument = clazz;
+    bool use_class_argument = method->is_static();
+
+    Value return_value;
+    if (native.argument_count() <= 13) {
+        void *arguments[13];
+        native.prepare_argument_pointers(arguments,
+                                         &jni_env_argument, &class_argument, use_class_argument, frame.locals);
+        return_value = native.call(arguments);
+    } else {
+        std::vector<void *> arguments;
+        arguments.resize(native.argument_count());
+        native.prepare_argument_pointers(arguments.data(),
+                                         &jni_env_argument, &class_argument, use_class_argument, frame.locals);
+        return_value = native.call(arguments.data());
+    }
+
+    if (method->return_category != 0) {
+        frame.locals[0] = return_value;
+    }
+
+    pop_frame_after_return(thread, frame, should_exit);
+}
+
