@@ -6,8 +6,12 @@
 #include "util.hpp"
 #include "zip.hpp"
 
-BootstrapClassLoader::BootstrapClassLoader(const std::string &bootclasspath)
-        : class_path_entries(), buffer(), array_classes() {
+BootstrapClassLoader BootstrapClassLoader::the_bootstrap_class_loader;
+
+void BootstrapClassLoader::initialize_with_boot_classpath(std::string const &bootclasspath) {
+    class_path_entries = std::vector<ClassPathEntry>();
+    array_classes = std::unordered_map<std::string, std::unique_ptr<ClassFile>>();
+
     // TODO fix hardcoded path
     class_path_entries.push_back({"java.base", {}, "../jdk/exploded-modules/java.base", {}});
 
@@ -193,8 +197,7 @@ static bool initialize_class(ClassFile *clazz, Thread &thread, Frame &frame) {
 }
 
 
-bool resolve_class(BootstrapClassLoader &bootstrap_class_loader, CONSTANT_Class_info *class_info,
-                   Thread &thread, Frame &frame) {
+bool resolve_class(CONSTANT_Class_info *class_info, Thread &thread, Frame &frame) {
     if (class_info->clazz == nullptr) {
         auto &name = class_info->name->value;
 
@@ -203,7 +206,8 @@ bool resolve_class(BootstrapClassLoader &bootstrap_class_loader, CONSTANT_Class_
 
         // TODO we also need to deal with array classes here. They also load the class for the elements.
 
-        ClassFile *clazz = bootstrap_class_loader.load(name);
+        // TODO check other classloaders first
+        ClassFile *clazz = BootstrapClassLoader::get().load(name);
         if (clazz == nullptr) {
             // TODO this prints "A not found" if A was found but a superclass/interface wasn't
             throw std::runtime_error("class not found: '" + name + "'");
@@ -221,7 +225,7 @@ bool resolve_class(BootstrapClassLoader &bootstrap_class_loader, CONSTANT_Class_
 
         size_t parent_instance_field_count = 0;
         if (clazz->super_class == nullptr && clazz->super_class_ref != nullptr) {
-            if (resolve_class(bootstrap_class_loader, clazz->super_class_ref, thread, frame))
+            if (resolve_class(clazz->super_class_ref, thread, frame))
                 return true;
 
             clazz->super_class = clazz->super_class_ref->clazz;
@@ -244,7 +248,7 @@ bool resolve_class(BootstrapClassLoader &bootstrap_class_loader, CONSTANT_Class_
         clazz->static_field_values.resize(clazz->fields.size() - clazz->declared_instance_field_count);
 
         for (auto &interface : clazz->interfaces) {
-            auto runInitializer = resolve_class(bootstrap_class_loader, interface, thread, frame);
+            auto runInitializer = resolve_class(interface, thread, frame);
             if (runInitializer)
                 return true;
         }

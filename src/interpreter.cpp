@@ -6,17 +6,13 @@
 #include <string>
 #include <iostream>
 #include <cmath>
+#include <cstdlib>
 
 #include "opcodes.hpp"
 #include "future.hpp"
 #include "math.hpp"
 #include "classloading.hpp"
 #include "native.hpp"
-
-static const u2 MAIN_ACCESS_FLAGS = (static_cast<u2>(FieldInfoAccessFlags::ACC_PUBLIC) |
-                                     static_cast<u2>(FieldInfoAccessFlags::ACC_STATIC));
-static const auto MAIN_NAME = "main";
-static const auto MAIN_DESCRIPTOR = "([Ljava/lang/String;)V";
 
 // Table 6.5.newarray-A. Array type codes
 enum class ArrayPrimitiveTypes {
@@ -30,14 +26,13 @@ enum class ArrayPrimitiveTypes {
     T_LONG = 11,
 };
 
-static void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
-                                BootstrapClassLoader &bootstrap_class_loader, bool &shouldExit);
+static void execute_instruction(Thread &thread, Frame &frame, bool &should_exit);
 
 static void execute_comparison(Frame &frame, bool condition);
 
 static void goto_(Frame &frame);
 
-static void handle_throw(Thread &thread, Frame &frame, bool &shouldExit, Reference exception);
+static void handle_throw(Thread &thread, Frame &frame, Reference exception);
 
 static inline void pop_frame(Thread &thread, Frame &frame);
 
@@ -49,7 +44,7 @@ void array_store(Frame &frame);
 template<typename Element>
 void array_load(Frame &frame);
 
-void fill_multi_array(Heap &heap, Reference &reference, ClassFile *element_type, const std::span<s4> &counts);
+void fill_multi_array(Reference &reference, ClassFile *element_type, const std::span<s4> &counts);
 
 [[nodiscard]] static bool method_resolution(ClassInterface_Methodref &method);
 
@@ -59,48 +54,21 @@ method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_inf
 
 static void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &frame, bool &should_exit);
 
-int interpret(BootstrapClassLoader &bootstrap_class_loader, ClassFile *main) {
-    auto main_method_iter = std::find_if(main->methods.begin(), main->methods.end(),
-                                         [](const method_info &m) {
-                                             return m.name_index->value == MAIN_NAME &&
-                                                    m.descriptor_index->value == MAIN_DESCRIPTOR &&
-                                                    (m.access_flags & MAIN_ACCESS_FLAGS) == MAIN_ACCESS_FLAGS;
-                                         }
-    );
-    if (main_method_iter == std::end(main->methods)) {
-        throw std::runtime_error("Couldn't find main method");
-    }
-    method_info *main_method = &*main_method_iter;
-
-    Heap heap{};
-
-    Thread thread{};
-    thread.stack.memory.resize(1024 * 1024 / sizeof(Value)); // 1mb for now
-
-    thread.stack.memory_used = 1;
-    thread.stack.memory[0] = Value(0); // TODO args[] for main
-
-    Frame frame{thread.stack, main, main_method, thread.stack.memory_used};
+Value interpret(Thread &thread, ClassFile *main, method_info *method) {
+    Frame frame{thread.stack, main, method, thread.stack.memory_used};
 
     // push the class initializer if necessary
-    resolve_class(bootstrap_class_loader, main->this_class, thread, frame);
+    resolve_class(main->this_class, thread, frame);
 
     bool shouldExit = false;
     while (!shouldExit) {
-        execute_instruction(heap, thread, frame, bootstrap_class_loader, shouldExit);
+        execute_instruction(thread, frame, shouldExit);
     }
 
-    // print exit code
-    if (frame.operands_top == 0) {
-        return 0;
-    } else {
-        return frame.pop<s4>();
-    }
+    return method->return_category == 0 ? Value() : frame.locals[0];
 }
 
-static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
-                                       BootstrapClassLoader &bootstrap_class_loader,
-                                       bool &shouldExit) {
+static inline void execute_instruction(Thread &thread, Frame &frame, bool &should_exit) {
     std::vector<u1> &code = *frame.code;
     auto opcode = code[frame.pc];
     // TODO implement remaining opcodes. The ones that are currently commented/missing out have no test coverage whatsoever
@@ -169,11 +137,12 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                         return;
                     }
                 }
+                (void) c;
                 throw std::runtime_error("ldc refers to unimplemented type: class");
             } else if (auto s = std::get_if<CONSTANT_String_info>(&entry.variant)) {
                 // TODO initialize class
-                auto clazz = bootstrap_class_loader.load("java/lang/String");
-                if (resolve_class(bootstrap_class_loader, clazz->this_class, thread, frame)) {
+                auto clazz = BootstrapClassLoader::get().load("java/lang/String");
+                if (resolve_class(clazz->this_class, thread, frame)) {
                     return;
                 }
                 frame.pc++;
@@ -219,7 +188,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                     }
                 }
 
-                frame.push<Reference>(heap.make_string(clazz, bootstrap_class_loader.load("[B"), string_utf8));
+                frame.push<Reference>(Heap::get().make_string(clazz, BootstrapClassLoader::get().load("[B"), string_utf8));
             } else {
                 // TODO: "a symbolic reference to a method type, a method handle, or a dynamically-computed constant." (?)
                 throw std::runtime_error("ldc refers to invalid/unimplemented type");
@@ -933,7 +902,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             }
             // fallthrough
         case OpCodes::return_: {
-            pop_frame_after_return(thread, frame, shouldExit);
+            pop_frame_after_return(thread, frame, should_exit);
             return;
         }
 
@@ -947,7 +916,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             auto field = frame.clazz->constant_pool.get<CONSTANT_Fieldref_info>(index);
 
             if (!field.resolved) {
-                if (resolve_class(bootstrap_class_loader, field.class_, thread, frame)) {
+                if (resolve_class(field.class_, thread, frame)) {
                     return;
                 }
 
@@ -1031,7 +1000,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             method_info *declared_method = declared_method_ref.method;
 
             if (declared_method == nullptr) {
-                if (resolve_class(bootstrap_class_loader, declared_method_ref.class_, thread, frame)) {
+                if (resolve_class(declared_method_ref.class_, thread, frame)) {
                     return;
                 }
 
@@ -1054,7 +1023,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             thread.stack.push_frame(frame, clazz, method);
 
             if (method->is_native()) {
-                native_call(clazz, method, thread, frame, shouldExit);
+                native_call(clazz, method, thread, frame, should_exit);
             }
             return;
         }
@@ -1080,7 +1049,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             ClassFile *clazz = method_ref->class_->clazz;
 
             if (method == nullptr) {
-                if (resolve_class(bootstrap_class_loader, method_ref->class_, thread, frame)) {
+                if (resolve_class(method_ref->class_, thread, frame)) {
                     return;
                 }
 
@@ -1096,7 +1065,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             thread.stack.push_frame(frame, clazz, method);
 
             if (method->is_native()) {
-                native_call(clazz, method, thread, frame, shouldExit);
+                native_call(clazz, method, thread, frame, should_exit);
             }
             return;
         }
@@ -1114,7 +1083,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             if (method_ref->class_->name->value == "java/lang/System" &&
                 method_ref->name_and_type->name->value == "exit" &&
                 method_ref->name_and_type->descriptor->value == "(I)V") {
-                shouldExit = true;
+                exit(EXIT_FAILURE);
                 return;
             } else if (method_ref->class_->name->value == "java/lang/StringUTF16" &&
                        method_ref->name_and_type->name->value == "isBigEndian" &&
@@ -1212,7 +1181,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             ClassFile *clazz = method_ref->class_->clazz;
 
             if (method == nullptr) {
-                if (resolve_class(bootstrap_class_loader, method_ref->class_, thread, frame)) {
+                if (resolve_class(method_ref->class_, thread, frame)) {
                     return;
                 }
 
@@ -1228,7 +1197,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             thread.stack.push_frame(frame, clazz, method);
 
             if (method->is_native()) {
-                native_call(clazz, method, thread, frame, shouldExit);
+                native_call(clazz, method, thread, frame, should_exit);
             }
             return;
         }
@@ -1240,7 +1209,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             method_info *declared_method = declared_method_ref.method;
 
             if (declared_method == nullptr) {
-                if (resolve_class(bootstrap_class_loader, declared_method_ref.class_, thread, frame)) {
+                if (resolve_class(declared_method_ref.class_, thread, frame)) {
                     return;
                 }
 
@@ -1265,7 +1234,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             thread.stack.push_frame(frame, clazz, method);
 
             if (method->is_native()) {
-                native_call(clazz, method, thread, frame, shouldExit);
+                native_call(clazz, method, thread, frame, should_exit);
             }
             return;
         }
@@ -1273,13 +1242,13 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             u2 index = frame.read_u2();
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
 
-            if (resolve_class(bootstrap_class_loader, &class_info, thread, frame)) {
+            if (resolve_class(&class_info, thread, frame)) {
                 return;
             }
             frame.pc += 2;
             auto clazz = class_info.clazz;
 
-            auto reference = heap.new_instance(clazz);
+            auto reference = Heap::get().new_instance(clazz);
             frame.push<Reference>(reference);
 
             // TODO: the next two instructions are probably dup+invokespecial. We could optimize for that pattern.
@@ -1294,42 +1263,42 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
 
             switch (static_cast<ArrayPrimitiveTypes>(type)) {
                 case ArrayPrimitiveTypes::T_INT: {
-                    auto reference = heap.new_array<s4>(bootstrap_class_loader.load("[I"), count);
+                    auto reference = Heap::get().new_array<s4>(BootstrapClassLoader::get().load("[I"), count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_BOOLEAN: {
-                    auto reference = heap.new_array<s1>(bootstrap_class_loader.load("[Z"), count);
+                    auto reference = Heap::get().new_array<s1>(BootstrapClassLoader::get().load("[Z"), count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_CHAR: {
-                    auto reference = heap.new_array<u2>(bootstrap_class_loader.load("[C"), count);
+                    auto reference = Heap::get().new_array<u2>(BootstrapClassLoader::get().load("[C"), count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_FLOAT: {
-                    auto reference = heap.new_array<float>(bootstrap_class_loader.load("[F"), count);
+                    auto reference = Heap::get().new_array<float>(BootstrapClassLoader::get().load("[F"), count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_DOUBLE: {
-                    auto reference = heap.new_array<double>(bootstrap_class_loader.load("[D"), count);
+                    auto reference = Heap::get().new_array<double>(BootstrapClassLoader::get().load("[D"), count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_BYTE: {
-                    auto reference = heap.new_array<s1>(bootstrap_class_loader.load("[B"), count);
+                    auto reference = Heap::get().new_array<s1>(BootstrapClassLoader::get().load("[B"), count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_SHORT: {
-                    auto reference = heap.new_array<s4>(bootstrap_class_loader.load("[S"), count);
+                    auto reference = Heap::get().new_array<s4>(BootstrapClassLoader::get().load("[S"), count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_LONG: {
-                    auto reference = heap.new_array<s8>(bootstrap_class_loader.load("[J"), count);
+                    auto reference = Heap::get().new_array<s8>(BootstrapClassLoader::get().load("[J"), count);
                     frame.push<Reference>(reference);
                     break;
                 }
@@ -1339,7 +1308,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
         case OpCodes::anewarray: {
             u2 index = frame.read_u2();
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
-            if (resolve_class(bootstrap_class_loader, &class_info, thread, frame)) {
+            if (resolve_class(&class_info, thread, frame)) {
                 return;
             }
             frame.pc += 2;
@@ -1350,9 +1319,9 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             }
 
             ClassFile *element = class_info.clazz;
-            ClassFile *array_class = bootstrap_class_loader.load(element->as_array_element());
+            ClassFile *array_class = BootstrapClassLoader::get().load(element->as_array_element());
 
-            auto reference = heap.new_array<Reference>(array_class, count);
+            auto reference = Heap::get().new_array<Reference>(array_class, count);
             frame.push<Reference>(reference);
             break;
         }
@@ -1371,7 +1340,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 // TODO If objectref is null, athrow throws a NullPointerException instead of objectref.
                 throw std::runtime_error("TODO NullPointerException");
             }
-            handle_throw(thread, frame, shouldExit, value);
+            handle_throw(thread, frame, value);
             return;
         }
 
@@ -1383,15 +1352,15 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
             frame.push<Reference>(objectref);
 
             if (objectref != JAVA_NULL) {
-                if (resolve_class(bootstrap_class_loader, &class_info, thread, frame)) {
+                if (resolve_class(&class_info, thread, frame)) {
                     return;
                 }
 
                 if (!objectref.object()->clazz->is_instance_of(class_info.clazz)) {
                     // TODO properly allocate a new exception (initialize clazz)
-                    ClassFile *clazz = bootstrap_class_loader.load("java/lang/ClassCastException");
-                    Reference ref = heap.new_instance(clazz);
-                    return handle_throw(thread, frame, shouldExit, ref);
+                    ClassFile *clazz = BootstrapClassLoader::get().load("java/lang/ClassCastException");
+                    Reference ref = Heap::get().new_instance(clazz);
+                    return handle_throw(thread, frame, ref);
                 }
             }
             frame.pc += 2;
@@ -1407,7 +1376,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 frame.push<s4>(0);
             } else {
                 frame.push<Reference>(objectref);
-                if (resolve_class(bootstrap_class_loader, &class_info, thread, frame)) {
+                if (resolve_class(&class_info, thread, frame)) {
                     return;
                 }
                 frame.pop<Reference>();
@@ -1473,7 +1442,7 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
         case OpCodes::multianewarray: {
             u2 index = frame.read_u2();
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
-            if (resolve_class(bootstrap_class_loader, &class_info, thread, frame)) {
+            if (resolve_class(&class_info, thread, frame)) {
                 return;
             }
             frame.pc += 2;
@@ -1492,8 +1461,8 @@ static inline void execute_instruction(Heap &heap, Thread &thread, Frame &frame,
                 }
             }
 
-            auto reference = heap.new_array<Reference>(class_info.clazz, counts.back());
-            fill_multi_array(heap, reference, class_info.clazz->array_element_type,
+            auto reference = Heap::get().new_array<Reference>(class_info.clazz, counts.back());
+            fill_multi_array(reference, class_info.clazz->array_element_type,
                              std::span(counts).subspan(0, counts.size() - 1));
             frame.push<Reference>(reference);
             break;
@@ -1537,7 +1506,7 @@ static void goto_(Frame &frame) {
     frame.pc = static_cast<size_t>(static_cast<long>(frame.pc) + offset);
 }
 
-static void handle_throw(Thread &thread, Frame &frame, bool &shouldExit, Reference exception) {
+static void handle_throw(Thread &thread, Frame &frame, Reference exception) {
     auto obj = exception.object();
     // TODO this is actually wrong, the stack should be generated when the Throwable is constructed
     std::vector<Frame> stack_trace;
@@ -1616,7 +1585,7 @@ static void handle_throw(Thread &thread, Frame &frame, bool &shouldExit, Referen
 
                 frame.clear();
                 frame.push<s4>(1);
-                shouldExit = true;
+                exit(EXIT_FAILURE);
                 return;
             } else {
                 pop_frame(thread, frame);
@@ -1718,15 +1687,15 @@ void array_load(Frame &frame) {
     frame.push<Element>(arrayref.data<Element>()[index]);
 }
 
-void fill_multi_array(Heap &heap, Reference &reference, ClassFile *element_type, const std::span<s4> &counts) {
+void fill_multi_array(Reference &reference, ClassFile *element_type, const std::span<s4> &counts) {
     s4 count = counts.back();
     // If any count value is zero, no subsequent dimensions are allocated
     if (count == 0) return;
 
     for (s4 i = reference.object()->length - 1; i >= 0; i--) {
-        auto child = heap.new_array<Reference>(element_type, count);
+        auto child = Heap::get().new_array<Reference>(element_type, count);
         if (counts.size() > 1) {
-            fill_multi_array(heap, child, element_type->array_element_type, counts.subspan(0, counts.size() - 1));
+            fill_multi_array(child, element_type->array_element_type, counts.subspan(0, counts.size() - 1));
         }
         reference.data<Reference>()[i] = child;
     }

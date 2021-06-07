@@ -237,6 +237,6 @@ struct Thread {
 
 struct BootstrapClassLoader;
 
-int interpret(BootstrapClassLoader &bootstrap_class_loader, ClassFile *main);
+Value interpret(Thread &thread, ClassFile *main, method_info *method);
 
 #endif //SCHOKOVM_INTERPRETER_HPP

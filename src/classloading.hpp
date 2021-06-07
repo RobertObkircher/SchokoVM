@@ -20,15 +20,19 @@ struct ClassPathEntry {
 };
 
 struct BootstrapClassLoader {
-    std::vector<ClassPathEntry> class_path_entries;
-    std::vector<char> buffer;
-    std::unordered_map<std::string, std::unique_ptr<ClassFile>> array_classes;
+    static BootstrapClassLoader &get() { return the_bootstrap_class_loader; }
 
-    explicit BootstrapClassLoader(const std::string &bootclasspath);
+    void initialize_with_boot_classpath(std::string const &bootclasspath);
 
     ClassFile *load(std::string const &name);
 
 private:
+    std::vector<ClassPathEntry> class_path_entries;
+    std::vector<char> buffer;
+    std::unordered_map<std::string, std::unique_ptr<ClassFile>> array_classes;
+
+    static BootstrapClassLoader the_bootstrap_class_loader;
+
     ClassFile *make_array_class(std::string name);
 };
 
@@ -36,8 +40,7 @@ private:
  * Throws if the class was not found
  * @return whether a stack frame for an initializer was pushed
  */
-bool resolve_class(BootstrapClassLoader &bootstrap_class_loader, CONSTANT_Class_info *class_info,
-                   Thread &thread, Frame &frame);
+bool resolve_class(CONSTANT_Class_info *class_info, Thread &thread, Frame &frame);
 
 bool resolve_field_recursive(ClassFile *clazz, CONSTANT_Fieldref_info *field_info);
 

@@ -86,6 +86,8 @@ struct Object {
 };
 
 struct Heap {
+    static inline Heap &get() { return the_heap; }
+
     struct OperatorDeleter {
         void operator()(void *pointer) {
             operator delete(pointer);
@@ -124,6 +126,9 @@ struct Heap {
     }
 
     Reference make_string(ClassFile *string_clazz, ClassFile *byte_array_clazz, const std::string &value_utf8);
+
+private:
+    static Heap the_heap;
 };
 
 #endif //SCHOKOVM_MEMORY_HPP
