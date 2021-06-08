@@ -278,92 +278,59 @@ jmethodID GetMethodID
  *    CallStaticReturntypeMethod
  */
 
-static jint call(JNIEnv *env, jclass java_class, bool is_virtual, jobject java_object, jmethodID methodID, const jvalue *args, Value &result) {
-    auto *thread = static_cast<Thread *>(env->functions->reserved0);
-    auto *object = (Object *) java_object;
-    auto *clazz = (ClassFile *) java_class;
-    auto *method = (method_info *) methodID;
+#define CALL_HELPER(Name, ArgType, NextArg)                                                                            \
+static jint Name(JNIEnv *env, jclass java_class, bool is_virtual,                                                      \
+                 jobject java_object, jmethodID methodID, ArgType args, Value &result) {                               \
+    auto *thread = static_cast<Thread *>(env->functions->reserved0);                                                   \
+    auto *object = (Object *) java_object;                                                                             \
+    auto *clazz = (ClassFile *) java_class;                                                                            \
+    auto *method = (method_info *) methodID;                                                                           \
+                                                                                                                       \
+    size_t saved_operand_stack_top = thread->stack.memory_used;                                                        \
+    thread->stack.memory_used += method->parameter_count;                                                              \
+    if (thread->stack.memory_used > thread->stack.memory.size()) {                                                     \
+        return JNI_ENOMEM;                                                                                             \
+    }                                                                                                                  \
+                                                                                                                       \
+    if (is_virtual) {                                                                                                  \
+        auto *declared_clazz = clazz;                                                                                  \
+        auto *declared_method = method;                                                                                \
+                                                                                                                       \
+        if (method_selection(object->clazz, declared_clazz, declared_method, clazz, method)) {                         \
+            return JNI_ERR;                                                                                            \
+        }                                                                                                              \
+    }                                                                                                                  \
+                                                                                                                       \
+    size_t offset = saved_operand_stack_top;                                                                           \
+    assert(method->is_static() == (object == nullptr));                                                                \
+    if (!method->is_static()) {                                                                                        \
+        thread->stack.memory[offset] = Value(Reference{object});                                                       \
+        ++offset;                                                                                                      \
+    }                                                                                                                  \
+                                                                                                                       \
+    MethodDescriptorParts parts{method->descriptor_index->value.c_str()};                                              \
+    for (; !parts->is_return; ++parts) {                                                                               \
+        thread->stack.memory[offset] = NextArg;                                                                        \
+        ++args;                                                                                                        \
+        offset += parts->category;                                                                                     \
+    }                                                                                                                  \
+                                                                                                                       \
+    result = interpret(*thread, clazz, method);                                                                        \
+    thread->stack.memory_used = saved_operand_stack_top;                                                               \
+    return JNI_OK;                                                                                                     \
+}                                                                                                                      \
 
-    size_t saved_operand_stack_top = thread->stack.memory_used;
-    thread->stack.memory_used += method->parameter_count;
-    if (thread->stack.memory_used > thread->stack.memory.size()) {
-        return JNI_ENOMEM;
-    }
-
-    if (is_virtual) {
-        auto *declared_clazz = clazz;
-        auto *declared_method = method;
-
-        if (method_selection(object->clazz, declared_clazz, declared_method, clazz, method)) {
-            return JNI_ERR;
-        }
-    }
-
-    size_t offset = saved_operand_stack_top;
-    assert(method->is_static() == (object == nullptr));
-    if (!method->is_static()) {
-        thread->stack.memory[offset] = Value(Reference{object});
-        ++offset;
-    }
-
-    MethodDescriptorParts parts{method->descriptor_index->value.c_str()};
-    for (; !parts->is_return; ++parts) {
-        thread->stack.memory[offset] = Value((s8) args->j);
-        ++args;
-        offset += parts->category;
-    }
-
-    result = interpret(*thread, clazz, method);
-    thread->stack.memory_used = saved_operand_stack_top;
-    return JNI_OK;
-}
-
-static jint call_v(JNIEnv *env, jclass java_class, bool is_virtual, jobject java_object, jmethodID methodID, va_list args, Value &result) {
-    auto *thread = static_cast<Thread *>(env->functions->reserved0);
-    auto *object = (Object *) java_object;
-    auto *clazz = (ClassFile *) java_class;
-    auto *method = (method_info *) methodID;
-
-    size_t saved_operand_stack_top = thread->stack.memory_used;
-    thread->stack.memory_used += method->parameter_count;
-    if (thread->stack.memory_used > thread->stack.memory.size()) {
-        return JNI_ENOMEM;
-    }
-
-    if (is_virtual) {
-        auto *declared_clazz = clazz;
-        auto *declared_method = method;
-
-        if (method_selection(object->clazz, declared_clazz, declared_method, clazz, method)) {
-            return JNI_ERR;
-        }
-    }
-
-    size_t offset = saved_operand_stack_top;
-    assert(method->is_static() == (object == nullptr));
-    if (!method->is_static()) {
-        thread->stack.memory[offset] = Value(Reference{object});
-        ++offset;
-    }
-
-    MethodDescriptorParts parts{method->descriptor_index->value.c_str()};
-    for (; !parts->is_return; ++parts) {
-        thread->stack.memory[offset] = Value((s8) va_arg(args, jvalue).j);
-        offset += parts->category;
-    }
-
-    result = interpret(*thread, clazz, method);
-    thread->stack.memory_used = saved_operand_stack_top;
-    return JNI_OK;
-}
+CALL_HELPER(call, const jvalue *, Value((s8) args->j); ++args)
+CALL_HELPER(call_v, va_list, (Value((s8) va_arg(args, jvalue).j)))
+#undef CALL_HELPER
 
 // static jint call(JNIEnv *env, jclass java_class, bool is_virtual, jobject java_object, jmethodID methodID, const jvalue *args, Value &result);
 // jobject CallObjectMethod(JNIEnv *env, jobject obj, jmethodID methodID, ...);
 // jobject CallNonvirtualObjectMethod(JNIEnv *env, jobject obj, jclass clazz, jmethodID methodID, ...);
 // jobject CallStaticObjectMethod(JNIEnv *env, jclass clazz, jmethodID methodID, ...);
 #define CALL(ReturnType, Name, Return)                                                                                 \
-ReturnType Call##Name##Method(JNIEnv *env, jobject object, jmethodID methodID, ...) {                            \
-    LOG("Call" #Name "Method");                                                                                  \
+ReturnType Call##Name##Method(JNIEnv *env, jobject object, jmethodID methodID, ...) {                                  \
+    LOG("Call" #Name "Method");                                                                                        \
     Value result;                                                                                                      \
     va_list args;                                                                                                      \
     va_start(args, methodID);                                                                                          \
@@ -371,37 +338,37 @@ ReturnType Call##Name##Method(JNIEnv *env, jobject object, jmethodID methodID, .
     va_end(args);                                                                                                      \
     Return (ReturnType) result.s8;                                                                                     \
 }                                                                                                                      \
-ReturnType Call##Name##MethodV(JNIEnv *env, jobject object, jmethodID methodID, va_list args) {                  \
-    LOG("Call" #Name "MethodV");                                                                                 \
+ReturnType Call##Name##MethodV(JNIEnv *env, jobject object, jmethodID methodID, va_list args) {                        \
+    LOG("Call" #Name "MethodV");                                                                                       \
     Value result;                                                                                                      \
     call_v(env, nullptr, true, object, methodID, args, result);                                                        \
     return (ReturnType) result.s8;                                                                                     \
 }                                                                                                                      \
-ReturnType Call##Name##MethodA(JNIEnv *env, jobject object, jmethodID methodID, const jvalue *args) {            \
-    LOG("Call" #Name "MethodA");                                                                                 \
+ReturnType Call##Name##MethodA(JNIEnv *env, jobject object, jmethodID methodID, const jvalue *args) {                  \
+    LOG("Call" #Name "MethodA");                                                                                       \
     Value result;                                                                                                      \
     call(env, nullptr, true, object, methodID, args, result);                                                          \
     return (ReturnType) result.s8;                                                                                     \
 }                                                                                                                      \
-ReturnType CallNonvirtual##Name##Method(JNIEnv *env, jobject object, jclass clazz, jmethodID methodID, ...) {                  \
-    LOG("CallNonvirtual" #Name "Method");                                                                        \
+ReturnType CallNonvirtual##Name##Method(JNIEnv *env, jobject object, jclass clazz, jmethodID methodID, ...) {          \
+    LOG("CallNonvirtual" #Name "Method");                                                                              \
     Value result;                                                                                                      \
     va_list args;                                                                                                      \
     va_start(args, methodID);                                                                                          \
-    call_v(env, clazz, false, object, methodID, args, result);                                                       \
+    call_v(env, clazz, false, object, methodID, args, result);                                                         \
     va_end(args);                                                                                                      \
     Return (ReturnType) result.s8;                                                                                     \
 }                                                                                                                      \
-ReturnType CallNonvirtual##Name##MethodV(JNIEnv *env, jobject object, jclass clazz, jmethodID methodID, va_list args) {        \
-    LOG("CallNonvirtual" #Name "MethodV");                                                                       \
+ReturnType CallNonvirtual##Name##MethodV(JNIEnv *env, jobject object, jclass clazz, jmethodID methodID, va_list args) {\
+    LOG("CallNonvirtual" #Name "MethodV");                                                                             \
     Value result;                                                                                                      \
-    call_v(env, clazz, false, object, methodID, args, result);                                                       \
+    call_v(env, clazz, false, object, methodID, args, result);                                                         \
     return (ReturnType) result.s8;                                                                                     \
 }                                                                                                                      \
-ReturnType CallNonvirtual##Name##MethodA(JNIEnv *env, jobject object, jclass clazz, jmethodID methodID, const jvalue *args) {  \
-    LOG("CallNonvirtual" #Name "MethodA");                                                                       \
+ReturnType CallNonvirtual##Name##MethodA(JNIEnv *env, jobject object, jclass clazz, jmethodID methodID, const jvalue *args) {\
+    LOG("CallNonvirtual" #Name "MethodA");                                                                             \
     Value result;                                                                                                      \
-    call(env, clazz, false, object, methodID, args, result);                                                         \
+    call(env, clazz, false, object, methodID, args, result);                                                           \
     return (ReturnType) result.s8;                                                                                     \
 }                                                                                                                      \
 ReturnType CallStatic##Name##Method(JNIEnv *env, jclass clazz, jmethodID methodID, ...) {                              \
