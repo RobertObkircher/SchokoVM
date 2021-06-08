@@ -48,10 +48,6 @@ void fill_multi_array(Reference &reference, ClassFile *element_type, const std::
 
 [[nodiscard]] static bool method_resolution(ClassInterface_Methodref &method);
 
-[[nodiscard]] static bool
-method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
-                 ClassFile *&out_class, method_info *&out_method);
-
 static void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &frame, bool &should_exit);
 
 Value interpret(Thread &thread, ClassFile *main, method_info *method) {
@@ -137,8 +133,11 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                         return;
                     }
                 }
-                (void) c;
-                throw std::runtime_error("ldc refers to unimplemented type: class");
+                if (resolve_class(c, thread, frame)) {
+                    return;
+                }
+                frame.pc++;
+                frame.push<Reference>(Reference{c->clazz});
             } else if (auto s = std::get_if<CONSTANT_String_info>(&entry.variant)) {
                 // TODO initialize class
                 auto clazz = BootstrapClassLoader::get().load("java/lang/String");
@@ -196,15 +195,22 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             break;
         }
         case OpCodes::ldc_w: {
-            size_t index = frame.consume_u2();
+            size_t index = frame.read_u2();
             auto &entry = frame.clazz->constant_pool.table[index];
+            // TODO common function to turn constan pool reference into value
             if (auto i = std::get_if<CONSTANT_Integer_info>(&entry.variant)) {
                 frame.push<s4>(i->value);
             } else if (auto f = std::get_if<CONSTANT_Float_info>(&entry.variant)) {
                 frame.push<float>(f->value);
+            } else if (auto c = std::get_if<CONSTANT_Class_info>(&entry.variant)) {
+                if (resolve_class(c, thread, frame)) {
+                    return;
+                }
+                frame.push<Reference>(Reference{c->clazz});
             } else {
                 throw std::runtime_error("ldc_w refers to invalid/unimplemented type");
             }
+            frame.pc += 2;
             break;
         }
         case OpCodes::ldc2_w: {
@@ -1780,7 +1786,7 @@ resolve_method_interfaces(ClassFile *clazz, const std::string &name, const std::
             "Couldn't find method (static): " + name + descriptor + " in class " + method.class_->name->value);
 }
 
-[[nodiscard]] static bool
+[[nodiscard]] bool
 method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
                  ClassFile *&out_class, method_info *&out_method) {
     // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.4.6

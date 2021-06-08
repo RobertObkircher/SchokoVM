@@ -237,6 +237,11 @@ struct Thread {
 
 struct BootstrapClassLoader;
 
+[[nodiscard]] bool
+method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
+                 ClassFile *&out_class, method_info *&out_method);
+
+
 Value interpret(Thread &thread, ClassFile *main, method_info *method);
 
 #endif //SCHOKOVM_INTERPRETER_HPP
