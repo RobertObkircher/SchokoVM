@@ -169,6 +169,7 @@ set(JAVA_TEST_SOURCES
         tests/MultiArrays.java
         tests/Native.java
         tests/ObjectArray.java
+        # tests/PropertiesTest.java
         tests/ReferenceComparisons.java
         tests/Strings.java
         tests/Switch.java
@@ -234,7 +235,7 @@ enable_testing()
 # https://cmake.org/cmake/help/latest/guide/tutorial/index.html#id11
 function(do_test path)
     get_filename_component(name ${path} NAME_WE)
-    add_test(NAME ${name} COMMAND sh "${CMAKE_SOURCE_DIR}/compare.sh" ${Java_JAVA_EXECUTABLE} ${name})
+    add_test(NAME ${name} COMMAND sh "${CMAKE_SOURCE_DIR}/compare.sh" ${Java_JAVA_EXECUTABLE} ${name} ${JDK_HOME})
 endfunction(do_test)
 
 foreach (source ${JAVA_TEST_SOURCES} ${JAVA_TEST_GENERATED_SOURCES})
