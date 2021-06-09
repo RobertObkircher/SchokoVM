@@ -169,8 +169,57 @@ static bool initialize_class(ClassFile *clazz, Thread &thread, Frame &frame) {
                     } else if (descriptor == "D") {
                         clazz->static_field_values[field.index] = Value(std::get<CONSTANT_Double_info>(value).value);
                     } else if (descriptor == "Ljava/lang/String;") {
-                        // TODO
-                        assert(false);
+                        // TODO deduplicate this + i think the
+                        auto string_clazz = BootstrapClassLoader::get().load("java/lang/String");
+                        if (resolve_class(string_clazz->this_class, thread, frame)) {
+                            return true;
+                        }
+                        frame.pc++;
+
+                        std::string &modified_utf8 = std::get<CONSTANT_String_info>(value).string->value;
+                        std::string string_utf8;
+                        string_utf8.reserve(modified_utf8.length());
+                        for (size_t i = 0; i < modified_utf8.length(); ++i) {
+                            u1 c = static_cast<u1>(modified_utf8[i]);
+
+                            if (c == 0b11101101) {
+                                u1 v = static_cast<u1>(modified_utf8[i + 1]);
+                                u1 w = static_cast<u1>(modified_utf8[i + 2]);
+                                u1 x = static_cast<u1>(modified_utf8[i + 3]);
+                                u1 y = static_cast<u1>(modified_utf8[i + 4]);
+                                u1 z = static_cast<u1>(modified_utf8[i + 5]);
+
+                                if (((v & 0xf0) == 0b10100000) && ((w & 0b11000000) == 0b10000000)
+                                    && (x == 0b11101101) && ((y & 0xf0) == 0b10110000) && ((z & 11000000) == 0b10000000)) {
+                                    int codepoint =
+                                            0x10000 + ((v & 0x0f) << 16) + ((w & 0x3f) << 10) + ((y & 0x0f) << 6) + (z & 0x3f);
+                                    // convert into the 4-byte utf8 variant
+                                    string_utf8.push_back(static_cast<char>(0b11110000 | ((codepoint >> 18) & 0b1111)));
+                                    string_utf8.push_back(static_cast<char>(0b10000000 | ((codepoint >> 12) & 0b111111)));
+                                    string_utf8.push_back(static_cast<char>(0b10000000 | ((codepoint >> 6) & 0b111111)));
+                                    string_utf8.push_back(static_cast<char>(0b10000000 | ((codepoint) & 0b111111)));
+                                    i += 5;
+                                    continue;
+                                }
+                            }
+
+                            if ((c & 0b10000000) == 0) { // copy 1 byte over
+                                string_utf8.push_back(static_cast<char>(c));
+                            } else if ((c & 0b11100000) == 0b11000000) { // copy 2 byte over
+                                string_utf8.push_back(static_cast<char>(c));
+                                string_utf8.push_back(modified_utf8[++i]);
+                            } else if ((c & 0b11110000) == 0b11100000) { // copy 3 byte over
+                                string_utf8.push_back(static_cast<char>(c));
+                                string_utf8.push_back(modified_utf8[++i]);
+                                string_utf8.push_back(modified_utf8[++i]);
+                            } else {
+                                throw std::runtime_error("Invalid byte in modified utf8 string: " + std::to_string((int) c));
+                            }
+                        }
+
+                        auto java_string = Heap::get().make_string(string_clazz, BootstrapClassLoader::get().load("[B"), string_utf8);
+                        clazz->static_field_values[field.index] = Value(java_string);
+
                     } else {
                         assert(false);
                     }
@@ -262,34 +311,38 @@ bool resolve_class(CONSTANT_Class_info *class_info, Thread &thread, Frame &frame
     return false;
 }
 
-bool resolve_field_recursive(ClassFile *clazz, CONSTANT_Fieldref_info *field_info) {
+void resolve_field(ClassFile *clazz, CONSTANT_Fieldref_info *fieldref_info, Reference &exception) {
+    assert(!fieldref_info->resolved);
+
+    field_info *info = find_field(clazz, fieldref_info->name_and_type->name->value, fieldref_info->name_and_type->descriptor->value, exception);
+    if (exception != JAVA_NULL) {
+        return;
+    }
+
+    fieldref_info->resolved = true;
+    fieldref_info->is_boolean = info->descriptor_index->value == "Z";
+    fieldref_info->is_static = info->is_static();
+    fieldref_info->index = info->index;
+    fieldref_info->category = info->category;
+}
+
+field_info *find_field_recursive(ClassFile *clazz, std::string_view name, std::string_view descriptor) {
     // Steps: https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.4.3.2
     for (;;) {
         // 1.
-        assert(!field_info->resolved);
-        for (auto const &f : clazz->fields) {
-            if (f.name_index->value == field_info->name_and_type->name->value &&
-                f.descriptor_index->value == field_info->name_and_type->descriptor->value) {
-
-                field_info->resolved = true;
-                field_info->is_boolean = f.descriptor_index->value == "Z";
-                field_info->is_static = f.is_static();
-                field_info->index = f.index;
-                field_info->category = f.category;
-
-                // TODO check access_flags
-                return true;
+        for (auto &f : clazz->fields) {
+            if (f.name_index->value == name && f.descriptor_index->value == descriptor) {
+                return &f;
             }
         }
 
         // 2.
-        assert(!field_info->resolved);
         for (auto const &interface : clazz->interfaces) {
-            if (resolve_field_recursive(interface->clazz, field_info))
-                return true;
+            field_info *info = find_field_recursive(interface->clazz, name, descriptor);
+            if (info != nullptr) {
+                return info;
+            }
         }
-
-        assert(!field_info->resolved);
 
         if (clazz->super_class != nullptr) {
             // 3.
@@ -298,5 +351,15 @@ bool resolve_field_recursive(ClassFile *clazz, CONSTANT_Fieldref_info *field_inf
             break;
         }
     }
-    return false;
+    return nullptr;
+}
+
+field_info *find_field(ClassFile *clazz, std::string_view name, std::string_view descriptor, Reference &exception) {
+    auto *result = find_field_recursive(clazz, name, descriptor);
+    if (result == nullptr) {
+        // TODO new NoSuchFieldError
+        exception.memory = (void *) 123;
+    }
+    // TODO access control
+    return result;
 }

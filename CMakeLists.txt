@@ -98,8 +98,13 @@ add_executable(SchokoVM
         src/classloading.cpp src/classloading.hpp
         src/util.cpp src/util.hpp
         src/native.cpp src/native.hpp
+        src/jni.cpp
+        src/jvm.cpp
         )
 add_sanitizers(SchokoVM)
+
+target_include_directories(SchokoVM PRIVATE ${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/jdk/include)
+target_compile_options(SchokoVM PRIVATE -Wno-unused-parameter)
 
 if (libzip_FOUND)
     target_link_libraries(SchokoVM libzip::zip)
@@ -123,18 +128,10 @@ get_filename_component(JDK_HOME ${JDK_HOME} DIRECTORY)
 get_filename_component(JDK_HOME ${JDK_HOME} DIRECTORY)
 message(STATUS "jdk: ${JDK_HOME}")
 
-set(JDK_BIN ${CMAKE_CURRENT_SOURCE_DIR}/jdk/bin)
-if(NOT IS_DIRECTORY ${JDK_BIN})
-    message(STATUS "Copying ${JDK_HOME} to ${JDK_BIN}")
-#    file(COPY ${JDK_HOME} DESTINATION ${JDK_BIN})
-    # this renames the target folder:
-    execute_process(COMMAND cp -r "${JDK_HOME}" "${JDK_BIN}")
-endif()
-
 set(JDK_EXPLODED ${CMAKE_CURRENT_SOURCE_DIR}/jdk/exploded-modules)
 if(NOT IS_DIRECTORY ${JDK_EXPLODED})
     message(STATUS "Exploding")
-    execute_process(COMMAND ${JDK_HOME}/bin/jimage extract --dir "${JDK_EXPLODED}" "${JDK_BIN}/lib/modules")
+    execute_process(COMMAND ${JDK_HOME}/bin/jimage extract --dir "${JDK_EXPLODED}" "${JDK_HOME}/lib/modules")
 endif()
 
 

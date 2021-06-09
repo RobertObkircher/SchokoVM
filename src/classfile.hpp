@@ -776,6 +776,9 @@ enum class ClassFileAccessFlags : u2 {
 };
 
 struct ClassFile {
+    Object header;
+    Value padding_for_java_instance_fields[20]; // TODO
+
     u4 magic;
     u2 minor_version;
     u2 major_version;

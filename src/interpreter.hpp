@@ -233,9 +233,16 @@ struct Stack {
 
 struct Thread {
     Stack stack{};
+    // TODO should be of type jthrowable
+    Reference current_exception = JAVA_NULL;
 };
 
 struct BootstrapClassLoader;
+
+[[nodiscard]] bool
+method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
+                 ClassFile *&out_class, method_info *&out_method);
+
 
 Value interpret(Thread &thread, ClassFile *main, method_info *method);
 

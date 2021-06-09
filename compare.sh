@@ -16,6 +16,7 @@ S_STATUS="$OUT/schoko_status"
 echo "$?" > "$R_STATUS"
 
 ./SchokoVM -classpath tests.jar "$CLASS" 1>"$S_OUT" 2>"$S_ERR"
+# "$JAVA" -XXaltjvm="$PWD" -Xbootclasspath:../jdk/exploded-modules -classpath tests.jar "$CLASS" 1>"$S_OUT" 2>"$S_ERR"
 echo "$?" > "$S_STATUS"
 
 X=0
@@ -24,6 +25,6 @@ diff --side-by-side --text "$R_STATUS" "$S_STATUS" || X=1
 echo "============================== stdout =============================="
 diff --side-by-side --text "$R_OUT" "$S_OUT"       || X=1
 echo "============================== stderr =============================="
-diff --side-by-side --text "$R_ERR" "$S_ERR"       || X=1
+diff                --text "$R_ERR" "$S_ERR"       || X=1
 echo "===================================================================="
 exit "$X"
