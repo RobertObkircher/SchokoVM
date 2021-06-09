@@ -40,9 +40,9 @@ void *get_native_function_pointer(ClassFile *clazz, method_info *method) {
     if (dlsym_handle == nullptr) {
         // TODO we might need different flags
 #ifdef __APPLE__
-        dlsym_handle = dlopen("./libNativeLib.dylib", RTLD_LAZY);
+        dlsym_handle = dlopen("./libNativeLib.dylib", RTLD_LAZY | RTLD_GLOBAL);
 #else
-        dlsym_handle = dlopen("./libNativeLib.so", RTLD_LAZY);
+        dlsym_handle = dlopen("./libNativeLib.so", RTLD_LAZY | RTLD_GLOBAL);
 #endif
         dlsym_handle = dlopen(nullptr, RTLD_LAZY);
         if (auto message = dlerror(); message != nullptr) {

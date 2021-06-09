@@ -10,7 +10,6 @@
 #include "parser.hpp"
 
 #define UNIMPLEMENTED(x) std::cerr << x; exit(42);
-
 #define LOG(x)
 
 /**
@@ -60,14 +59,14 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
         }
     }
 
-    std::string libverify_path = java_home + "/lib/libverify.dylib";
+    std::string libverify_path = java_home + "/lib/libverify" + LIB_EXTENSION;
     dlopen(libverify_path.c_str(),
            RTLD_LAZY | RTLD_GLOBAL);
     if (auto message = dlerror(); message != nullptr) {
         std::cerr << "dlopen failed: " << message << "\n";
         abort();
     }
-    std::string libjava_path = java_home + "/lib/libjava.dylib";
+    std::string libjava_path = java_home + "/lib/libjava" + LIB_EXTENSION;
     dlopen(libjava_path.c_str(), RTLD_LAZY | RTLD_GLOBAL);
     if (auto message = dlerror(); message != nullptr) {
         std::cerr << "dlopen failed: " << message << "\n";

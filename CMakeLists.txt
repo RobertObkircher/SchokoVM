@@ -82,7 +82,6 @@ endfunction(add_sanitizers)
 # Executables and libraries
 #
 
-# I'm not entirely sure how to use add_subdirectory(src) and we only have one executable anyway
 add_library(jvm SHARED
         src/types.hpp
         src/classfile.hpp
@@ -100,11 +99,10 @@ add_library(jvm SHARED
         src/jni.cpp
         src/jvm.cpp
         )
-# add_sanitizers(jvm)
-
+add_sanitizers(jvm)
 target_include_directories(jvm PRIVATE ${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/jdk/include)
 target_compile_options(jvm PRIVATE -Wno-unused-parameter)
-
+target_compile_definitions(jvm PRIVATE LIB_EXTENSION="${CMAKE_SHARED_LIBRARY_SUFFIX}")
 if (libzip_FOUND)
     target_link_libraries(jvm libzip::zip)
 else ()
@@ -113,7 +111,11 @@ else ()
 endif ()
 
 
-add_executable(SchokoVM src/main.cpp)
+add_executable(SchokoVM src/main.cpp
+        src/args.hpp
+        src/interpreter.hpp
+        )
+add_sanitizers(SchokoVM)
 target_include_directories(SchokoVM PRIVATE ${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/jdk/include)
 target_link_libraries(SchokoVM jvm)
 
