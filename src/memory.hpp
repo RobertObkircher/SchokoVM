@@ -7,6 +7,7 @@
 #include <vector>
 #include <unordered_map>
 #include <string>
+#include <jni.h>
 
 #include "future.hpp"
 #include "types.hpp"
@@ -129,6 +130,14 @@ struct Heap {
 
 private:
     static Heap the_heap;
+};
+
+struct Env {
+    static inline JNIEnv* &get() { return the_env; }
+    static inline void set(JNIEnv* v) { the_env = v; }
+
+private:
+    static JNIEnv *the_env;
 };
 
 #endif //SCHOKOVM_MEMORY_HPP

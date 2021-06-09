@@ -17,6 +17,7 @@ std::optional<Arguments> parse_args(int argc, char *argv[]) {
     };
 
     std::optional<std::string> classpath{};
+    std::optional<std::string> libjava{};
     std::optional<std::string> mainclass{};
     std::vector<std::string> remaining;
 
@@ -35,6 +36,8 @@ std::optional<Arguments> parse_args(int argc, char *argv[]) {
             } else {
                 classpath = argv[index++];
             }
+        } else if (arg == "--libjava") {
+            libjava = argv[index++];
         } else {
             mainclass = arg;
             break;
@@ -47,12 +50,16 @@ std::optional<Arguments> parse_args(int argc, char *argv[]) {
     if (!mainclass)
         return usage("mainclass must be specified!");
 
+    if (!libjava)
+        return usage("libjava must be specified!");
+
     if (!classpath)
         classpath = ".";
 
     return Arguments{
             *mainclass,
             *classpath,
+            *libjava,
             remaining,
     };
 }

@@ -4,6 +4,8 @@
 #include <codecvt>
 #include "classfile.hpp"
 
+JNIEnv* Env::the_env;
+
 Heap Heap::the_heap;
 
 Reference Heap::new_instance(ClassFile *clazz) {

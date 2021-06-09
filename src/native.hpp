@@ -9,6 +9,7 @@
 #include <optional>
 #include <span>
 #include <vector>
+#include <jni.h>
 
 #include "types.hpp"
 
@@ -21,7 +22,7 @@ void *get_native_function_pointer(ClassFile *clazz, method_info *method);
 struct NativeFunction {
     NativeFunction(method_info *method, void *function_pointer);
 
-    void prepare_argument_pointers(void **arguments, void **jni_env_argument, ClassFile **class_argument,
+    void prepare_argument_pointers(void **arguments, JNIEnv **jni_env_argument, ClassFile **class_argument,
                                    bool use_class_argument, std::span<Value> &locals);
 
     Value call(void **arguments);

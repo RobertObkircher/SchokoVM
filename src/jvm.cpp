@@ -1344,3 +1344,16 @@ JNIEXPORT void JNICALL
 JVM_GetVersionInfo(JNIEnv* env, jvm_version_info* info, size_t info_size) {
     UNIMPLEMENTED("JVM_GetVersionInfo");
 }
+
+extern "C" {
+
+JNIEXPORT jstring JNICALL
+JVM_InitClassName(JNIEnv *env, jclass clazz) {
+    auto *java_class = (ClassFile *) clazz;
+    const auto &name = java_class->name();
+    auto ref = Heap::get().make_string(BootstrapClassLoader::get().load("java/lang/String"),
+                                       BootstrapClassLoader::get().load("[B"), name);
+    return (jstring) ref.memory;
+}
+
+}

@@ -58,7 +58,7 @@ void *get_native_function_pointer(ClassFile *clazz, method_info *method) {
     name += '_';
     name += method->name_index->value;
 
-    auto result = dlsym(dlsym_handle, name.c_str());
+    auto result = dlsym(RTLD_DEFAULT, name.c_str());
     if (auto message = dlerror(); message != nullptr) {
         std::cerr << "Could not find native function " << name << ": " << message << "\n";
         return nullptr;
@@ -109,7 +109,7 @@ NativeFunction::NativeFunction(method_info *method, void *function_pointer) : m_
     }
 }
 
-void NativeFunction::prepare_argument_pointers(void **arguments, void **jni_env_argument, ClassFile **class_argument,
+void NativeFunction::prepare_argument_pointers(void **arguments, JNIEnv **jni_env_argument, ClassFile **class_argument,
                                                bool use_class_argument, std::span<Value> &locals) {
     arguments[0] = jni_env_argument;
     ++arguments;
