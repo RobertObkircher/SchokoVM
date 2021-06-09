@@ -10,41 +10,48 @@
 //    UNIMPLEMENTED("$2");
 // }
 
+#define UNIMPLEMENTED(x) std::cerr << x; exit(42);
+#define LOG(x)
+
 // TODO I have no idea why this is not in the header and why jdk 11 binaries link to it
 extern "C" {
 JNIEXPORT jboolean JNICALL
 JVM_IsUseContainerSupport() {
-    return false;
+    UNIMPLEMENTED("JVM_IsUseContainerSupport")
 }
 
 JNIEXPORT jboolean JNICALL
 JVM_AreNestMates(JNIEnv *env, jclass current, jclass member) {
-    return false;
+    UNIMPLEMENTED("JVM_AreNestMates")
 }
 
 JNIEXPORT void JNICALL
 JVM_InitializeFromArchive(JNIEnv* env, jclass cls) {
+    UNIMPLEMENTED("JVM_InitializeFromArchive")
 }
 
 JNIEXPORT jstring JNICALL
 JVM_InitClassName(JNIEnv *env, jclass cls) {
-    return nullptr;
+    auto *java_class = (ClassFile *) cls;
+    auto name = java_class->name();
+    std::replace(name.begin(), name.end(), '/', '.');
+    // TODO load class
+    auto ref = Heap::get().make_string(BootstrapClassLoader::get().load("java/lang/String"),
+                                       BootstrapClassLoader::get().load("[B"), name);
+    return (jstring) ref.memory;
 }
 
 JNIEXPORT jclass JNICALL
 JVM_GetNestHost(JNIEnv* env, jclass current) {
-    return nullptr;
+    UNIMPLEMENTED("JVM_GetNestHost");
 }
 
 JNIEXPORT jobjectArray JNICALL
 JVM_GetNestMembers(JNIEnv* env, jclass current) {
-    return nullptr;
+    UNIMPLEMENTED("JVM_Clone");
 }
 
 }
-
-#define UNIMPLEMENTED(x) std::cerr << x; exit(42);
-#define LOG(x)
 
 JNIEXPORT jint JNICALL
 JVM_GetInterfaceVersion(void) {
