@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <dlfcn.h>
 
 #define _JNI_IMPLEMENTATION_
 
@@ -40,19 +41,37 @@ _JNI_IMPORT_OR_EXPORT_ jint JNICALL
 JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
     auto *vm_args = static_cast<JavaVMInitArgs *>(args);
 
-    std::string bootclasspath_option{"-Xbootclasspath:"};
-    std::string classpath_option{"-Djava.class.path="};
+    static const std::string BOOTCLASSPATH_OPTION = "-Xbootclasspath:";
+    static const std::string CLASSPATH_option{"-Djava.class.path="};
+    static const std::string JAVAHOME_OPTION{"-Xjavahome:"};
 
     std::string bootclasspath{};
     std::string classpath{};
+    std::string java_home{};
 
     for (int i = 0; i < vm_args->nOptions; ++i) {
         std::string option{vm_args->options[i].optionString};
-        if (option.starts_with(bootclasspath_option)) {
-            bootclasspath = option.substr(bootclasspath_option.size());
-        } else if (option.starts_with(classpath_option)) {
-            classpath = option.substr(classpath_option.size());
+        if (option.starts_with(BOOTCLASSPATH_OPTION)) {
+            bootclasspath = option.substr(BOOTCLASSPATH_OPTION.size());
+        } else if (option.starts_with(CLASSPATH_option)) {
+            classpath = option.substr(CLASSPATH_option.size());
+        } else if (option.starts_with(JAVAHOME_OPTION)) {
+            java_home = option.substr(JAVAHOME_OPTION.size());
         }
+    }
+
+    std::string libverify_path = java_home + "/lib/libverify.dylib";
+    dlopen(libverify_path.c_str(),
+           RTLD_LAZY | RTLD_GLOBAL);
+    if (auto message = dlerror(); message != nullptr) {
+        std::cerr << "dlopen failed: " << message << "\n";
+        abort();
+    }
+    std::string libjava_path = java_home + "/lib/libjava.dylib";
+    dlopen(libjava_path.c_str(), RTLD_LAZY | RTLD_GLOBAL);
+    if (auto message = dlerror(); message != nullptr) {
+        std::cerr << "dlopen failed: " << message << "\n";
+        abort();
     }
 
     // TODO remove classpath
@@ -66,7 +85,7 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
     native->reserved0 = thread;
 
     *pvm = new JavaVM{&jni_invoke_interface};
-    *penv = new JNIEnv{native};
+    *penv = thread->jni_env = new JNIEnv{native}; // TODO store JNIEnv as member of thread instead of allocating?
     return 0;
 }
 

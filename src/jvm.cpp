@@ -10,6 +10,39 @@
 //    UNIMPLEMENTED("$2");
 // }
 
+// TODO I have no idea why this is not in the header and why jdk 11 binaries link to it
+extern "C" {
+JNIEXPORT jboolean JNICALL
+JVM_IsUseContainerSupport() {
+    return false;
+}
+
+JNIEXPORT jboolean JNICALL
+JVM_AreNestMates(JNIEnv *env, jclass current, jclass member) {
+    return false;
+}
+
+JNIEXPORT void JNICALL
+JVM_InitializeFromArchive(JNIEnv* env, jclass cls) {
+}
+
+JNIEXPORT jstring JNICALL
+JVM_InitClassName(JNIEnv *env, jclass cls) {
+    return nullptr;
+}
+
+JNIEXPORT jclass JNICALL
+JVM_GetNestHost(JNIEnv* env, jclass current) {
+    return nullptr;
+}
+
+JNIEXPORT jobjectArray JNICALL
+JVM_GetNestMembers(JNIEnv* env, jclass current) {
+    return nullptr;
+}
+
+}
+
 #define UNIMPLEMENTED(x) std::cerr << x; exit(42);
 #define LOG(x)
 
@@ -1269,16 +1302,24 @@ JVM_NativePath(char *) {
  *   all platforms. */
 
 JNIEXPORT int
-jio_vsnprintf(char *str, size_t count, const char *fmt, va_list args);
+jio_vsnprintf(char *str, size_t count, const char *fmt, va_list args) {
+    UNIMPLEMENTED("jio_vsnprintf");
+}
 
 JNIEXPORT int
-jio_snprintf(char *str, size_t count, const char *fmt, ...);
+jio_snprintf(char *str, size_t count, const char *fmt, ...) {
+    UNIMPLEMENTED("jio_snprintf");
+}
 
 JNIEXPORT int
-jio_fprintf(FILE *, const char *fmt, ...);
+jio_fprintf(FILE *, const char *fmt, ...) {
+    UNIMPLEMENTED("jio_fprintf");
+}
 
 JNIEXPORT int
-jio_vfprintf(FILE *, const char *fmt, va_list args);
+jio_vfprintf(FILE *, const char *fmt, va_list args) {
+    UNIMPLEMENTED("jio_vfprintf");
+}
 
 
 JNIEXPORT void * JNICALL

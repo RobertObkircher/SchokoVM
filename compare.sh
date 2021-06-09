@@ -15,8 +15,8 @@ S_STATUS="$OUT/schoko_status"
 "$JAVA" -Djava.library.path="$PWD" -classpath tests.jar "$CLASS" 1>"$R_OUT" 2>"$R_ERR"
 echo "$?" > "$R_STATUS"
 
-./SchokoVM -classpath tests.jar "$CLASS" 1>"$S_OUT" 2>"$S_ERR"
-# "$JAVA" -XXaltjvm="$PWD" -Xbootclasspath:../jdk/exploded-modules -classpath tests.jar "$CLASS" 1>"$S_OUT" 2>"$S_ERR"
+# ./SchokoVM --java-home $JAVA_HOME -classpath tests.jar "$CLASS" 1>"$S_OUT" 2>"$S_ERR"
+"$JAVA" -XXaltjvm="$PWD" -Xbootclasspath:../jdk/exploded-modules -Xjavahome:$JAVA_HOME -classpath tests.jar "$CLASS" 1>"$S_OUT" 2>"$S_ERR"
 echo "$?" > "$S_STATUS"
 
 X=0

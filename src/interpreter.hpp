@@ -5,6 +5,7 @@
 #include <span>
 #include <unordered_map>
 #include <vector>
+#include <jni.h>
 
 #include "future.hpp"
 #include "classfile.hpp"
@@ -235,6 +236,7 @@ struct Thread {
     Stack stack{};
     // TODO should be of type jthrowable
     Reference current_exception = JAVA_NULL;
+    JNIEnv *jni_env;
 };
 
 struct BootstrapClassLoader;

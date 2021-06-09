@@ -44,6 +44,7 @@ void *get_native_function_pointer(ClassFile *clazz, method_info *method) {
 #else
         dlsym_handle = dlopen("./libNativeLib.so", RTLD_LAZY);
 #endif
+        dlsym_handle = dlopen(nullptr, RTLD_LAZY);
         if (auto message = dlerror(); message != nullptr) {
             std::cerr << "dlopen failed: " << message << "\n";
             return nullptr;
