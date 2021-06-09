@@ -233,6 +233,8 @@ struct Stack {
 
 struct Thread {
     Stack stack{};
+    // TODO should be of type jthrowable
+    Reference current_exception = JAVA_NULL;
 };
 
 struct BootstrapClassLoader;

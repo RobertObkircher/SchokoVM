@@ -311,34 +311,38 @@ bool resolve_class(CONSTANT_Class_info *class_info, Thread &thread, Frame &frame
     return false;
 }
 
-bool resolve_field_recursive(ClassFile *clazz, CONSTANT_Fieldref_info *field_info) {
+void resolve_field(ClassFile *clazz, CONSTANT_Fieldref_info *fieldref_info, Reference &exception) {
+    assert(!fieldref_info->resolved);
+
+    field_info *info = find_field(clazz, fieldref_info->name_and_type->name->value, fieldref_info->name_and_type->descriptor->value, exception);
+    if (exception != JAVA_NULL) {
+        return;
+    }
+
+    fieldref_info->resolved = true;
+    fieldref_info->is_boolean = info->descriptor_index->value == "Z";
+    fieldref_info->is_static = info->is_static();
+    fieldref_info->index = info->index;
+    fieldref_info->category = info->category;
+}
+
+field_info *find_field_recursive(ClassFile *clazz, std::string_view name, std::string_view descriptor) {
     // Steps: https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.4.3.2
     for (;;) {
         // 1.
-        assert(!field_info->resolved);
-        for (auto const &f : clazz->fields) {
-            if (f.name_index->value == field_info->name_and_type->name->value &&
-                f.descriptor_index->value == field_info->name_and_type->descriptor->value) {
-
-                field_info->resolved = true;
-                field_info->is_boolean = f.descriptor_index->value == "Z";
-                field_info->is_static = f.is_static();
-                field_info->index = f.index;
-                field_info->category = f.category;
-
-                // TODO check access_flags
-                return true;
+        for (auto &f : clazz->fields) {
+            if (f.name_index->value == name && f.descriptor_index->value == descriptor) {
+                return &f;
             }
         }
 
         // 2.
-        assert(!field_info->resolved);
         for (auto const &interface : clazz->interfaces) {
-            if (resolve_field_recursive(interface->clazz, field_info))
-                return true;
+            field_info *info = find_field_recursive(interface->clazz, name, descriptor);
+            if (info != nullptr) {
+                return info;
+            }
         }
-
-        assert(!field_info->resolved);
 
         if (clazz->super_class != nullptr) {
             // 3.
@@ -347,5 +351,15 @@ bool resolve_field_recursive(ClassFile *clazz, CONSTANT_Fieldref_info *field_inf
             break;
         }
     }
-    return false;
+    return nullptr;
+}
+
+field_info *find_field(ClassFile *clazz, std::string_view name, std::string_view descriptor, Reference &exception) {
+    auto *result = find_field_recursive(clazz, name, descriptor);
+    if (result == nullptr) {
+        // TODO new NoSuchFieldError
+        exception.memory = (void *) 123;
+    }
+    // TODO access control
+    return result;
 }

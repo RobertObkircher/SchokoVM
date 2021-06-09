@@ -405,100 +405,58 @@ CALL(void, Void,);
 
 #undef CALL
 
-jfieldID GetFieldID
-        (JNIEnv *env, jclass clazz, const char *name, const char *sig) {
-    UNIMPLEMENTED("GetFieldID");
+jfieldID GetFieldID(JNIEnv *env, jclass clazz, const char *name, const char *sig) {
+    LOG("GetFieldID");
+    auto *thread = (Thread *) env->functions->reserved0;
+    return (jfieldID) find_field((ClassFile*) clazz, name, sig, thread->current_exception);
 }
 
-jobject GetObjectField
-        (JNIEnv *env, jobject obj, jfieldID fieldID) {
-    UNIMPLEMENTED("GetObjectField");
+jfieldID GetStaticFieldID(JNIEnv *env, jclass clazz, const char *name, const char *sig) {
+    LOG("GetStaticFieldID");
+    auto *thread = (Thread *) env->functions->reserved0;
+    return (jfieldID) find_field((ClassFile*) clazz, name, sig, thread->current_exception);
 }
 
-jboolean GetBooleanField
-        (JNIEnv *env, jobject obj, jfieldID fieldID) {
-    UNIMPLEMENTED("GetBooleanField");
-}
 
-jbyte GetByteField
-        (JNIEnv *env, jobject obj, jfieldID fieldID) {
-    UNIMPLEMENTED("GetByteField");
-}
+/*
+ * GetTypeField
+ * SetTypeField
+ * GetStaticTypeField
+ * SetStaticTypeField
+ */
 
-jchar GetCharField
-        (JNIEnv *env, jobject obj, jfieldID fieldID) {
-    UNIMPLEMENTED("GetCharField");
-}
+#define FIELD(JavaType, Name, Variant, CppType)                                                                        \
+JavaType Get##Name##Field(JNIEnv *, jobject obj, jfieldID fieldID) {                                                   \
+    LOG("Get" #Name "Field");                                                                                          \
+    size_t index = ((field_info *) fieldID)->index;                                                                    \
+    return (JavaType) Reference{obj}.data<Value>()[index].Variant;                                                     \
+}                                                                                                                      \
+void Set##Name##Field(JNIEnv *, jobject obj, jfieldID fieldID, JavaType val) {                                         \
+    LOG("Set" #Name "Field");                                                                                          \
+    size_t index = ((field_info *) fieldID)->index;                                                                    \
+    Reference{obj}.data<Value>()[index].Variant = (CppType) val;                                                       \
+}                                                                                                                      \
+JavaType GetStatic##Name##Field(JNIEnv *, jclass clazz, jfieldID fieldID) {                                            \
+    LOG("GetStatic" #Name "Field");                                                                                    \
+    size_t index = ((field_info *) fieldID)->index;                                                                    \
+    return (JavaType) ((ClassFile *) clazz)->static_field_values[index].Variant;                                       \
+}                                                                                                                      \
+void SetStatic##Name##Field(JNIEnv *, jclass clazz, jfieldID fieldID, JavaType val) {                                  \
+    LOG("SetStatic" #Name "Field");                                                                                    \
+    size_t index = ((field_info *) fieldID)->index;                                                                    \
+    ((ClassFile *) clazz)->static_field_values[index].Variant = (CppType) val;                                         \
+}                                                                                                                      \
 
-jshort GetShortField
-        (JNIEnv *env, jobject obj, jfieldID fieldID) {
-    UNIMPLEMENTED("GetShortField");
-}
-
-jint GetIntField
-        (JNIEnv *env, jobject obj, jfieldID fieldID) {
-    UNIMPLEMENTED("GetIntField");
-}
-
-jlong GetLongField
-        (JNIEnv *env, jobject obj, jfieldID fieldID) {
-    UNIMPLEMENTED("GetLongField");
-}
-
-jfloat GetFloatField
-        (JNIEnv *env, jobject obj, jfieldID fieldID) {
-    UNIMPLEMENTED("GetFloatField");
-}
-
-jdouble GetDoubleField
-        (JNIEnv *env, jobject obj, jfieldID fieldID) {
-    UNIMPLEMENTED("GetDoubleField");
-}
-
-void SetObjectField
-        (JNIEnv *env, jobject obj, jfieldID fieldID, jobject val) {
-    UNIMPLEMENTED("SetObjectField");
-}
-
-void SetBooleanField
-        (JNIEnv *env, jobject obj, jfieldID fieldID, jboolean val) {
-    UNIMPLEMENTED("SetBooleanField");
-}
-
-void SetByteField
-        (JNIEnv *env, jobject obj, jfieldID fieldID, jbyte val) {
-    UNIMPLEMENTED("SetByteField");
-}
-
-void SetCharField
-        (JNIEnv *env, jobject obj, jfieldID fieldID, jchar val) {
-    UNIMPLEMENTED("SetCharField");
-}
-
-void SetShortField
-        (JNIEnv *env, jobject obj, jfieldID fieldID, jshort val) {
-    UNIMPLEMENTED("SetShortField");
-}
-
-void SetIntField
-        (JNIEnv *env, jobject obj, jfieldID fieldID, jint val) {
-    UNIMPLEMENTED("SetIntField");
-}
-
-void SetLongField
-        (JNIEnv *env, jobject obj, jfieldID fieldID, jlong val) {
-    UNIMPLEMENTED("SetLongField");
-}
-
-void SetFloatField
-        (JNIEnv *env, jobject obj, jfieldID fieldID, jfloat val) {
-    UNIMPLEMENTED("SetFloatField");
-}
-
-void SetDoubleField
-        (JNIEnv *env, jobject obj, jfieldID fieldID, jdouble val) {
-    UNIMPLEMENTED("SetDoubleField");
-}
+FIELD(jobject, Object, reference.memory, void *)
+FIELD(jboolean, Boolean, s4, u1);
+FIELD(jbyte, Byte, s4, u1);
+FIELD(jchar, Char, s4, u2);
+FIELD(jshort, Short, s4, u2);
+FIELD(jint, Int, s4, s4);
+FIELD(jlong, Long, s8, s8);
+FIELD(jfloat, Float, float_, float);
+FIELD(jdouble, Double, double_, double);
+#undef FIELD
 
 jmethodID GetStaticMethodID(JNIEnv *env, jclass clazz, const char *name, const char *sig) {
     LOG("GetStaticMethodID");
@@ -518,101 +476,6 @@ jmethodID GetStaticMethodID(JNIEnv *env, jclass clazz, const char *name, const c
     assert(method_iter->is_static());
     method_info *m = &*method_iter;
     return (jmethodID) m;
-}
-
-jfieldID GetStaticFieldID
-        (JNIEnv *env, jclass clazz, const char *name, const char *sig) {
-    UNIMPLEMENTED("GetStaticFieldID");
-}
-
-jobject GetStaticObjectField
-        (JNIEnv *env, jclass clazz, jfieldID fieldID) {
-    UNIMPLEMENTED("GetStaticObjectField");
-}
-
-jboolean GetStaticBooleanField
-        (JNIEnv *env, jclass clazz, jfieldID fieldID) {
-    UNIMPLEMENTED("GetStaticBooleanField");
-}
-
-jbyte GetStaticByteField
-        (JNIEnv *env, jclass clazz, jfieldID fieldID) {
-    UNIMPLEMENTED("GetStaticByteField");
-}
-
-jchar GetStaticCharField
-        (JNIEnv *env, jclass clazz, jfieldID fieldID) {
-    UNIMPLEMENTED("GetStaticCharField");
-}
-
-jshort GetStaticShortField
-        (JNIEnv *env, jclass clazz, jfieldID fieldID) {
-    UNIMPLEMENTED("GetStaticShortField");
-}
-
-jint GetStaticIntField
-        (JNIEnv *env, jclass clazz, jfieldID fieldID) {
-    UNIMPLEMENTED("GetStaticIntField");
-}
-
-jlong GetStaticLongField
-        (JNIEnv *env, jclass clazz, jfieldID fieldID) {
-    UNIMPLEMENTED("GetStaticLongField");
-}
-
-jfloat GetStaticFloatField
-        (JNIEnv *env, jclass clazz, jfieldID fieldID) {
-    UNIMPLEMENTED("GetStaticFloatField");
-}
-
-jdouble GetStaticDoubleField
-        (JNIEnv *env, jclass clazz, jfieldID fieldID) {
-    UNIMPLEMENTED("GetStaticDoubleField");
-}
-
-void SetStaticObjectField
-        (JNIEnv *env, jclass clazz, jfieldID fieldID, jobject value) {
-    UNIMPLEMENTED("SetStaticObjectField");
-}
-
-void SetStaticBooleanField
-        (JNIEnv *env, jclass clazz, jfieldID fieldID, jboolean value) {
-    UNIMPLEMENTED("SetStaticBooleanField");
-}
-
-void SetStaticByteField
-        (JNIEnv *env, jclass clazz, jfieldID fieldID, jbyte value) {
-    UNIMPLEMENTED("SetStaticByteField");
-}
-
-void SetStaticCharField
-        (JNIEnv *env, jclass clazz, jfieldID fieldID, jchar value) {
-    UNIMPLEMENTED("SetStaticCharField");
-}
-
-void SetStaticShortField
-        (JNIEnv *env, jclass clazz, jfieldID fieldID, jshort value) {
-    UNIMPLEMENTED("SetStaticShortField");
-}
-
-void SetStaticIntField
-        (JNIEnv *env, jclass clazz, jfieldID fieldID, jint value) {
-    UNIMPLEMENTED("SetStaticIntField");
-}
-
-void SetStaticLongField
-        (JNIEnv *env, jclass clazz, jfieldID fieldID, jlong value) {
-    UNIMPLEMENTED("SetStaticLongField");
-}
-
-void SetStaticFloatField
-        (JNIEnv *env, jclass clazz, jfieldID fieldID, jfloat value) {
-    UNIMPLEMENTED("SetStaticFloatField");
-}
-
-void SetStaticDoubleField
-        (JNIEnv *env, jclass clazz, jfieldID fieldID, jdouble value) {
-    UNIMPLEMENTED("SetStaticDoubleField");
 }
 
 jstring NewString

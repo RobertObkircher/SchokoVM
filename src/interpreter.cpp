@@ -926,7 +926,8 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                     return;
                 }
 
-                if (!resolve_field_recursive(field.class_->clazz, &field))
+                resolve_field(field.class_->clazz, &field, thread.current_exception);
+                if (thread.current_exception != JAVA_NULL)
                     throw std::runtime_error(
                             "field not found: " + field.class_->name->value + "." + field.name_and_type->name->value +
                             " " + field.name_and_type->descriptor->value);
@@ -1879,6 +1880,10 @@ void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &f
         native.prepare_argument_pointers(arguments.data(),
                                          &jni_env_argument, &class_argument, use_class_argument, frame.locals);
         return_value = native.call(arguments.data());
+    }
+
+    if (thread.current_exception != JAVA_NULL) {
+        // TODO handle excaption
     }
 
     if (method->return_category != 0) {
