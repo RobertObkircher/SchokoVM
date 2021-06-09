@@ -17,7 +17,7 @@ find_package(libzip)
 
 if (APPLE)
     set(CMAKE_SHARED_MODULE_SUFFIX ".dylib")
-endif()
+endif ()
 
 #
 # Common compiler options
@@ -82,9 +82,7 @@ endfunction(add_sanitizers)
 # Executables and libraries
 #
 
-# I'm not entirely sure how to use add_subdirectory(src) and we only have one executable anyway
-add_executable(SchokoVM
-        src/main.cpp
+add_library(jvm SHARED
         src/types.hpp
         src/classfile.hpp
         src/parser.cpp src/parser.hpp
@@ -101,22 +99,31 @@ add_executable(SchokoVM
         src/jni.cpp
         src/jvm.cpp
         )
-add_sanitizers(SchokoVM)
-
-target_include_directories(SchokoVM PRIVATE ${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/jdk/include)
-target_compile_options(SchokoVM PRIVATE -Wno-unused-parameter)
-
+add_sanitizers(jvm)
+target_include_directories(jvm PRIVATE ${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/jdk/include)
+target_compile_options(jvm PRIVATE -Wno-unused-parameter)
+target_compile_definitions(jvm PRIVATE LIB_EXTENSION="${CMAKE_SHARED_LIBRARY_SUFFIX}")
 if (libzip_FOUND)
-    target_link_libraries(SchokoVM libzip::zip)
+    target_link_libraries(jvm libzip::zip)
 else ()
     # hope that it's on the standard search paths
-    target_link_libraries(SchokoVM zip)
+    target_link_libraries(jvm zip)
 endif ()
+
+
+add_executable(SchokoVM src/main.cpp
+        src/args.hpp
+        src/interpreter.hpp
+        )
+add_sanitizers(SchokoVM)
+target_include_directories(SchokoVM PRIVATE ${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/jdk/include)
+target_link_libraries(SchokoVM jvm)
+
 
 add_library(NativeLib MODULE
         src/native-test.cpp
         )
-target_link_libraries(SchokoVM dl ffi)
+target_link_libraries(jvm dl ffi)
 
 
 #
@@ -129,11 +136,13 @@ get_filename_component(JDK_HOME ${JDK_HOME} DIRECTORY)
 message(STATUS "jdk: ${JDK_HOME}")
 
 set(JDK_EXPLODED ${CMAKE_CURRENT_SOURCE_DIR}/jdk/exploded-modules)
-if(NOT IS_DIRECTORY ${JDK_EXPLODED})
+if (NOT IS_DIRECTORY ${JDK_EXPLODED})
     message(STATUS "Exploding")
     execute_process(COMMAND ${JDK_HOME}/bin/jimage extract --dir "${JDK_EXPLODED}" "${JDK_HOME}/lib/modules")
-endif()
+endif ()
 
+find_library(LIBJAVA java PATHS ${JDK_HOME}/lib REQUIRED)
+#target_link_libraries(jvm ${LIBJAVA})
 
 #
 # Tests
@@ -144,6 +153,7 @@ endif()
 set(JAVA_TEST_SOURCES
         tests/Assertions.java
         tests/Bitwise.java
+        tests/Clazz.java
         tests/Empty.java
         tests/Exceptions.java
         # tests/ExceptionsConstruct.java
@@ -161,6 +171,7 @@ set(JAVA_TEST_SOURCES
         tests/MultiArrays.java
         tests/Native.java
         tests/ObjectArray.java
+        # tests/PropertiesTest.java
         tests/ReferenceComparisons.java
         tests/Strings.java
         tests/Switch.java
@@ -219,14 +230,14 @@ add_custom_command(
 
 # https://cmake.org/cmake/help/latest/module/UseJava.html
 add_jar(tests ${JAVA_TEST_SOURCES} ${JAVA_TEST_GENERATED_SOURCES})
-add_dependencies(SchokoVM tests)
+add_dependencies(jvm tests)
 
 enable_testing()
 # https://cmake.org/cmake/help/latest/command/add_test.html
 # https://cmake.org/cmake/help/latest/guide/tutorial/index.html#id11
 function(do_test path)
     get_filename_component(name ${path} NAME_WE)
-    add_test(NAME ${name} COMMAND sh "${CMAKE_SOURCE_DIR}/compare.sh" ${Java_JAVA_EXECUTABLE} ${name})
+    add_test(NAME ${name} COMMAND sh "${CMAKE_SOURCE_DIR}/compare.sh" ${Java_JAVA_EXECUTABLE} ${name} ${JDK_HOME})
 endfunction(do_test)
 
 foreach (source ${JAVA_TEST_SOURCES} ${JAVA_TEST_GENERATED_SOURCES})

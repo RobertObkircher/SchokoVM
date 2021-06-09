@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <dlfcn.h>
 
 #define _JNI_IMPLEMENTATION_
 
@@ -9,7 +10,6 @@
 #include "parser.hpp"
 
 #define UNIMPLEMENTED(x) std::cerr << x; exit(42);
-
 #define LOG(x)
 
 /**
@@ -40,19 +40,37 @@ _JNI_IMPORT_OR_EXPORT_ jint JNICALL
 JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
     auto *vm_args = static_cast<JavaVMInitArgs *>(args);
 
-    std::string bootclasspath_option{"-Xbootclasspath:"};
-    std::string classpath_option{"-Djava.class.path="};
+    static const std::string BOOTCLASSPATH_OPTION = "-Xbootclasspath:";
+    static const std::string CLASSPATH_option{"-Djava.class.path="};
+    static const std::string JAVAHOME_OPTION{"-Xjavahome:"};
 
     std::string bootclasspath{};
     std::string classpath{};
+    std::string java_home{};
 
     for (int i = 0; i < vm_args->nOptions; ++i) {
         std::string option{vm_args->options[i].optionString};
-        if (option.starts_with(bootclasspath_option)) {
-            bootclasspath = option.substr(bootclasspath_option.size());
-        } else if (option.starts_with(classpath_option)) {
-            classpath = option.substr(classpath_option.size());
+        if (option.starts_with(BOOTCLASSPATH_OPTION)) {
+            bootclasspath = option.substr(BOOTCLASSPATH_OPTION.size());
+        } else if (option.starts_with(CLASSPATH_option)) {
+            classpath = option.substr(CLASSPATH_option.size());
+        } else if (option.starts_with(JAVAHOME_OPTION)) {
+            java_home = option.substr(JAVAHOME_OPTION.size());
         }
+    }
+
+    std::string libverify_path = java_home + "/lib/libverify" + LIB_EXTENSION;
+    dlopen(libverify_path.c_str(),
+           RTLD_LAZY | RTLD_GLOBAL);
+    if (auto message = dlerror(); message != nullptr) {
+        std::cerr << "dlopen failed: " << message << "\n";
+        abort();
+    }
+    std::string libjava_path = java_home + "/lib/libjava" + LIB_EXTENSION;
+    dlopen(libjava_path.c_str(), RTLD_LAZY | RTLD_GLOBAL);
+    if (auto message = dlerror(); message != nullptr) {
+        std::cerr << "dlopen failed: " << message << "\n";
+        abort();
     }
 
     // TODO remove classpath
@@ -66,7 +84,7 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
     native->reserved0 = thread;
 
     *pvm = new JavaVM{&jni_invoke_interface};
-    *penv = new JNIEnv{native};
+    *penv = thread->jni_env = new JNIEnv{native}; // TODO store JNIEnv as member of thread instead of allocating?
     return 0;
 }
 
@@ -751,7 +769,26 @@ void SetDoubleArrayRegion
 jint RegisterNatives
         (JNIEnv *env, jclass clazz, const JNINativeMethod *methods,
          jint nMethods) {
-    UNIMPLEMENTED("RegisterNatives");
+    auto *java_class = (ClassFile *) clazz;
+    for(int i = 0; i < nMethods; i++) {
+        const auto &name = methods[i].name;
+        const auto &sig = methods[i].signature;
+        const auto &ptr = methods[i].fnPtr;
+        auto method_iter = std::find_if(java_class->methods.begin(), java_class->methods.end(),
+                                        [name, sig](const method_info &m) {
+                                            return m.name_index->value == name && m.descriptor_index->value == sig;
+                                        }
+        );
+
+        if (method_iter == java_class->methods.end()) {
+            // TODO error
+            std::cerr << "not found" << "\n";
+            return -1;
+        }
+
+        method_iter->native_function = NativeFunction{&*method_iter, ptr};
+    }
+    return 1;
 }
 
 jint UnregisterNatives

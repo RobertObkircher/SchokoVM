@@ -8,6 +8,7 @@
 struct Arguments {
     std::string mainclass;
     std::string classpath;
+    std::string java_home;
     std::vector<std::string> remaining;
 };
 

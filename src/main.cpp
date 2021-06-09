@@ -27,7 +27,9 @@ int main(int argc, char *argv[]) {
     hack[0].optionString = bootclasspath.data();
     std::string classpath ="-Djava.class.path=" + arguments->classpath;
     hack[1].optionString = classpath.data();
-    args.nOptions = 2;
+    std::string javahome ="-Xjavahome:" + arguments->java_home;
+    hack[2].optionString = javahome.data();
+    args.nOptions = 3;
 
     JavaVM *pvm = nullptr;
     JNIEnv *penv = nullptr;
