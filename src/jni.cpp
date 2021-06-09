@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <dlfcn.h>
 
 #define _JNI_IMPLEMENTATION_
 
@@ -55,6 +56,18 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
         }
     }
 
+    auto dlsym_handle = dlopen("/usr/lib/jvm/java-11-openjdk/lib/libverify.so", RTLD_LAZY | RTLD_GLOBAL);
+    if (auto message = dlerror(); message != nullptr) {
+        std::cerr << "dlopen failed: " << message << "\n";
+        abort();
+    }
+    dlsym_handle = dlopen("/usr/lib/jvm/java-11-openjdk/lib/libjava.so", RTLD_LAZY | RTLD_GLOBAL);
+    if (auto message = dlerror(); message != nullptr) {
+        std::cerr << "dlopen failed: " << message << "\n";
+        abort();
+    }
+
+
     // TODO remove classpath
     BootstrapClassLoader::get().initialize_with_boot_classpath(bootclasspath + ":" + classpath);
 
@@ -66,7 +79,7 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
     native->reserved0 = thread;
 
     *pvm = new JavaVM{&jni_invoke_interface};
-    *penv = new JNIEnv{native};
+    *penv = thread->jni_env = new JNIEnv{native}; // TODO store JNIEnv as member of thread instead of allocating?
     return 0;
 }
 

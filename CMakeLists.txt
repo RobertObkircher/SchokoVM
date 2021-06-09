@@ -83,7 +83,7 @@ endfunction(add_sanitizers)
 #
 
 # I'm not entirely sure how to use add_subdirectory(src) and we only have one executable anyway
-add_executable(SchokoVM
+add_library(jvm SHARED
         src/main.cpp
         src/types.hpp
         src/classfile.hpp
@@ -101,22 +101,22 @@ add_executable(SchokoVM
         src/jni.cpp
         src/jvm.cpp
         )
-add_sanitizers(SchokoVM)
+# add_sanitizers(jvm)
 
-target_include_directories(SchokoVM PRIVATE ${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/jdk/include)
-target_compile_options(SchokoVM PRIVATE -Wno-unused-parameter)
+target_include_directories(jvm PRIVATE ${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/jdk/include)
+target_compile_options(jvm PRIVATE -Wno-unused-parameter)
 
 if (libzip_FOUND)
-    target_link_libraries(SchokoVM libzip::zip)
+    target_link_libraries(jvm libzip::zip)
 else ()
     # hope that it's on the standard search paths
-    target_link_libraries(SchokoVM zip)
+    target_link_libraries(jvm zip)
 endif ()
 
 add_library(NativeLib MODULE
         src/native-test.cpp
         )
-target_link_libraries(SchokoVM dl ffi)
+target_link_libraries(jvm dl ffi)
 
 
 #
@@ -134,6 +134,8 @@ if(NOT IS_DIRECTORY ${JDK_EXPLODED})
     execute_process(COMMAND ${JDK_HOME}/bin/jimage extract --dir "${JDK_EXPLODED}" "${JDK_HOME}/lib/modules")
 endif()
 
+find_library(LIBJAVA java PATHS ${JDK_HOME}/lib REQUIRED)
+#target_link_libraries(jvm ${LIBJAVA})
 
 #
 # Tests
@@ -219,7 +221,7 @@ add_custom_command(
 
 # https://cmake.org/cmake/help/latest/module/UseJava.html
 add_jar(tests ${JAVA_TEST_SOURCES} ${JAVA_TEST_GENERATED_SOURCES})
-add_dependencies(SchokoVM tests)
+add_dependencies(jvm tests)
 
 enable_testing()
 # https://cmake.org/cmake/help/latest/command/add_test.html

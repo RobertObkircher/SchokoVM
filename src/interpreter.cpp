@@ -1848,12 +1848,6 @@ method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_inf
 }
 
 void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &frame, bool &should_exit) {
-    // TODO remove once we have libjava
-    if (method->name_index->value == "registerNatives") {
-        pop_frame_after_return(thread, frame, should_exit);
-        return;
-    }
-
     if (!method->native_function) {
         auto *function_pointer = get_native_function_pointer(clazz, method);
         if (function_pointer == nullptr) {
@@ -1864,7 +1858,7 @@ void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &f
     }
     NativeFunction &native = *method->native_function;
 
-    void *jni_env_argument = nullptr; // TODO get from thread and fix type
+    void *jni_env_argument = thread.jni_env;
     ClassFile *class_argument = clazz;
     bool use_class_argument = method->is_static();
 
