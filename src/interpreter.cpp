@@ -136,8 +136,15 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 if (resolve_class(c, thread, frame)) {
                     return;
                 }
+                auto clazz = BootstrapClassLoader::get().load("java/lang/Class");
+                if (resolve_class(clazz->this_class, thread, frame)) {
+                    return;
+                }
+
                 frame.pc++;
-                frame.push<Reference>(Reference{c->clazz});
+                auto ref = Reference{c->clazz};
+                ref.object()->clazz = clazz;
+                frame.push<Reference>(ref);
             } else if (auto s = std::get_if<CONSTANT_String_info>(&entry.variant)) {
                 // TODO initialize class
                 auto clazz = BootstrapClassLoader::get().load("java/lang/String");

@@ -151,6 +151,7 @@ find_library(LIBJAVA java PATHS ${JDK_HOME}/lib REQUIRED)
 set(JAVA_TEST_SOURCES
         tests/Assertions.java
         tests/Bitwise.java
+        tests/Clazz.java
         tests/Empty.java
         tests/Exceptions.java
         # tests/ExceptionsConstruct.java
