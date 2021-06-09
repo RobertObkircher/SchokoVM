@@ -311,7 +311,6 @@ static jint Name(JNIEnv *env, jclass java_class, bool is_virtual,               
     MethodDescriptorParts parts{method->descriptor_index->value.c_str()};                                              \
     for (; !parts->is_return; ++parts) {                                                                               \
         thread->stack.memory[offset] = NextArg;                                                                        \
-        ++args;                                                                                                        \
         offset += parts->category;                                                                                     \
     }                                                                                                                  \
                                                                                                                        \

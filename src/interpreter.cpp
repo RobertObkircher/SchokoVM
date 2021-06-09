@@ -1517,6 +1517,8 @@ static void handle_throw(Thread &thread, Frame &frame, Reference exception) {
     // TODO this is actually wrong, the stack should be generated when the Throwable is constructed
     std::vector<Frame> stack_trace;
 
+    // TODO if a native frame is on the stack or if we reach the top we should set should_exit to true and return without printing anything.
+
     for (;;) {
         stack_trace.push_back(frame);
         auto &exception_table = frame.method->code_attribute->exception_table;

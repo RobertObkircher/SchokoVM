@@ -47,7 +47,13 @@ int main(int argc, char *argv[]) {
         pvm->DestroyJavaVM();
         throw std::runtime_error("Couldn't find main method");
     }
-    penv->CallStaticVoidMethod(main_class, main_method_id);
+    // TODO args
+    penv->CallStaticVoidMethod(main_class, main_method_id, Reference{nullptr});
+
+    if (jthrowable exception = penv->ExceptionOccurred(); exception != nullptr) {
+        // TODO?
+        penv->ExceptionClear();
+    }
 
     // TODO figure out how to free this (or maybe LeakSanitizer won't complain if we just put it in a thread local variable?)
     delete (Thread *) penv->functions->reserved0;
