@@ -770,7 +770,26 @@ void SetDoubleArrayRegion
 jint RegisterNatives
         (JNIEnv *env, jclass clazz, const JNINativeMethod *methods,
          jint nMethods) {
-    UNIMPLEMENTED("RegisterNatives");
+    auto *java_class = (ClassFile *) clazz;
+    for(int i = 0; i < nMethods; i++) {
+        const auto &name = methods[i].name;
+        const auto &sig = methods[i].signature;
+        const auto &ptr = methods[i].fnPtr;
+        auto method_iter = std::find_if(java_class->methods.begin(), java_class->methods.end(),
+                                        [name, sig](const method_info &m) {
+                                            return m.name_index->value == name && m.descriptor_index->value == sig;
+                                        }
+        );
+
+        if (method_iter == java_class->methods.end()) {
+            // TODO error
+            std::cerr << "not found" << "\n";
+            return -1;
+        }
+
+        method_iter->native_function = NativeFunction{&*method_iter, ptr};
+    }
+    return 1;
 }
 
 jint UnregisterNatives
