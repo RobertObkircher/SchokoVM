@@ -2,6 +2,7 @@
 #include <utility>
 
 #include "classloading.hpp"
+#include "memory.hpp"
 #include "parser.hpp"
 #include "util.hpp"
 #include "zip.hpp"
@@ -9,28 +10,35 @@
 BootstrapClassLoader BootstrapClassLoader::the_bootstrap_class_loader;
 
 void BootstrapClassLoader::initialize_with_boot_classpath(std::string const &bootclasspath) {
-    class_path_entries = std::vector<ClassPathEntry>();
-    array_classes = std::unordered_map<std::string, std::unique_ptr<ClassFile>>();
-
-    // TODO fix hardcoded path
-    class_path_entries.push_back({"java.base", {}, "../jdk/exploded-modules/java.base", {}});
+    m_class_path_entries = std::vector<ClassPathEntry>();
+    m_classes = std::unordered_map<std::string, ClassFile *>();
 
     for (auto &path : split(bootclasspath, ':')) {
         if (path.ends_with(".jar") || path.ends_with(".zip")) {
-            class_path_entries.push_back({"", {}, "", ZipArchive(path)});
+            m_class_path_entries.push_back({"", ZipArchive(path)});
         } else {
-            class_path_entries.push_back({path, {}, path, {}});
+            m_class_path_entries.push_back({path, {}});
         }
     }
 
-    make_array_class("[B");
-    make_array_class("[C");
-    make_array_class("[D");
-    make_array_class("[F");
-    make_array_class("[I");
-    make_array_class("[J");
-    make_array_class("[S");
-    make_array_class("[Z");
+    m_constants.java_lang_Class = load_or_throw("java/lang/Class");
+    m_constants.java_lang_Class->header.clazz = m_constants.java_lang_Class;
+
+    m_constants.java_io_Serializable = load_or_throw("java/io/Serializable");
+    m_constants.java_lang_Cloneable = load_or_throw("java/lang/Cloneable");
+    m_constants.java_lang_Object = load_or_throw("java/lang/Object");
+    m_constants.java_lang_String = load_or_throw("java/lang/String");
+
+    for (auto &primitive : m_constants.primitives) {
+        primitive.primitive = make_builtin_class(primitive.primitive_name, nullptr);
+        if (primitive.id != Primitive::Void) {
+            primitive.array = make_builtin_class(primitive.array_name, primitive.primitive);
+        } else {
+            primitive.array = nullptr;
+        }
+        primitive.boxed = load_or_throw(primitive.boxed_name);
+    }
+
 }
 
 // https://stackoverflow.com/a/7782037
@@ -40,12 +48,20 @@ struct membuf : std::streambuf {
     }
 };
 
-ClassFile *BootstrapClassLoader::load(std::string const &name) {
-    if (name.size() >= 2 && name[0] == '[') {
-        if (auto found = array_classes.find(name); found != array_classes.end()) {
-            return found->second.get();
-        }
+ClassFile *BootstrapClassLoader::load_or_throw(std::string const &name) {
+    ClassFile *clazz = load(name);
+    if (clazz == nullptr) {
+        throw std::runtime_error("Failed to load " + name);
+    }
+    return clazz;
+}
 
+ClassFile *BootstrapClassLoader::load(std::string const &name) {
+    if (auto found = m_classes.find(name); found != m_classes.end()) {
+        return found->second;
+    }
+
+    if (name.size() >= 2 && name[0] == '[') {
         std::string element_name;
         if (name[1] == 'L') {
             // turn [Ljava.lang.Boolean; into java/lang/Boolean
@@ -65,83 +81,85 @@ ClassFile *BootstrapClassLoader::load(std::string const &name) {
         if (element_type == nullptr) {
             return nullptr;
         }
-        ClassFile *array_class = make_array_class(name);
-        array_class->array_element_type = element_type;
+        ClassFile *array_class = make_builtin_class(name, element_type);
         return array_class;
     }
 
-    for (auto &cp_entry : class_path_entries) {
-        if (auto loaded = cp_entry.class_files.find(name); loaded != cp_entry.class_files.end()) {
-            if (loaded->second == nullptr) {
-                continue;
-            }
-            return loaded->second.get();
-        }
-
-        std::unique_ptr<ClassFile> parsed{};
-
+    ClassFile *result = nullptr;
+    for (auto &cp_entry : m_class_path_entries) {
         if (!cp_entry.directory.empty()) {
             auto path = cp_entry.directory + "/" + name + ".class";
             std::ifstream in{path, std::ios::in | std::ios::binary};
 
             if (in) {
                 Parser parser{in};
-                parsed = std::make_unique<ClassFile>(parser.parse());
+                result = Heap::get().allocate_class();
+                *result = parser.parse();
+                result->header.clazz = constants().java_lang_Class;
+                break;
             }
         } else if (!cp_entry.zip.path.empty()) {
             auto path = name + ".class";
 
             if (ZipEntry const *zip_entry = cp_entry.zip.entry_for_path(path); zip_entry != nullptr) {
-                cp_entry.zip.read(*zip_entry, buffer);
+                cp_entry.zip.read(*zip_entry, m_buffer);
 
-                membuf buf{buffer.data(), buffer.data() + buffer.size()};
+                membuf buf{m_buffer.data(), m_buffer.data() + m_buffer.size()};
                 std::istream in{&buf};
 
                 Parser parser{in};
-                parsed = std::make_unique<ClassFile>(parser.parse());
+                result = Heap::get().allocate_class();
+                *result = parser.parse();
+                result->header.clazz = constants().java_lang_Class;
+                break;
             }
-        }
-
-        ClassFile *result = parsed.get();
-        cp_entry.class_files.insert({name, std::move(parsed)});
-
-        if (result != nullptr) {
-            if (name != result->name()) {
-                throw ParseError("unexpected name");
-            }
-            return result;
         }
     }
-    return nullptr;
+
+    if (result != nullptr) {
+        if (name != result->name()) {
+            throw ParseError("unexpected name");
+        }
+    }
+
+    m_classes.insert({name, result});
+    return result;
 }
 
-ClassFile *BootstrapClassLoader::make_array_class(std::string name) {
-    auto clazz = std::make_unique<ClassFile>();
+ClassFile *BootstrapClassLoader::make_builtin_class(std::string name, ClassFile *array_element_type) {
+    auto clazz = Heap::get().allocate_class();
 
-    auto add_name_and_class = [&clazz, &name](u2 index, ClassFile *c) -> CONSTANT_Class_info * {
+    u2 index = 0;
+    auto add_name_and_class = [&clazz, &name, &index](ClassFile *c) -> CONSTANT_Class_info * {
         assert(c);
         clazz->constant_pool.table[index].variant = CONSTANT_Utf8_info{
-                c == clazz.get() ? name : c->name()
+                c == clazz ? name : c->name()
         };
         clazz->constant_pool.table[index + 1].variant = CONSTANT_Class_info{
                 index,
                 &clazz->constant_pool.get<CONSTANT_Utf8_info>(index),
                 c,
         };
-        return &clazz->constant_pool.get<CONSTANT_Class_info>(index + 1);
+        auto result = &clazz->constant_pool.get<CONSTANT_Class_info>(index + 1);
+        index += 2;
+        return result;
     };
 
-    clazz->constant_pool.table.resize(4 * 2);
-    clazz->this_class = add_name_and_class(0, clazz.get());
-    clazz->super_class_ref = add_name_and_class(2, clazz->super_class = load("java/lang/Object"));
-    clazz->interfaces.push_back(add_name_and_class(4, load("java/lang/Cloneable")));
-    clazz->interfaces.push_back(add_name_and_class(6, load("java/io/Serializable")));
+    if (array_element_type != nullptr) {
+        clazz->constant_pool.table.resize(4 * 2);
+        clazz->super_class_ref = add_name_and_class(clazz->super_class = constants().java_lang_Object);
+        clazz->interfaces.push_back(add_name_and_class(constants().java_lang_Cloneable));
+        clazz->interfaces.push_back(add_name_and_class(constants().java_io_Serializable));
+    } else {
+        clazz->constant_pool.table.resize(1 * 2);
+    }
+    clazz->this_class = add_name_and_class(clazz);
+    clazz->array_element_type = array_element_type;
 
     // TODO add array clone method here?
 
-    ClassFile *result = clazz.get();
-    array_classes.insert({std::move(name), std::move(clazz)});
-    return result;
+    m_classes.insert({std::move(name), clazz});
+    return clazz;
 }
 
 
@@ -170,7 +188,7 @@ static bool initialize_class(ClassFile *clazz, Thread &thread, Frame &frame) {
                         clazz->static_field_values[field.index] = Value(std::get<CONSTANT_Double_info>(value).value);
                     } else if (descriptor == "Ljava/lang/String;") {
                         // TODO deduplicate this + i think the
-                        auto string_clazz = BootstrapClassLoader::get().load("java/lang/String");
+                        auto string_clazz = BootstrapClassLoader::constants().java_lang_String;
                         if (resolve_class(string_clazz->this_class, thread, frame)) {
                             return true;
                         }
@@ -190,13 +208,17 @@ static bool initialize_class(ClassFile *clazz, Thread &thread, Frame &frame) {
                                 u1 z = static_cast<u1>(modified_utf8[i + 5]);
 
                                 if (((v & 0xf0) == 0b10100000) && ((w & 0b11000000) == 0b10000000)
-                                    && (x == 0b11101101) && ((y & 0xf0) == 0b10110000) && ((z & 11000000) == 0b10000000)) {
+                                    && (x == 0b11101101) && ((y & 0xf0) == 0b10110000) &&
+                                    ((z & 11000000) == 0b10000000)) {
                                     int codepoint =
-                                            0x10000 + ((v & 0x0f) << 16) + ((w & 0x3f) << 10) + ((y & 0x0f) << 6) + (z & 0x3f);
+                                            0x10000 + ((v & 0x0f) << 16) + ((w & 0x3f) << 10) + ((y & 0x0f) << 6) +
+                                            (z & 0x3f);
                                     // convert into the 4-byte utf8 variant
                                     string_utf8.push_back(static_cast<char>(0b11110000 | ((codepoint >> 18) & 0b1111)));
-                                    string_utf8.push_back(static_cast<char>(0b10000000 | ((codepoint >> 12) & 0b111111)));
-                                    string_utf8.push_back(static_cast<char>(0b10000000 | ((codepoint >> 6) & 0b111111)));
+                                    string_utf8.push_back(
+                                            static_cast<char>(0b10000000 | ((codepoint >> 12) & 0b111111)));
+                                    string_utf8.push_back(
+                                            static_cast<char>(0b10000000 | ((codepoint >> 6) & 0b111111)));
                                     string_utf8.push_back(static_cast<char>(0b10000000 | ((codepoint) & 0b111111)));
                                     i += 5;
                                     continue;
@@ -213,11 +235,12 @@ static bool initialize_class(ClassFile *clazz, Thread &thread, Frame &frame) {
                                 string_utf8.push_back(modified_utf8[++i]);
                                 string_utf8.push_back(modified_utf8[++i]);
                             } else {
-                                throw std::runtime_error("Invalid byte in modified utf8 string: " + std::to_string((int) c));
+                                throw std::runtime_error(
+                                        "Invalid byte in modified utf8 string: " + std::to_string((int) c));
                             }
                         }
 
-                        auto java_string = Heap::get().make_string(string_clazz, BootstrapClassLoader::get().load("[B"), string_utf8);
+                        auto java_string = Heap::get().make_string(string_utf8);
                         clazz->static_field_values[field.index] = Value(java_string);
 
                     } else {
@@ -314,7 +337,8 @@ bool resolve_class(CONSTANT_Class_info *class_info, Thread &thread, Frame &frame
 void resolve_field(ClassFile *clazz, CONSTANT_Fieldref_info *fieldref_info, Reference &exception) {
     assert(!fieldref_info->resolved);
 
-    field_info *info = find_field(clazz, fieldref_info->name_and_type->name->value, fieldref_info->name_and_type->descriptor->value, exception);
+    field_info *info = find_field(clazz, fieldref_info->name_and_type->name->value,
+                                  fieldref_info->name_and_type->descriptor->value, exception);
     if (exception != JAVA_NULL) {
         return;
     }
