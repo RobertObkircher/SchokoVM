@@ -95,6 +95,7 @@ struct Heap {
     };
 
     std::vector<std::unique_ptr<void, OperatorDeleter>> allocations;
+    std::vector<std::unique_ptr<ClassFile>> classes;
     std::unordered_map<std::string, Reference> interned_strings;
 
     Reference new_instance(ClassFile *clazz);
@@ -125,7 +126,9 @@ struct Heap {
         return reference;
     }
 
-    Reference make_string(ClassFile *string_clazz, ClassFile *byte_array_clazz, const std::string &value_utf8);
+    Reference make_string(std::string const &value_utf8);
+
+    ClassFile *allocate_class();
 
 private:
     static Heap the_heap;

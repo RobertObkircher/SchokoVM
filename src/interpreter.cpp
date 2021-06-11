@@ -136,18 +136,11 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 if (resolve_class(c, thread, frame)) {
                     return;
                 }
-                auto clazz = BootstrapClassLoader::get().load("java/lang/Class");
-                if (resolve_class(clazz->this_class, thread, frame)) {
-                    return;
-                }
-
                 frame.pc++;
-                auto ref = Reference{c->clazz};
-                ref.object()->clazz = clazz;
-                frame.push<Reference>(ref);
+                frame.push<Reference>(Reference{c->clazz});
             } else if (auto s = std::get_if<CONSTANT_String_info>(&entry.variant)) {
-                // TODO initialize class
-                auto clazz = BootstrapClassLoader::get().load("java/lang/String");
+                // TODO where should we initialize the string class? This is definitely not the right place
+                auto clazz = BootstrapClassLoader::constants().java_lang_String;
                 if (resolve_class(clazz->this_class, thread, frame)) {
                     return;
                 }
@@ -194,7 +187,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                     }
                 }
 
-                frame.push<Reference>(Heap::get().make_string(clazz, BootstrapClassLoader::get().load("[B"), string_utf8));
+                frame.push<Reference>(Heap::get().make_string(string_utf8));
             } else {
                 // TODO: "a symbolic reference to a method type, a method handle, or a dynamically-computed constant." (?)
                 throw std::runtime_error("ldc refers to invalid/unimplemented type");
