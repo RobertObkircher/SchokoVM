@@ -1,16 +1,25 @@
 # SchokoVM
 
-A Java Bytecode interpreter. 
+A Java Bytecode interpreter.
 
 [![Run tests](https://github.com/RobertObkircher/SchokoVM/actions/workflows/tests.yml/badge.svg)](https://github.com/RobertObkircher/SchokoVM/actions/workflows/tests.yml)
 
-# OpenJDK
+# Dependencies
 
-You need to download an OpenJDK release and the sources: `cd jdk && ./download.sh`
+- OpenJDK 11:
+
+  If CMake finds the wrong version, you can set the JAVA_HOME environment variable.
+
+- `libzip`, `libdl`, `libffi`
+
+# OpenJDK 11 sources
+
+You can optionally download the source code for OpenJDK 11 with this script:
+`cd jdk && ./download.sh`. This is not necessary to compile the project.
 
 # GDB
 
-You need a ~/.gdbinit in your home directory or the project .gdbinit file will be ignored:
+You need a `~/.gdbinit` in your home directory or the project .gdbinit file will be ignored:
 
 ```
 set auto-load local-gdbinit on 
@@ -18,20 +27,6 @@ add-auto-load-safe-path /
 ```
 
 The project `.gdbinit` file allows you to debug testcases that are executed by `compare.sh`.
-
-# OpenJDK rt.jar
-
-Since java 9 OpenJDK uses the jrt filesystem to store the class library.
-I tried the following to get something like the old rt.jar.
-
-```sh
-jimage extract --dir modules /usr/lib/jvm/default/lib/modules
-mkdir rt
-cp -fr modules/*/* rt
-cd rt
-zip -r ../rt.jar .
-rm -rf modules rt
-```
 
 # Notes
 
