@@ -337,8 +337,11 @@ static jint Name(JNIEnv *env, jclass java_class, bool is_virtual,               
     return JNI_OK;                                                                                                     \
 }                                                                                                                      \
 
+
 CALL_HELPER(call, const jvalue *, Value((s8) args->j); ++args)
+
 CALL_HELPER(call_v, va_list, (Value((s8) va_arg(args, jvalue).j)))
+
 #undef CALL_HELPER
 
 // static jint call(JNIEnv *env, jclass java_class, bool is_virtual, jobject java_object, jmethodID methodID, const jvalue *args, Value &result);
@@ -410,15 +413,25 @@ ReturnType CallStatic##Name##MethodA(JNIEnv *env, jclass clazz, jmethodID method
     return (ReturnType) result.s8;                                                                                     \
 }                                                                                                                      \
 
+
 CALL(jobject, Object, return);
+
 CALL(jboolean, Boolean, return);
+
 CALL(jbyte, Byte, return);
+
 CALL(jchar, Char, return);
+
 CALL(jshort, Short, return);
+
 CALL(jint, Int, return);
+
 CALL(jlong, Long, return);
+
 CALL(jfloat, Float, return);
+
 CALL(jdouble, Double, return);
+
 CALL(void, Void,);
 
 #undef CALL
@@ -426,13 +439,13 @@ CALL(void, Void,);
 jfieldID GetFieldID(JNIEnv *env, jclass clazz, const char *name, const char *sig) {
     LOG("GetFieldID");
     auto *thread = (Thread *) env->functions->reserved0;
-    return (jfieldID) find_field((ClassFile*) clazz, name, sig, thread->current_exception);
+    return (jfieldID) find_field((ClassFile *) clazz, name, sig, thread->current_exception);
 }
 
 jfieldID GetStaticFieldID(JNIEnv *env, jclass clazz, const char *name, const char *sig) {
     LOG("GetStaticFieldID");
     auto *thread = (Thread *) env->functions->reserved0;
-    return (jfieldID) find_field((ClassFile*) clazz, name, sig, thread->current_exception);
+    return (jfieldID) find_field((ClassFile *) clazz, name, sig, thread->current_exception);
 }
 
 
@@ -465,14 +478,23 @@ void SetStatic##Name##Field(JNIEnv *, jclass clazz, jfieldID fieldID, JavaType v
     ((ClassFile *) clazz)->static_field_values[index].Variant = (CppType) val;                                         \
 }                                                                                                                      \
 
+
 FIELD(jobject, Object, reference.memory, void *)
+
 FIELD(jboolean, Boolean, s4, u1);
+
 FIELD(jbyte, Byte, s4, u1);
+
 FIELD(jchar, Char, s4, u2);
+
 FIELD(jshort, Short, s4, u2);
+
 FIELD(jint, Int, s4, s4);
+
 FIELD(jlong, Long, s8, s8);
+
 FIELD(jfloat, Float, float_, float);
+
 FIELD(jdouble, Double, double_, double);
 #undef FIELD
 
@@ -770,7 +792,7 @@ jint RegisterNatives
         (JNIEnv *env, jclass clazz, const JNINativeMethod *methods,
          jint nMethods) {
     auto *java_class = (ClassFile *) clazz;
-    for(int i = 0; i < nMethods; i++) {
+    for (int i = 0; i < nMethods; i++) {
         const auto &name = methods[i].name;
         const auto &sig = methods[i].signature;
         const auto &ptr = methods[i].fnPtr;
