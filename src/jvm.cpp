@@ -26,7 +26,7 @@ JVM_AreNestMates(JNIEnv *env, jclass current, jclass member) {
 }
 
 JNIEXPORT void JNICALL
-JVM_InitializeFromArchive(JNIEnv* env, jclass cls) {
+JVM_InitializeFromArchive(JNIEnv *env, jclass cls) {
     UNIMPLEMENTED("JVM_InitializeFromArchive")
 }
 
@@ -40,12 +40,12 @@ JVM_InitClassName(JNIEnv *env, jclass cls) {
 }
 
 JNIEXPORT jclass JNICALL
-JVM_GetNestHost(JNIEnv* env, jclass current) {
+JVM_GetNestHost(JNIEnv *env, jclass current) {
     UNIMPLEMENTED("JVM_GetNestHost");
 }
 
 JNIEXPORT jobjectArray JNICALL
-JVM_GetNestMembers(JNIEnv* env, jclass current) {
+JVM_GetNestMembers(JNIEnv *env, jclass current) {
     UNIMPLEMENTED("JVM_Clone");
 }
 
@@ -182,17 +182,17 @@ JVM_ActiveProcessorCount(void) {
     UNIMPLEMENTED("JVM_ActiveProcessorCount");
 }
 
-JNIEXPORT void * JNICALL
+JNIEXPORT void *JNICALL
 JVM_LoadLibrary(const char *name) {
     UNIMPLEMENTED("JVM_LoadLibrary");
 }
 
 JNIEXPORT void JNICALL
-JVM_UnloadLibrary(void * handle) {
+JVM_UnloadLibrary(void *handle) {
     UNIMPLEMENTED("JVM_UnloadLibrary");
 }
 
-JNIEXPORT void * JNICALL
+JNIEXPORT void *JNICALL
 JVM_FindLibraryEntry(void *handle, const char *name) {
     UNIMPLEMENTED("JVM_FindLibraryEntry");
 }
@@ -225,7 +225,7 @@ JVM_InitStackTraceElementArray(JNIEnv *env, jobjectArray elements, jobject throw
 }
 
 JNIEXPORT void JNICALL
-JVM_InitStackTraceElement(JNIEnv* env, jobject element, jobject stackFrameInfo) {
+JVM_InitStackTraceElement(JNIEnv *env, jobject element, jobject stackFrameInfo) {
     UNIMPLEMENTED("JVM_InitStackTraceElement");
 }
 
@@ -444,7 +444,17 @@ JVM_GetCallerClass(JNIEnv *env) {
  */
 JNIEXPORT jclass JNICALL
 JVM_FindPrimitiveClass(JNIEnv *env, const char *utf) {
-    UNIMPLEMENTED("JVM_FindPrimitiveClass");
+    LOG("JVM_FindPrimitiveClass");
+    const auto primitives = BootstrapClassLoader::constants().primitives;
+
+    for (size_t i = 0; i < Primitive::TYPE_COUNT; i++) {
+        const auto primitive = primitives[i];
+        if (std::strcmp(primitive.primitive_name, utf) == 0) {
+            return reinterpret_cast<jclass>(primitive.primitive);
+        }
+    }
+
+    throw std::runtime_error("Coudln't find primitive class " + std::string(utf));
 }
 
 
@@ -479,7 +489,7 @@ JVM_FindClassFromCaller(JNIEnv *env, const char *name, jboolean init,
  */
 JNIEXPORT jclass JNICALL
 JVM_FindClassFromClass(JNIEnv *env, const char *name, jboolean init,
-                             jclass from) {
+                       jclass from) {
     UNIMPLEMENTED("JVM_FindClassFromClass");
 }
 
@@ -520,7 +530,7 @@ JVM_DefineClassWithSource(JNIEnv *env, const char *name, jobject loader,
  */
 JNIEXPORT void JNICALL
 JVM_DefineModule(JNIEnv *env, jobject module, jboolean is_open, jstring version,
-                 jstring location, const char* const* packages, jsize num_packages) {
+                 jstring location, const char *const *packages, jsize num_packages) {
     UNIMPLEMENTED("JVM_DefineModule");
 }
 
@@ -540,7 +550,7 @@ JVM_SetBootLoaderUnnamedModule(JNIEnv *env, jobject module) {
  *  to_module:   module to export the package to
  */
 JNIEXPORT void JNICALL
-JVM_AddModuleExports(JNIEnv *env, jobject from_module, const char* package, jobject to_module) {
+JVM_AddModuleExports(JNIEnv *env, jobject from_module, const char *package, jobject to_module) {
     UNIMPLEMENTED("JVM_AddModuleExports");
 }
 
@@ -550,7 +560,7 @@ JVM_AddModuleExports(JNIEnv *env, jobject from_module, const char* package, jobj
  *  package:     name of the package to export to all unnamed modules
  */
 JNIEXPORT void JNICALL
-JVM_AddModuleExportsToAllUnnamed(JNIEnv *env, jobject from_module, const char* package) {
+JVM_AddModuleExportsToAllUnnamed(JNIEnv *env, jobject from_module, const char *package) {
     UNIMPLEMENTED("JVM_AddModuleExportsToAllUnnamed");
 }
 
@@ -560,7 +570,7 @@ JVM_AddModuleExportsToAllUnnamed(JNIEnv *env, jobject from_module, const char* p
  *  package:     name of the package to export
  */
 JNIEXPORT void JNICALL
-JVM_AddModuleExportsToAll(JNIEnv *env, jobject from_module, const char* package) {
+JVM_AddModuleExportsToAll(JNIEnv *env, jobject from_module, const char *package) {
     UNIMPLEMENTED("JVM_AddModuleExportsToAll");
 }
 
@@ -724,92 +734,92 @@ JVM_GetClassConstantPool(JNIEnv *env, jclass cls) {
 }
 
 JNIEXPORT jint JNICALL JVM_ConstantPoolGetSize
-(JNIEnv *env, jobject unused, jobject jcpool) {
+        (JNIEnv *env, jobject unused, jobject jcpool) {
     UNIMPLEMENTED("JVM_ConstantPoolGetSize");
 }
 
 JNIEXPORT jclass JNICALL JVM_ConstantPoolGetClassAt
-(JNIEnv *env, jobject unused, jobject jcpool, jint index) {
+        (JNIEnv *env, jobject unused, jobject jcpool, jint index) {
     UNIMPLEMENTED("JVM_ConstantPoolGetClassAt");
 }
 
 JNIEXPORT jclass JNICALL JVM_ConstantPoolGetClassAtIfLoaded
-(JNIEnv *env, jobject unused, jobject jcpool, jint index) {
+        (JNIEnv *env, jobject unused, jobject jcpool, jint index) {
     UNIMPLEMENTED("JVM_ConstantPoolGetClassAtIfLoaded");
 }
 
 JNIEXPORT jint JNICALL JVM_ConstantPoolGetClassRefIndexAt
-(JNIEnv *env, jobject obj, jobject unused, jint index) {
+        (JNIEnv *env, jobject obj, jobject unused, jint index) {
     UNIMPLEMENTED("JVM_ConstantPoolGetClassRefIndexAt");
 }
 
 JNIEXPORT jobject JNICALL JVM_ConstantPoolGetMethodAt
-(JNIEnv *env, jobject unused, jobject jcpool, jint index) {
+        (JNIEnv *env, jobject unused, jobject jcpool, jint index) {
     UNIMPLEMENTED("JVM_ConstantPoolGetMethodAt");
 }
 
 JNIEXPORT jobject JNICALL JVM_ConstantPoolGetMethodAtIfLoaded
-(JNIEnv *env, jobject unused, jobject jcpool, jint index) {
+        (JNIEnv *env, jobject unused, jobject jcpool, jint index) {
     UNIMPLEMENTED("JVM_ConstantPoolGetMethodAtIfLoaded");
 }
 
 JNIEXPORT jobject JNICALL JVM_ConstantPoolGetFieldAt
-(JNIEnv *env, jobject unused, jobject jcpool, jint index) {
+        (JNIEnv *env, jobject unused, jobject jcpool, jint index) {
     UNIMPLEMENTED("JVM_ConstantPoolGetFieldAt");
 }
 
 JNIEXPORT jobject JNICALL JVM_ConstantPoolGetFieldAtIfLoaded
-(JNIEnv *env, jobject unused, jobject jcpool, jint index) {
+        (JNIEnv *env, jobject unused, jobject jcpool, jint index) {
     UNIMPLEMENTED("JVM_ConstantPoolGetFieldAtIfLoaded");
 }
 
 JNIEXPORT jobjectArray JNICALL JVM_ConstantPoolGetMemberRefInfoAt
-(JNIEnv *env, jobject unused, jobject jcpool, jint index) {
+        (JNIEnv *env, jobject unused, jobject jcpool, jint index) {
     UNIMPLEMENTED("JVM_ConstantPoolGetMemberRefInfoAt");
 }
 
 JNIEXPORT jint JNICALL JVM_ConstantPoolGetNameAndTypeRefIndexAt
-(JNIEnv *env, jobject obj, jobject unused, jint index) {
+        (JNIEnv *env, jobject obj, jobject unused, jint index) {
     UNIMPLEMENTED("JVM_ConstantPoolGetNameAndTypeRefIndexAt");
 }
 
 JNIEXPORT jobjectArray JNICALL JVM_ConstantPoolGetNameAndTypeRefInfoAt
-(JNIEnv *env, jobject obj, jobject unused, jint index) {
+        (JNIEnv *env, jobject obj, jobject unused, jint index) {
     UNIMPLEMENTED("JVM_ConstantPoolGetNameAndTypeRefInfoAt");
 }
 
 JNIEXPORT jint JNICALL JVM_ConstantPoolGetIntAt
-(JNIEnv *env, jobject unused, jobject jcpool, jint index) {
+        (JNIEnv *env, jobject unused, jobject jcpool, jint index) {
     UNIMPLEMENTED("JVM_ConstantPoolGetIntAt");
 }
 
 JNIEXPORT jlong JNICALL JVM_ConstantPoolGetLongAt
-(JNIEnv *env, jobject unused, jobject jcpool, jint index) {
+        (JNIEnv *env, jobject unused, jobject jcpool, jint index) {
     UNIMPLEMENTED("JVM_ConstantPoolGetLongAt");
 }
 
 JNIEXPORT jfloat JNICALL JVM_ConstantPoolGetFloatAt
-(JNIEnv *env, jobject unused, jobject jcpool, jint index) {
+        (JNIEnv *env, jobject unused, jobject jcpool, jint index) {
     UNIMPLEMENTED("JVM_ConstantPoolGetFloatAt");
 }
 
 JNIEXPORT jdouble JNICALL JVM_ConstantPoolGetDoubleAt
-(JNIEnv *env, jobject unused, jobject jcpool, jint index) {
+        (JNIEnv *env, jobject unused, jobject jcpool, jint index) {
     UNIMPLEMENTED("JVM_ConstantPoolGetDoubleAt");
 }
 
 JNIEXPORT jstring JNICALL JVM_ConstantPoolGetStringAt
-(JNIEnv *env, jobject unused, jobject jcpool, jint index) {
+        (JNIEnv *env, jobject unused, jobject jcpool, jint index) {
     UNIMPLEMENTED("JVM_ConstantPoolGetStringAt");
 }
 
 JNIEXPORT jstring JNICALL JVM_ConstantPoolGetUTF8At
-(JNIEnv *env, jobject unused, jobject jcpool, jint index) {
+        (JNIEnv *env, jobject unused, jobject jcpool, jint index) {
     UNIMPLEMENTED("JVM_ConstantPoolGetUTF8At");
 }
 
 JNIEXPORT jbyte JNICALL JVM_ConstantPoolGetTagAt
-(JNIEnv *env, jobject unused, jobject jcpool, jint index) {
+        (JNIEnv *env, jobject unused, jobject jcpool, jint index) {
     UNIMPLEMENTED("JVM_ConstantPoolGetTagAt");
 }
 
@@ -849,7 +859,7 @@ JVM_GetStackAccessControlContext(JNIEnv *env, jclass cls) {
  * Other platform-dependent signal values may also be supported.
  */
 
-JNIEXPORT void * JNICALL
+JNIEXPORT void *JNICALL
 JVM_RegisterSignal(jint sig, void *handler) {
     UNIMPLEMENTED("JVM_RegisterSignal");
 }
@@ -896,7 +906,7 @@ JVM_SupportsCX8(void) {
  * Get the version number the JVM was built with
  */
 JNIEXPORT jint JNICALL
-JVM_DTraceGetVersion(JNIEnv* env) {
+JVM_DTraceGetVersion(JNIEnv *env) {
     UNIMPLEMENTED("JVM_DTraceGetVersion");
 }
 
@@ -907,8 +917,8 @@ JVM_DTraceGetVersion(JNIEnv* env) {
  * built with.
  */
 JNIEXPORT jlong JNICALL
-JVM_DTraceActivate(JNIEnv* env, jint version, jstring module_name,
-  jint providers_count, JVM_DTraceProvider* providers) {
+JVM_DTraceActivate(JNIEnv *env, jint version, jstring module_name,
+                   jint providers_count, JVM_DTraceProvider *providers) {
     UNIMPLEMENTED("JVM_DTraceActivate");
 }
 
@@ -916,7 +926,7 @@ JVM_DTraceActivate(JNIEnv* env, jint version, jstring module_name,
  * Check JSDT probe
  */
 JNIEXPORT jboolean JNICALL
-JVM_DTraceIsProbeEnabled(JNIEnv* env, jmethodID method) {
+JVM_DTraceIsProbeEnabled(JNIEnv *env, jmethodID method) {
     UNIMPLEMENTED("JVM_DTraceIsProbeEnabled");
 }
 
@@ -924,7 +934,7 @@ JVM_DTraceIsProbeEnabled(JNIEnv* env, jmethodID method) {
  * Destroy custom DOF
  */
 JNIEXPORT void JNICALL
-JVM_DTraceDispose(JNIEnv* env, jlong activation_handle) {
+JVM_DTraceDispose(JNIEnv *env, jlong activation_handle) {
     UNIMPLEMENTED("JVM_DTraceDispose");
 }
 
@@ -932,7 +942,7 @@ JVM_DTraceDispose(JNIEnv* env, jlong activation_handle) {
  * Check to see if DTrace is supported by OS
  */
 JNIEXPORT jboolean JNICALL
-JVM_DTraceIsSupported(JNIEnv* env) {
+JVM_DTraceIsSupported(JNIEnv *env) {
     UNIMPLEMENTED("JVM_DTraceIsSupported");
 }
 
@@ -946,7 +956,7 @@ JVM_DTraceIsSupported(JNIEnv* env) {
  * The caller must treat the string as a constant and not modify it
  * in any way.
  */
-JNIEXPORT const char * JNICALL
+JNIEXPORT const char *JNICALL
 JVM_GetClassNameUTF(JNIEnv *env, jclass cb) {
     UNIMPLEMENTED("JVM_GetClassNameUTF");
 }
@@ -1113,7 +1123,7 @@ JVM_IsVMGeneratedMethodIx(JNIEnv *env, jclass cb, int index) {
  * The caller must treat the string as a constant and not modify it
  * in any way.
  */
-JNIEXPORT const char * JNICALL
+JNIEXPORT const char *JNICALL
 JVM_GetMethodIxNameUTF(JNIEnv *env, jclass cb, jint index) {
     UNIMPLEMENTED("JVM_GetMethodIxNameUTF");
 }
@@ -1125,7 +1135,7 @@ JVM_GetMethodIxNameUTF(JNIEnv *env, jclass cb, jint index) {
  * The caller must treat the string as a constant and not modify it
  * in any way.
  */
-JNIEXPORT const char * JNICALL
+JNIEXPORT const char *JNICALL
 JVM_GetMethodIxSignatureUTF(JNIEnv *env, jclass cb, jint index) {
     UNIMPLEMENTED("JVM_GetMethodIxSignatureUTF");
 }
@@ -1140,7 +1150,7 @@ JVM_GetMethodIxSignatureUTF(JNIEnv *env, jclass cb, jint index) {
  * The caller must treat the string as a constant and not modify it
  * in any way.
  */
-JNIEXPORT const char * JNICALL
+JNIEXPORT const char *JNICALL
 JVM_GetCPFieldNameUTF(JNIEnv *env, jclass cb, jint index) {
     UNIMPLEMENTED("JVM_GetCPFieldNameUTF");
 }
@@ -1155,7 +1165,7 @@ JVM_GetCPFieldNameUTF(JNIEnv *env, jclass cb, jint index) {
  * The caller must treat the string as a constant and not modify it
  * in any way.
  */
-JNIEXPORT const char * JNICALL
+JNIEXPORT const char *JNICALL
 JVM_GetCPMethodNameUTF(JNIEnv *env, jclass cb, jint index) {
     UNIMPLEMENTED("JVM_GetCPMethodNameUTF");
 }
@@ -1170,7 +1180,7 @@ JVM_GetCPMethodNameUTF(JNIEnv *env, jclass cb, jint index) {
  * The caller must treat the string as a constant and not modify it
  * in any way.
  */
-JNIEXPORT const char * JNICALL
+JNIEXPORT const char *JNICALL
 JVM_GetCPMethodSignatureUTF(JNIEnv *env, jclass cb, jint index) {
     UNIMPLEMENTED("JVM_GetCPMethodSignatureUTF");
 }
@@ -1185,7 +1195,7 @@ JVM_GetCPMethodSignatureUTF(JNIEnv *env, jclass cb, jint index) {
  * The caller must treat the string as a constant and not modify it
  * in any way.
  */
-JNIEXPORT const char * JNICALL
+JNIEXPORT const char *JNICALL
 JVM_GetCPFieldSignatureUTF(JNIEnv *env, jclass cb, jint index) {
     UNIMPLEMENTED("JVM_GetCPFieldSignatureUTF");
 }
@@ -1199,7 +1209,7 @@ JVM_GetCPFieldSignatureUTF(JNIEnv *env, jclass cb, jint index) {
  * The caller must treat the string as a constant and not modify it
  * in any way.
  */
-JNIEXPORT const char * JNICALL
+JNIEXPORT const char *JNICALL
 JVM_GetCPClassNameUTF(JNIEnv *env, jclass cb, jint index) {
     UNIMPLEMENTED("JVM_GetCPClassNameUTF");
 }
@@ -1215,7 +1225,7 @@ JVM_GetCPClassNameUTF(JNIEnv *env, jclass cb, jint index) {
  * The caller must treat the string as a constant and not modify it
  * in any way.
  */
-JNIEXPORT const char * JNICALL
+JNIEXPORT const char *JNICALL
 JVM_GetCPFieldClassNameUTF(JNIEnv *env, jclass cb, jint index) {
     UNIMPLEMENTED("JVM_GetCPFieldClassNameUTF");
 }
@@ -1232,7 +1242,7 @@ JVM_GetCPFieldClassNameUTF(JNIEnv *env, jclass cb, jint index) {
  * The caller must treat the string as a constant and not modify it
  * in any way.
  */
-JNIEXPORT const char * JNICALL
+JNIEXPORT const char *JNICALL
 JVM_GetCPMethodClassNameUTF(JNIEnv *env, jclass cb, jint index) {
     UNIMPLEMENTED("JVM_GetCPMethodClassNameUTF");
 }
@@ -1287,7 +1297,7 @@ JVM_IsSameClassPackage(JNIEnv *env, jclass class1, jclass class2) {
  * cleanup, such as removing redundant separator characters.  It modifies
  * the given pathname string in place.
  */
-JNIEXPORT char * JNICALL
+JNIEXPORT char *JNICALL
 JVM_NativePath(char *) {
     UNIMPLEMENTED("JVM_NativePath");
 }
@@ -1327,7 +1337,7 @@ jio_vfprintf(FILE *, const char *fmt, va_list args) {
 }
 
 
-JNIEXPORT void * JNICALL
+JNIEXPORT void *JNICALL
 JVM_RawMonitorCreate(void) {
     UNIMPLEMENTED("JVM_RawMonitorCreate");
 }
@@ -1350,7 +1360,7 @@ JVM_RawMonitorExit(void *mon) {
 /*
  * java.lang.management support
  */
-JNIEXPORT void* JNICALL
+JNIEXPORT void *JNICALL
 JVM_GetManagement(jint version) {
     UNIMPLEMENTED("JVM_GetManagement");
 }
@@ -1382,11 +1392,11 @@ JVM_GetTemporaryDirectory(JNIEnv *env) {
  * method's name and descriptor, respectively.
  */
 JNIEXPORT jobjectArray JNICALL
-JVM_GetEnclosingMethodInfo(JNIEnv* env, jclass ofClass) {
+JVM_GetEnclosingMethodInfo(JNIEnv *env, jclass ofClass) {
     UNIMPLEMENTED("JVM_GetEnclosingMethodInfo");
 }
 
 JNIEXPORT void JNICALL
-JVM_GetVersionInfo(JNIEnv* env, jvm_version_info* info, size_t info_size) {
+JVM_GetVersionInfo(JNIEnv *env, jvm_version_info *info, size_t info_size) {
     UNIMPLEMENTED("JVM_GetVersionInfo");
 }

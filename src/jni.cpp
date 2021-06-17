@@ -4,6 +4,9 @@
 
 #define _JNI_IMPLEMENTATION_
 
+#include <locale>
+#include <codecvt>
+
 #include "jni.h"
 #include "classloading.hpp"
 #include "memory.hpp"
@@ -277,7 +280,10 @@ jobject NewObjectA
 
 jclass GetObjectClass
         (JNIEnv *env, jobject obj) {
-    UNIMPLEMENTED("GetObjectClass");
+    LOG("GetObjectClass");
+    auto ref = Reference{obj};
+    ClassFile *clazz = ref.object()->clazz;
+    return reinterpret_cast<jclass>(clazz);
 }
 
 jboolean IsInstanceOf
@@ -337,8 +343,11 @@ static jint Name(JNIEnv *env, jclass java_class, bool is_virtual,               
     return JNI_OK;                                                                                                     \
 }                                                                                                                      \
 
+
 CALL_HELPER(call, const jvalue *, Value((s8) args->j); ++args)
+
 CALL_HELPER(call_v, va_list, (Value((s8) va_arg(args, jvalue).j)))
+
 #undef CALL_HELPER
 
 // static jint call(JNIEnv *env, jclass java_class, bool is_virtual, jobject java_object, jmethodID methodID, const jvalue *args, Value &result);
@@ -410,15 +419,25 @@ ReturnType CallStatic##Name##MethodA(JNIEnv *env, jclass clazz, jmethodID method
     return (ReturnType) result.s8;                                                                                     \
 }                                                                                                                      \
 
+
 CALL(jobject, Object, return);
+
 CALL(jboolean, Boolean, return);
+
 CALL(jbyte, Byte, return);
+
 CALL(jchar, Char, return);
+
 CALL(jshort, Short, return);
+
 CALL(jint, Int, return);
+
 CALL(jlong, Long, return);
+
 CALL(jfloat, Float, return);
+
 CALL(jdouble, Double, return);
+
 CALL(void, Void,);
 
 #undef CALL
@@ -426,13 +445,13 @@ CALL(void, Void,);
 jfieldID GetFieldID(JNIEnv *env, jclass clazz, const char *name, const char *sig) {
     LOG("GetFieldID");
     auto *thread = (Thread *) env->functions->reserved0;
-    return (jfieldID) find_field((ClassFile*) clazz, name, sig, thread->current_exception);
+    return (jfieldID) find_field((ClassFile *) clazz, name, sig, thread->current_exception);
 }
 
 jfieldID GetStaticFieldID(JNIEnv *env, jclass clazz, const char *name, const char *sig) {
     LOG("GetStaticFieldID");
     auto *thread = (Thread *) env->functions->reserved0;
-    return (jfieldID) find_field((ClassFile*) clazz, name, sig, thread->current_exception);
+    return (jfieldID) find_field((ClassFile *) clazz, name, sig, thread->current_exception);
 }
 
 
@@ -465,14 +484,23 @@ void SetStatic##Name##Field(JNIEnv *, jclass clazz, jfieldID fieldID, JavaType v
     ((ClassFile *) clazz)->static_field_values[index].Variant = (CppType) val;                                         \
 }                                                                                                                      \
 
+
 FIELD(jobject, Object, reference.memory, void *)
+
 FIELD(jboolean, Boolean, s4, u1);
+
 FIELD(jbyte, Byte, s4, u1);
+
 FIELD(jchar, Char, s4, u2);
+
 FIELD(jshort, Short, s4, u2);
+
 FIELD(jint, Int, s4, s4);
+
 FIELD(jlong, Long, s8, s8);
+
 FIELD(jfloat, Float, float_, float);
+
 FIELD(jdouble, Double, double_, double);
 #undef FIELD
 
@@ -528,14 +556,30 @@ jsize GetStringUTFLength
 
 const char *GetStringUTFChars
         (JNIEnv *env, jstring str, jboolean *isCopy) {
-    UNIMPLEMENTED("GetStringUTFChars");
+    LOG("GetStringUTFChars");
+    auto ref = Reference{str};
+    auto charArray = ref.data<Value>()[0].reference;
+    auto utf16_length_bytes = static_cast<size_t>(charArray.object()->length);
+    auto *utf16_data = charArray.data<u1>();
+
+    std::string utf8_string = std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t>{}.to_bytes(
+            (char16_t *) utf16_data, (char16_t *) (utf16_data + utf16_length_bytes));
+    auto utf8_length = utf8_string.size();
+
+    char *result = new char[utf8_length + 1];
+    std::strcpy(result, utf8_string.c_str());
+
+    if (isCopy != nullptr) {
+        *isCopy = JNI_TRUE;
+    }
+    return result;
 }
 
 void ReleaseStringUTFChars
         (JNIEnv *env, jstring str, const char *chars) {
-    UNIMPLEMENTED("ReleaseStringUTFChars");
+    LOG("ReleaseStringUTFChars");
+    delete[] chars;
 }
-
 
 jsize GetArrayLength
         (JNIEnv *env, jarray array) {
@@ -770,7 +814,7 @@ jint RegisterNatives
         (JNIEnv *env, jclass clazz, const JNINativeMethod *methods,
          jint nMethods) {
     auto *java_class = (ClassFile *) clazz;
-    for(int i = 0; i < nMethods; i++) {
+    for (int i = 0; i < nMethods; i++) {
         const auto &name = methods[i].name;
         const auto &sig = methods[i].signature;
         const auto &ptr = methods[i].fnPtr;

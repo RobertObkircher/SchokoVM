@@ -3,9 +3,25 @@ public class Clazz {
     static void println(boolean i) { System.out.println(i); }
 
 	public static void main(String[] args) {
-       // TODO native code doesn't do class loading yet
-        String s = "a";
-        Class<?> a = Object.class;
-        println(a.getName());
+//         TODO native code doesn't do class loading yet
+        String temp = "a";
+
+        println(Object.class.getName());
+        println(Integer.class.getName());
+        println(int.class.getName());
+        println(int[][].class.getName());
+
+        String s = "xyz";
+        Class<?> stringClass = s.getClass();
+        println(stringClass.getName());
+        println(stringClass == String.class);
+        println(stringClass == Class.class);
+        println(stringClass instanceof Class);
+
+        int[][] i = new int[1][2];
+        Class<?> iiArrayClass = i.getClass();
+        println(iiArrayClass.getName());
+        println(iiArrayClass == int[][].class);
+        println(iiArrayClass instanceof Class);
 	}
 }
