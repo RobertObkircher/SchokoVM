@@ -280,7 +280,9 @@ jobject NewObjectA
 
 jclass GetObjectClass
         (JNIEnv *env, jobject obj) {
-    UNIMPLEMENTED("GetObjectClass");
+    auto ref = Reference{obj};
+    ClassFile *clazz = ref.object()->clazz;
+    return reinterpret_cast<jclass>(clazz);
 }
 
 jboolean IsInstanceOf

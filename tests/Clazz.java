@@ -10,5 +10,18 @@ public class Clazz {
         println(Integer.class.getName());
         println(int.class.getName());
         println(int[][].class.getName());
+
+        String s = "xyz";
+        Class<?> stringClass = s.getClass();
+        println(stringClass.getName());
+        println(stringClass == String.class);
+        println(stringClass == Class.class);
+        println(stringClass instanceof Class);
+
+        int[][] i = new int[1][2];
+        Class<?> iiArrayClass = i.getClass();
+        println(iiArrayClass.getName());
+        println(iiArrayClass == int[][].class);
+        println(iiArrayClass instanceof Class);
 	}
 }
