@@ -153,6 +153,7 @@ ClassFile *BootstrapClassLoader::make_builtin_class(std::string name, ClassFile 
     } else {
         clazz->constant_pool.table.resize(1 * 2);
     }
+    clazz->header.clazz = constants().java_lang_Class;
     clazz->this_class = add_name_and_class(clazz);
     clazz->array_element_type = array_element_type;
 
