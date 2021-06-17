@@ -280,6 +280,7 @@ jobject NewObjectA
 
 jclass GetObjectClass
         (JNIEnv *env, jobject obj) {
+    LOG("GetObjectClass");
     auto ref = Reference{obj};
     ClassFile *clazz = ref.object()->clazz;
     return reinterpret_cast<jclass>(clazz);
@@ -555,6 +556,7 @@ jsize GetStringUTFLength
 
 const char *GetStringUTFChars
         (JNIEnv *env, jstring str, jboolean *isCopy) {
+    LOG("GetStringUTFChars");
     auto ref = Reference{str};
     auto charArray = ref.data<Value>()[0].reference;
     auto utf16_length = static_cast<size_t>(charArray.object()->length);
@@ -579,6 +581,7 @@ const char *GetStringUTFChars
 
 void ReleaseStringUTFChars
         (JNIEnv *env, jstring str, const char *chars) {
+    LOG("ReleaseStringUTFChars");
     delete[] chars;
 }
 
