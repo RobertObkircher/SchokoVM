@@ -161,7 +161,7 @@ set(JAVA_TEST_SOURCES
         tests/ExceptionsExitNested.java
         tests/ExceptionsInheritance.java
         tests/Fields.java
-        # tests/HelloWorld.java
+        tests/HelloWorld.java
         tests/InvokeStatic.java
         tests/Instanceof.java
         # tests/KarelTheRobot.java

@@ -50,6 +50,8 @@ void fill_multi_array(Reference &reference, ClassFile *element_type, const std::
 
 static void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &frame, bool &should_exit);
 
+static bool throw_if_null(Thread &thread, Frame &frame, Reference reference);
+
 Value interpret(Thread &thread, ClassFile *main, method_info *method) {
     Frame frame{thread.stack, main, method, thread.stack.memory_used};
 
@@ -1018,6 +1020,9 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             }
 
             auto object = frame.peek_at(declared_method->stack_slots_for_parameters - 1).reference;
+            if (throw_if_null(thread, frame, object)) {
+                return;
+            }
 
             ClassFile *clazz;
             method_info *method;
@@ -1887,3 +1892,21 @@ void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &f
     pop_frame_after_return(thread, frame, should_exit);
 }
 
+static bool throw_if_null(Thread &thread, Frame &frame, Reference reference) {
+    if (reference != JAVA_NULL) {
+        return false;
+    }
+    // bool load_and_init_class_or_throw(?) {
+    auto *clazz = BootstrapClassLoader::get().load("java/lang/NullPointerException");
+
+    // TODO how to initialize the clazz
+
+    if (clazz == nullptr) {
+        abort(); // TODO throw class not found?
+    }
+    // }
+
+    auto npe = Heap::get().new_instance(clazz);
+    handle_throw(thread, frame, npe);
+    return true;
+}
