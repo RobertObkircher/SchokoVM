@@ -53,6 +53,8 @@ static void native_call(ClassFile *clazz, method_info *method, Thread &thread, F
 Value interpret(Thread &thread, ClassFile *main, method_info *method) {
     Frame frame{thread.stack, main, method, thread.stack.memory_used, true};
 
+    BootstrapClassLoader::constants_mut().ensure_resolved_and_initialized(thread, frame);
+
     if (!main->is_initialized) {
         if (resolve_class(main->this_class, thread, frame)) {
             assert(thread.current_exception != JAVA_NULL);
@@ -148,11 +150,6 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 frame.pc++;
                 frame.push<Reference>(Reference{c->clazz});
             } else if (auto s = std::get_if<CONSTANT_String_info>(&entry.variant)) {
-                // TODO where should we initialize the string class? This is definitely not the right place
-                auto clazz = BootstrapClassLoader::constants().java_lang_String;
-                if (resolve_class(clazz->this_class, thread, frame)) {
-                    return;
-                }
                 frame.pc++;
 
                 std::string &modified_utf8 = s->string->value;
@@ -948,6 +945,9 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 case OpCodes::getstatic: {
                     if (!field.is_static)
                         throw std::runtime_error("field is not static");
+                    if (initialize_class(field.class_->clazz, thread, frame)) {
+                        return;
+                    }
                     auto value = field.class_->clazz->static_field_values[field.index];
                     if (field.category == ValueCategory::C1) {
                         frame.push(value);
@@ -959,6 +959,9 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 case OpCodes::putstatic: {
                     if (!field.is_static)
                         throw std::runtime_error("field is not static");
+                    if (initialize_class(field.class_->clazz, thread, frame)) {
+                        return;
+                    }
                     Value value;
                     if (field.category == ValueCategory::C1) {
                         value = frame.pop();
@@ -1202,6 +1205,9 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 }
 
                 clazz = method_ref->class_->clazz;
+                if (initialize_class(clazz, thread, frame)) {
+                    return;
+                }
 
                 if (method_resolution(*method_ref)) {
                     return;
@@ -1261,8 +1267,12 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             if (resolve_class(&class_info, thread, frame)) {
                 return;
             }
+
             frame.pc += 2;
             auto clazz = class_info.clazz;
+            if (initialize_class(clazz, thread, frame)) {
+                return;
+            }
 
             auto reference = Heap::get().new_instance(clazz);
             frame.push<Reference>(reference);
@@ -1373,8 +1383,14 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 }
 
                 if (!objectref.object()->clazz->is_instance_of(class_info.clazz)) {
-                    // TODO properly allocate a new exception (initialize clazz)
+                    // TODO factor this out into a method
                     ClassFile *clazz = BootstrapClassLoader::get().load("java/lang/ClassCastException");
+                    if (resolve_class(clazz->this_class, thread, frame)) {
+                        return;
+                    }
+                    if (initialize_class(clazz, thread, frame)) {
+                        return;
+                    }
                     Reference ref = Heap::get().new_instance(clazz);
                     return handle_throw(thread, frame, ref);
                 }

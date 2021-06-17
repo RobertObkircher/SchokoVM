@@ -426,9 +426,6 @@ bool resolve_class(CONSTANT_Class_info *class_info, Thread &thread, Frame &frame
 
         clazz->resolved = true;
         class_info->clazz = clazz;
-
-        if (initialize_class(clazz, thread, frame))
-            return true;
     }
     return false;
 }
@@ -485,4 +482,27 @@ field_info *find_field(ClassFile *clazz, std::string_view name, std::string_view
     }
     // TODO access control
     return result;
+}
+
+void resolve_and_initialize(ClassFile *clazz, Thread &thread, Frame &frame) {
+    if (resolve_class(clazz->this_class, thread, frame)) {
+        throw std::runtime_error("Failed to resolve");
+    }
+    if (initialize_class(clazz, thread, frame)) {
+        throw std::runtime_error("Failed to initialize");
+    }
+}
+
+void Constants::ensure_resolved_and_initialized(Thread &thread, Frame &frame) {
+    if (initialized) {
+        return;
+    }
+
+    resolve_and_initialize(java_lang_Object, thread, frame);
+    resolve_and_initialize(java_lang_Class, thread, frame);
+    resolve_and_initialize(java_lang_String, thread, frame);
+
+    // TODO what about the interfaces?
+
+    initialized = true;
 }

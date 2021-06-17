@@ -60,12 +60,19 @@ struct Constants {
             {Primitive::Boolean, "boolean", nullptr, "java/lang/Boolean",   nullptr, 'Z', "[Z", nullptr},
             {Primitive::Void,    "void",    nullptr, "java/lang/Void",      nullptr, 'V', "[V", nullptr},
     };
+
+    void ensure_resolved_and_initialized(Thread &thread, Frame &frame);
+
+private:
+    bool initialized = false;
 };
 
 struct BootstrapClassLoader {
     static BootstrapClassLoader &get() { return the_bootstrap_class_loader; }
 
     static Constants const &constants() { return the_bootstrap_class_loader.m_constants; }
+
+    static Constants &constants_mut() { return the_bootstrap_class_loader.m_constants; }
 
     static Primitive const &
     primitive(Primitive::Type id) { return the_bootstrap_class_loader.m_constants.primitives[id]; }
