@@ -4,6 +4,9 @@
 
 #define _JNI_IMPLEMENTATION_
 
+#include <locale>
+#include <codecvt>
+
 #include "jni.h"
 #include "classloading.hpp"
 #include "memory.hpp"
@@ -550,14 +553,32 @@ jsize GetStringUTFLength
 
 const char *GetStringUTFChars
         (JNIEnv *env, jstring str, jboolean *isCopy) {
-    UNIMPLEMENTED("GetStringUTFChars");
+    auto ref = Reference{str};
+    auto charArray = ref.data<Value>()[0].reference;
+    auto utf16_length = static_cast<size_t>(charArray.object()->length);
+    auto *utf16_data = charArray.data<u1>();
+
+    std::u16string utf16_string;
+    utf16_string.resize(utf16_length / 2);
+    std::memcpy(utf16_string.data(), utf16_data, utf16_length);
+
+    std::string u8_string = std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t>{}.to_bytes(utf16_string);
+    auto u8_length = u8_string.size();
+
+    // TODO move instead of copy?
+    char *result = new char[u8_length + 1];
+    std::strcpy(result, u8_string.c_str());
+
+    if (isCopy != nullptr) {
+        *isCopy = JNI_TRUE;
+    }
+    return result;
 }
 
 void ReleaseStringUTFChars
         (JNIEnv *env, jstring str, const char *chars) {
-    UNIMPLEMENTED("ReleaseStringUTFChars");
+    delete[] chars;
 }
-
 
 jsize GetArrayLength
         (JNIEnv *env, jarray array) {
