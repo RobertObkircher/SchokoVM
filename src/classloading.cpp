@@ -162,7 +162,7 @@ ClassFile *BootstrapClassLoader::make_builtin_class(std::string name, ClassFile 
 }
 
 // Note: This is not "preparation"
-static bool initialize_static_fields(ClassFile *clazz, Thread &thread, Frame &frame) {
+static void initialize_static_fields(ClassFile *clazz, Thread &thread, Frame &frame) {
     for (const auto &field : clazz->fields) {
         if (field.is_static()) {
             bool fail = false;
@@ -244,7 +244,6 @@ static bool initialize_static_fields(ClassFile *clazz, Thread &thread, Frame &fr
             }
         }
     }
-    return false;
 }
 
 // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.5
@@ -283,9 +282,7 @@ Result initialize_class(ClassFile *C, Thread &thread, Frame &frame) {
     //    in the order the fields appear in the ClassFile structure.
     C->initializing_thread = &thread;
     LC.unlock();
-    if (initialize_static_fields(C, thread, frame)) {
-        return Exception;
-    }
+    initialize_static_fields(C, thread, frame);
 
     // 7. Next, if C is a class rather than an interface, then let SC be its superclass and let SI1, ..., SIn be all
     //    superinterfaces of C (whether direct or indirect) that declare at least one non-abstract, non-static method.
@@ -303,6 +300,7 @@ Result initialize_class(ClassFile *C, Thread &thread, Frame &frame) {
     auto fail7 = [&LC, C]() {
         LC.lock();
         C->is_erroneous_state = true;
+        C->initializing_thread = nullptr;
         C->initialization_condition_variable.notify_all();
         LC.unlock();
         return Exception;
@@ -344,6 +342,7 @@ Result initialize_class(ClassFile *C, Thread &thread, Frame &frame) {
     if (no_exception) {
         LC.lock();
         C->is_initialized = true;
+        C->initializing_thread = nullptr;
         C->initialization_condition_variable.notify_all();
         return ResultOk;
     }
@@ -361,6 +360,7 @@ Result initialize_class(ClassFile *C, Thread &thread, Frame &frame) {
     //     and complete this procedure abruptly with reason E or its replacement as determined in the previous step.
     LC.lock();
     C->is_erroneous_state = true;
+    C->initializing_thread = nullptr;
     C->initialization_condition_variable.notify_all();
     LC.unlock();
 
