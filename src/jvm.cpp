@@ -444,7 +444,16 @@ JVM_GetCallerClass(JNIEnv *env) {
  */
 JNIEXPORT jclass JNICALL
 JVM_FindPrimitiveClass(JNIEnv *env, const char *utf) {
-    UNIMPLEMENTED("JVM_FindPrimitiveClass");
+    const auto primitives = BootstrapClassLoader::constants().primitives;
+
+    for (size_t i = 0; i < Primitive::TYPE_COUNT; i++) {
+        const auto primitive = primitives[i];
+        if (std::strcmp(primitive.primitive_name, utf) == 0) {
+            return reinterpret_cast<jclass>(primitive.primitive);
+        }
+    }
+
+    throw std::runtime_error("Coudln't find primitive class " + std::string(utf));
 }
 
 
