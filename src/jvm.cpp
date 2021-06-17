@@ -35,9 +35,7 @@ JVM_InitClassName(JNIEnv *env, jclass cls) {
     auto *java_class = (ClassFile *) cls;
     auto name = java_class->name();
     std::replace(name.begin(), name.end(), '/', '.');
-    // TODO load class
-    auto ref = Heap::get().make_string(BootstrapClassLoader::get().load("java/lang/String"),
-                                       BootstrapClassLoader::get().load("[B"), name);
+    auto ref = Heap::get().make_string(name);
     return (jstring) ref.memory;
 }
 

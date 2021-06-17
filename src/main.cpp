@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
     assert(args.options == nullptr);
     JavaVMOption hack[10];
     args.options = hack;
-    std::string bootclasspath {"-Xbootclasspath:../jdk/exploded-modules"};
+    std::string bootclasspath {"-Xbootclasspath:../jdk/exploded-modules/java.base"};
     hack[0].optionString = bootclasspath.data();
     std::string classpath ="-Djava.class.path=" + arguments->classpath;
     hack[1].optionString = classpath.data();
