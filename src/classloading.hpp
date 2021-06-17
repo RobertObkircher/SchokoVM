@@ -87,6 +87,8 @@ private:
     ClassFile *make_builtin_class(std::string name, ClassFile *element_type);
 };
 
+Result initialize_class(ClassFile *C, Thread &thread, Frame &frame);
+
 /**
  * Throws if the class was not found
  * @return whether a stack frame for an initializer was pushed

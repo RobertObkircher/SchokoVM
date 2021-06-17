@@ -51,13 +51,22 @@ void fill_multi_array(Reference &reference, ClassFile *element_type, const std::
 static void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &frame, bool &should_exit);
 
 Value interpret(Thread &thread, ClassFile *main, method_info *method) {
-    Frame frame{thread.stack, main, method, thread.stack.memory_used};
+    Frame frame{thread.stack, main, method, thread.stack.memory_used, true};
 
-    // push the class initializer if necessary
-    resolve_class(main->this_class, thread, frame);
+    if (!main->is_initialized) {
+        if (resolve_class(main->this_class, thread, frame)) {
+            assert(thread.current_exception != JAVA_NULL);
+            return Value();
+        }
+        // we can safely ignore the return value
+        initialize_class(main, thread, frame);
+        if (thread.current_exception != JAVA_NULL) {
+            return Value();
+        }
+    }
 
     bool shouldExit = false;
-    while (!shouldExit) {
+    while (!shouldExit && thread.current_exception == JAVA_NULL) {
         execute_instruction(thread, frame, shouldExit);
     }
 
@@ -1618,7 +1627,8 @@ static inline void pop_frame(Thread &thread, Frame &frame) {
 }
 
 static void pop_frame_after_return(Thread &thread, Frame &frame, bool &should_exit) {
-    if (thread.stack.parent_frames.empty()) {
+    if (frame.is_root_frame) {
+        thread.stack.memory_used = frame.previous_stack_memory_usage;
         should_exit = true;
     } else {
         pop_frame(thread, frame);
@@ -1627,14 +1637,15 @@ static void pop_frame_after_return(Thread &thread, Frame &frame, bool &should_ex
 }
 
 
-Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top)
+Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top, bool is_root_frame)
         : clazz(clazz),
           method(method),
           code(nullptr),
           operands_top(0),
           previous_stack_memory_usage(stack.memory_used),
           pc(0),
-          invoke_length(0) {
+          invoke_length(0),
+          is_root_frame(is_root_frame) {
     //assert(method->code_attribute->max_locals >= method->parameter_count);
     assert(stack.memory_used >= method->stack_slots_for_parameters);
     assert(operand_stack_top >= method->stack_slots_for_parameters);

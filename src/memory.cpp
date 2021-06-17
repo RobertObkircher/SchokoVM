@@ -41,7 +41,9 @@ Reference Heap::make_string(std::string const &value_utf8) {
 }
 
 ClassFile *Heap::allocate_class() {
-    // TODO who should set the header?
     classes.push_back(std::make_unique<ClassFile>());
-    return classes[classes.size() - 1].get();
+    auto *result = classes[classes.size() - 1].get();
+    // NOTE: Classes that are loaded before the constant is initalized need to be patched later
+    result->header.clazz = BootstrapClassLoader::constants().java_lang_Class;
+    return result;
 }
