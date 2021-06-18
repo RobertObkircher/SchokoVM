@@ -51,10 +51,12 @@ void fill_multi_array(Reference &reference, ClassFile *element_type, const std::
 static void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &frame, bool &should_exit);
 
 Value interpret(Thread &thread, ClassFile *main, method_info *method) {
+    [[maybe_unused]] auto frames = thread.stack.parent_frames.size();
+    [[maybe_unused]] auto memory_used = thread.stack.memory_used;
     Frame frame{thread.stack, main, method, thread.stack.memory_used, true};
 
     if (!main->is_initialized) {
-        if (resolve_class(main->this_class, thread, frame)) {
+        if (resolve_class(main->this_class)) {
             assert(thread.current_exception != JAVA_NULL);
             return Value();
         }
@@ -69,6 +71,9 @@ Value interpret(Thread &thread, ClassFile *main, method_info *method) {
     while (!shouldExit && thread.current_exception == JAVA_NULL) {
         execute_instruction(thread, frame, shouldExit);
     }
+
+    assert(thread.stack.parent_frames.size() == frames);
+    assert(thread.stack.memory_used == memory_used);
 
     return method->return_category == 0 ? Value() : frame.locals[0];
 }
@@ -142,7 +147,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                         return;
                     }
                 }
-                if (resolve_class(c, thread, frame)) {
+                if (resolve_class(c)) {
                     return;
                 }
                 frame.pc++;
@@ -207,7 +212,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             } else if (auto f = std::get_if<CONSTANT_Float_info>(&entry.variant)) {
                 frame.push<float>(f->value);
             } else if (auto c = std::get_if<CONSTANT_Class_info>(&entry.variant)) {
-                if (resolve_class(c, thread, frame)) {
+                if (resolve_class(c)) {
                     return;
                 }
                 frame.push<Reference>(Reference{c->clazz});
@@ -926,7 +931,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             auto field = frame.clazz->constant_pool.get<CONSTANT_Fieldref_info>(index);
 
             if (!field.resolved) {
-                if (resolve_class(field.class_, thread, frame)) {
+                if (resolve_class(field.class_)) {
                     return;
                 }
 
@@ -1017,7 +1022,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             method_info *declared_method = declared_method_ref.method;
 
             if (declared_method == nullptr) {
-                if (resolve_class(declared_method_ref.class_, thread, frame)) {
+                if (resolve_class(declared_method_ref.class_)) {
                     return;
                 }
 
@@ -1066,7 +1071,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             ClassFile *clazz = method_ref->class_->clazz;
 
             if (method == nullptr) {
-                if (resolve_class(method_ref->class_, thread, frame)) {
+                if (resolve_class(method_ref->class_)) {
                     return;
                 }
 
@@ -1198,7 +1203,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             ClassFile *clazz = method_ref->class_->clazz;
 
             if (method == nullptr) {
-                if (resolve_class(method_ref->class_, thread, frame)) {
+                if (resolve_class(method_ref->class_)) {
                     return;
                 }
 
@@ -1229,7 +1234,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             method_info *declared_method = declared_method_ref.method;
 
             if (declared_method == nullptr) {
-                if (resolve_class(declared_method_ref.class_, thread, frame)) {
+                if (resolve_class(declared_method_ref.class_)) {
                     return;
                 }
 
@@ -1262,7 +1267,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             u2 index = frame.read_u2();
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
 
-            if (resolve_class(&class_info, thread, frame)) {
+            if (resolve_class(&class_info)) {
                 return;
             }
 
@@ -1332,7 +1337,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         case OpCodes::anewarray: {
             u2 index = frame.read_u2();
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
-            if (resolve_class(&class_info, thread, frame)) {
+            if (resolve_class(&class_info)) {
                 return;
             }
             frame.pc += 2;
@@ -1376,14 +1381,14 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             frame.push<Reference>(objectref);
 
             if (objectref != JAVA_NULL) {
-                if (resolve_class(&class_info, thread, frame)) {
+                if (resolve_class(&class_info)) {
                     return;
                 }
 
                 if (!objectref.object()->clazz->is_instance_of(class_info.clazz)) {
                     // TODO factor this out into a method
                     ClassFile *clazz = BootstrapClassLoader::get().load("java/lang/ClassCastException");
-                    if (resolve_class(clazz->this_class, thread, frame)) {
+                    if (resolve_class(clazz->this_class)) {
                         return;
                     }
                     if (initialize_class(clazz, thread, frame)) {
@@ -1406,7 +1411,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 frame.push<s4>(0);
             } else {
                 frame.push<Reference>(objectref);
-                if (resolve_class(&class_info, thread, frame)) {
+                if (resolve_class(&class_info)) {
                     return;
                 }
                 frame.pop<Reference>();
@@ -1472,7 +1477,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         case OpCodes::multianewarray: {
             u2 index = frame.read_u2();
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
-            if (resolve_class(&class_info, thread, frame)) {
+            if (resolve_class(&class_info)) {
                 return;
             }
             frame.pc += 2;

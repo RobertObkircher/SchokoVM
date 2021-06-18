@@ -91,13 +91,28 @@ private:
     ClassFile *make_builtin_class(std::string name, ClassFile *element_type);
 };
 
-Result initialize_class(ClassFile *C, Thread &thread, Frame &frame);
+Result initialize_class(ClassFile *C, Thread &thread);
+
+inline Result initialize_class(ClassFile *C, Thread &thread, Frame &frame) {
+    // quick check without lock
+    if (C->is_initialized) {
+        return ResultOk;
+    }
+    thread.stack.parent_frames.push_back(frame);
+
+    auto result = initialize_class(C, thread);
+
+    frame = thread.stack.parent_frames[thread.stack.parent_frames.size() - 1];
+    thread.stack.parent_frames.pop_back();
+
+    return result;
+}
+
 
 /**
  * Throws if the class was not found
- * @return whether a stack frame for an initializer was pushed
  */
-bool resolve_class(CONSTANT_Class_info *class_info, Thread &thread, Frame &frame);
+Result resolve_class(CONSTANT_Class_info *class_info);
 
 field_info *find_field(ClassFile *clazz, std::string_view name, std::string_view descriptor, Reference &exception);
 

@@ -162,7 +162,7 @@ ClassFile *BootstrapClassLoader::make_builtin_class(std::string name, ClassFile 
 }
 
 // Note: This is not "preparation"
-static void initialize_static_fields(ClassFile *clazz, Thread &thread, Frame &frame) {
+static void initialize_static_fields(ClassFile *clazz) {
     for (const auto &field : clazz->fields) {
         if (field.is_static()) {
             bool fail = false;
@@ -186,8 +186,6 @@ static void initialize_static_fields(ClassFile *clazz, Thread &thread, Frame &fr
                     } else if (descriptor == "D") {
                         clazz->static_field_values[field.index] = Value(std::get<CONSTANT_Double_info>(value).value);
                     } else if (descriptor == "Ljava/lang/String;") {
-                        frame.pc++;
-
                         std::string &modified_utf8 = std::get<CONSTANT_String_info>(value).string->value;
                         std::string string_utf8;
                         string_utf8.reserve(modified_utf8.length());
@@ -247,7 +245,12 @@ static void initialize_static_fields(ClassFile *clazz, Thread &thread, Frame &fr
 }
 
 // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.5
-Result initialize_class(ClassFile *C, Thread &thread, Frame &frame) {
+Result initialize_class(ClassFile *C, Thread &thread) {
+    // quick check without lock
+    if (C->is_initialized) {
+        return ResultOk;
+    }
+
     // 1. Synchronize on the initialization lock, LC, for C.
     //    This involves waiting until the current thread can acquire LC.
     std::unique_lock LC{C->initialization_lock};
@@ -282,7 +285,7 @@ Result initialize_class(ClassFile *C, Thread &thread, Frame &frame) {
     //    in the order the fields appear in the ClassFile structure.
     C->initializing_thread = &thread;
     LC.unlock();
-    initialize_static_fields(C, thread, frame);
+    initialize_static_fields(C);
 
     // 7. Next, if C is a class rather than an interface, then let SC be its superclass and let SI1, ..., SIn be all
     //    superinterfaces of C (whether direct or indirect) that declare at least one non-abstract, non-static method.
@@ -306,14 +309,14 @@ Result initialize_class(ClassFile *C, Thread &thread, Frame &frame) {
         return Exception;
     };
     if (C->super_class) {
-        if (initialize_class(C->super_class, thread, frame)) {
+        if (initialize_class(C->super_class, thread)) {
             return fail7();
         }
     }
     // TODO not sure if this is (also) correct
     for (auto &class_info : C->interfaces) {
         assert(class_info->clazz);
-        if (initialize_class(class_info->clazz, thread, frame)) {
+        if (initialize_class(class_info->clazz, thread)) {
             return fail7();
         }
     }
@@ -326,10 +329,7 @@ Result initialize_class(ClassFile *C, Thread &thread, Frame &frame) {
     if (C->clinit_index >= 0) {
         method_info *clinit = &C->methods[static_cast<unsigned long>(C->clinit_index)];
 
-        thread.stack.parent_frames.push_back(frame);
         interpret(thread, C, clinit);
-        frame = thread.stack.parent_frames[thread.stack.parent_frames.size() - 1];
-        thread.stack.parent_frames.pop_back();
 
         if (thread.current_exception != JAVA_NULL) {
             no_exception = false;
@@ -368,7 +368,7 @@ Result initialize_class(ClassFile *C, Thread &thread, Frame &frame) {
 }
 
 
-bool resolve_class(CONSTANT_Class_info *class_info, Thread &thread, Frame &frame) {
+Result resolve_class(CONSTANT_Class_info *class_info) {
     if (class_info->clazz == nullptr) {
         auto &name = class_info->name->value;
 
@@ -386,7 +386,7 @@ bool resolve_class(CONSTANT_Class_info *class_info, Thread &thread, Frame &frame
 
         if (clazz->resolved) {
             class_info->clazz = clazz;
-            return false;
+            return ResultOk;
         }
 
         for (const auto &field : clazz->fields) {
@@ -396,8 +396,8 @@ bool resolve_class(CONSTANT_Class_info *class_info, Thread &thread, Frame &frame
 
         size_t parent_instance_field_count = 0;
         if (clazz->super_class == nullptr && clazz->super_class_ref != nullptr) {
-            if (resolve_class(clazz->super_class_ref, thread, frame))
-                return true;
+            if (resolve_class(clazz->super_class_ref))
+                return Exception;
 
             clazz->super_class = clazz->super_class_ref->clazz;
             parent_instance_field_count = clazz->super_class->total_instance_field_count;
@@ -419,15 +419,14 @@ bool resolve_class(CONSTANT_Class_info *class_info, Thread &thread, Frame &frame
         clazz->static_field_values.resize(clazz->fields.size() - clazz->declared_instance_field_count);
 
         for (auto &interface : clazz->interfaces) {
-            auto runInitializer = resolve_class(interface, thread, frame);
-            if (runInitializer)
-                return true;
+            if (resolve_class(interface))
+                return Exception;
         }
 
         clazz->resolved = true;
         class_info->clazz = clazz;
     }
-    return false;
+    return ResultOk;
 }
 
 void resolve_field(ClassFile *clazz, CONSTANT_Fieldref_info *fieldref_info, Reference &exception) {
@@ -486,16 +485,22 @@ field_info *find_field(ClassFile *clazz, std::string_view name, std::string_view
 
 
 void Constants::resolve_and_initialize(Thread &thread) {
-    ClassFile *clazz = nullptr;
-    method_info method;
-    Frame frame{thread.stack, clazz, &method, thread.stack.memory_used, true};
+    if (thread.current_exception != JAVA_NULL) {
+        throw std::runtime_error("Failed to resolve and initialize");
+    }
 
-    auto resolve_and_initialize = [&thread, &frame](ClassFile *clazz) {
-        if (resolve_class(clazz->this_class, thread, frame)) {
+    auto resolve_and_initialize = [&thread](ClassFile *clazz) {
+        if (resolve_class(clazz->this_class)) {
             throw std::runtime_error("Failed to resolve");
         }
-        if (initialize_class(clazz, thread, frame)) {
+        if (thread.current_exception != JAVA_NULL) {
+            throw std::runtime_error("Failed to resolve2");
+        }
+        if (initialize_class(clazz, thread)) {
             throw std::runtime_error("Failed to initialize");
+        }
+        if (thread.current_exception != JAVA_NULL) {
+            throw std::runtime_error("Failed to initialize2");
         }
     };
 
