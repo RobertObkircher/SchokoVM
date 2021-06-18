@@ -484,25 +484,24 @@ field_info *find_field(ClassFile *clazz, std::string_view name, std::string_view
     return result;
 }
 
-void resolve_and_initialize(ClassFile *clazz, Thread &thread, Frame &frame) {
-    if (resolve_class(clazz->this_class, thread, frame)) {
-        throw std::runtime_error("Failed to resolve");
-    }
-    if (initialize_class(clazz, thread, frame)) {
-        throw std::runtime_error("Failed to initialize");
-    }
-}
 
-void Constants::ensure_resolved_and_initialized(Thread &thread, Frame &frame) {
-    if (initialized) {
-        return;
-    }
+void Constants::resolve_and_initialize(Thread &thread) {
+    ClassFile *clazz = nullptr;
+    method_info method;
+    Frame frame{thread.stack, clazz, &method, thread.stack.memory_used, true};
 
-    resolve_and_initialize(java_lang_Object, thread, frame);
-    resolve_and_initialize(java_lang_Class, thread, frame);
-    resolve_and_initialize(java_lang_String, thread, frame);
+    auto resolve_and_initialize = [&thread, &frame](ClassFile *clazz) {
+        if (resolve_class(clazz->this_class, thread, frame)) {
+            throw std::runtime_error("Failed to resolve");
+        }
+        if (initialize_class(clazz, thread, frame)) {
+            throw std::runtime_error("Failed to initialize");
+        }
+    };
 
-    // TODO what about the interfaces?
-
-    initialized = true;
+    resolve_and_initialize(java_lang_Object);
+    resolve_and_initialize(java_lang_Class);
+    resolve_and_initialize(java_lang_String);
+    resolve_and_initialize(java_io_Serializable);
+    resolve_and_initialize(java_lang_Cloneable);
 }

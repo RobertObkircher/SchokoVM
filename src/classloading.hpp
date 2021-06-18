@@ -61,10 +61,7 @@ struct Constants {
             {Primitive::Void,    "void",    nullptr, "java/lang/Void",      nullptr, 'V', "[V", nullptr},
     };
 
-    void ensure_resolved_and_initialized(Thread &thread, Frame &frame);
-
-private:
-    bool initialized = false;
+    void resolve_and_initialize(Thread &thread);
 };
 
 struct BootstrapClassLoader {

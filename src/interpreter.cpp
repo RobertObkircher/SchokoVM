@@ -53,8 +53,6 @@ static void native_call(ClassFile *clazz, method_info *method, Thread &thread, F
 Value interpret(Thread &thread, ClassFile *main, method_info *method) {
     Frame frame{thread.stack, main, method, thread.stack.memory_used, true};
 
-    BootstrapClassLoader::constants_mut().ensure_resolved_and_initialized(thread, frame);
-
     if (!main->is_initialized) {
         if (resolve_class(main->this_class, thread, frame)) {
             assert(thread.current_exception != JAVA_NULL);
