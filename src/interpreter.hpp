@@ -17,7 +17,7 @@ struct Stack;
 // Example:
 //     case SomeInstruction:
 //         if (some_function(thread, frame)) { return; }
-enum Result {
+enum [[nodiscard]] Result {
     ResultOk,
     Exception, // either the frame and stack were modified to run the exception handler or thread.current_exception was set
 };

@@ -197,6 +197,28 @@ static void initialize_static_fields(ClassFile *clazz) {
     }
 }
 
+static Result recursively_initialize_interfaces(ClassFile *clazz, Thread &thread) {
+    assert(clazz);
+    for (auto &class_info : clazz->interfaces) {
+        auto *interface = class_info->clazz;
+        assert(interface->is_interface());
+
+        if (recursively_initialize_interfaces(interface, thread)) {
+            return Exception;
+        }
+
+        for (method_info const &method : interface->methods) {
+            if (!method.is_abstract() && !method.is_static()) {
+                if (initialize_class(class_info->clazz, thread)) {
+                    return Exception;
+                }
+                break;
+            }
+        }
+    }
+    return ResultOk;
+};
+
 // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.5
 Result initialize_class(ClassFile *C, Thread &thread) {
     // quick check without lock
@@ -253,23 +275,21 @@ Result initialize_class(ClassFile *C, Thread &thread) {
     //    If the initialization of S completes abruptly because of a thrown exception, then acquire LC, label the Class
     //    object for C as erroneous, notify all waiting threads, release LC, and complete abruptly, throwing the same
     //    exception that resulted from initializing SC.
-    auto fail7 = [&LC, C]() {
-        LC.lock();
-        C->is_erroneous_state = true;
-        C->initializing_thread = nullptr;
-        C->initialization_condition_variable.notify_all();
-        LC.unlock();
-        return Exception;
-    };
-    if (C->super_class) {
-        if (initialize_class(C->super_class, thread)) {
-            return fail7();
+    if (!C->is_interface()) {
+        auto fail7 = [&LC, C]() {
+            LC.lock();
+            C->is_erroneous_state = true;
+            C->initializing_thread = nullptr;
+            C->initialization_condition_variable.notify_all();
+            LC.unlock();
+            return Exception;
+        };
+        if (C->super_class) {
+            if (initialize_class(C->super_class, thread)) {
+                return fail7();
+            }
         }
-    }
-    // TODO not sure if this is (also) correct
-    for (auto &class_info : C->interfaces) {
-        assert(class_info->clazz);
-        if (initialize_class(class_info->clazz, thread)) {
+        if (recursively_initialize_interfaces(C, thread)) {
             return fail7();
         }
     }

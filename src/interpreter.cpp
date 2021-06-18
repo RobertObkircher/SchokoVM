@@ -51,6 +51,12 @@ void fill_multi_array(Reference &reference, ClassFile *element_type, const std::
 static void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &frame, bool &should_exit);
 
 Value interpret(Thread &thread, ClassFile *main, method_info *method) {
+    if (thread.current_exception != JAVA_NULL) {
+        // TODO is it possible to call a function while an exception is being thrown?
+        assert(false);
+        return Value();
+    }
+
     [[maybe_unused]] auto frames = thread.stack.parent_frames.size();
     [[maybe_unused]] auto memory_used = thread.stack.memory_used;
     Frame frame{thread.stack, main, method, thread.stack.memory_used, true};
@@ -60,11 +66,11 @@ Value interpret(Thread &thread, ClassFile *main, method_info *method) {
             assert(thread.current_exception != JAVA_NULL);
             return Value();
         }
-        // we can safely ignore the return value
-        initialize_class(main, thread, frame);
-        if (thread.current_exception != JAVA_NULL) {
+        if (initialize_class(main, thread, frame)) {
+            assert(thread.current_exception != JAVA_NULL);
             return Value();
         }
+        assert(thread.current_exception == JAVA_NULL);
     }
 
     bool shouldExit = false;
