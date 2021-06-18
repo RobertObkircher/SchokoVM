@@ -179,7 +179,9 @@ JVM_MaxMemory(void) {
 
 JNIEXPORT jint JNICALL
 JVM_ActiveProcessorCount(void) {
-    UNIMPLEMENTED("JVM_ActiveProcessorCount");
+    LOG("JVM_ActiveProcessorCount");
+    // TODO no multithreading
+    return 1;
 }
 
 JNIEXPORT void *JNICALL
