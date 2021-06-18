@@ -15,8 +15,20 @@ public class Initialization {
         }
     }
 
-    static interface ShouldBeInitializedWithC {
-        int i = ShouldBeInitializedWithC.baz();
+    static interface ShouldAlsoBeInitializedWithC {
+        int i = ShouldAlsoBeInitializedWithC.baz();
+        static int baz(){
+            println("ShouldAlsoBeInitializedWithC.baz");
+            return 1;
+        }
+
+        default int nonAbstractNonStatic() {
+            return 4;
+        }
+    }
+
+    static interface ShouldBeInitializedWithC extends ShouldAlsoBeInitializedWithC {
+        int i = baz();
         static int baz(){
             println("ShouldBeInitializedWithC.baz");
             return 1;
