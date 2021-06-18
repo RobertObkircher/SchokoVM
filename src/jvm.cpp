@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <thread>
 #include <iostream>
 
 #include "jvm.h"
@@ -180,8 +181,12 @@ JVM_MaxMemory(void) {
 JNIEXPORT jint JNICALL
 JVM_ActiveProcessorCount(void) {
     LOG("JVM_ActiveProcessorCount");
-    // TODO no multithreading
-    return 1;
+    auto hint =  std::thread::hardware_concurrency();
+    if(hint > 0) {
+        return static_cast<jint>(hint);
+    } else {
+        return 1;
+    }
 }
 
 JNIEXPORT void *JNICALL
