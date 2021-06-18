@@ -153,6 +153,7 @@ find_library(LIBJAVA java PATHS ${JDK_HOME}/lib REQUIRED)
 set(JAVA_TEST_SOURCES
         tests/Assertions.java
         tests/Bitwise.java
+#        tests/Boxing.java
         tests/Clazz.java
         tests/Collections.java
         tests/Empty.java
