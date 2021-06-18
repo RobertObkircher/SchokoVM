@@ -1267,7 +1267,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                     break;
                 }
                 case ArrayPrimitiveTypes::T_SHORT: {
-                    auto reference = Heap::get().new_array<s4>(BootstrapClassLoader::get().load("[S"), count);
+                    auto reference = Heap::get().new_array<s2>(BootstrapClassLoader::get().load("[S"), count);
                     frame.push<Reference>(reference);
                     break;
                 }
