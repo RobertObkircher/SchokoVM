@@ -69,7 +69,7 @@ struct BootstrapClassLoader {
 
     static Constants const &constants() { return the_bootstrap_class_loader.m_constants; }
 
-    static Constants &constants_mut() { return the_bootstrap_class_loader.m_constants; }
+    void resolve_and_initialize_constants(Thread &thread) { the_bootstrap_class_loader.m_constants.resolve_and_initialize(thread); }
 
     static Primitive const &
     primitive(Primitive::Type id) { return the_bootstrap_class_loader.m_constants.primitives[id]; }
