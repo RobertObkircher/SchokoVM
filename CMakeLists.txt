@@ -154,6 +154,7 @@ set(JAVA_TEST_SOURCES
         tests/Assertions.java
         tests/Bitwise.java
         tests/Clazz.java
+        tests/Collections.java
         tests/Empty.java
         tests/Exceptions.java
         # tests/ExceptionsConstruct.java
