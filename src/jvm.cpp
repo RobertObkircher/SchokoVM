@@ -879,7 +879,8 @@ JVM_FindSignal(const char *name) {
  */
 JNIEXPORT jboolean JNICALL
 JVM_DesiredAssertionStatus(JNIEnv *env, jclass unused, jclass cls) {
-    UNIMPLEMENTED("JVM_DesiredAssertionStatus");
+    LOG("JVM_DesiredAssertionStatus");
+    return false; // TODO assertions
 }
 
 /*

@@ -2,6 +2,7 @@
 #define SCHOKOVM_CLASSFILE_HPP
 
 #include <bitset>
+#include <condition_variable>
 #include <vector>
 #include <variant>
 #include <cassert>
@@ -803,6 +804,12 @@ struct ClassFile {
     ClassFile *array_element_type = nullptr; // set iff this is an array of references
 
     bool resolved = false;
+
+    std::mutex initialization_lock{};
+    std::condition_variable initialization_condition_variable{};
+    bool is_initialized = false;
+    struct Thread *initializing_thread = nullptr;
+    bool is_erroneous_state = false;
 
     // Computes whether `this` is a subclass of `other` (regarding both `extends` and `implements`).
     // Note that `x.is_subclass_of(x) == false`

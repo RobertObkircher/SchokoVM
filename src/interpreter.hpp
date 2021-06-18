@@ -13,6 +13,15 @@
 
 struct Stack;
 
+// Some functions receive a reference to the current local frame as a parameter.
+// Example:
+//     case SomeInstruction:
+//         if (some_function(thread, frame)) { return; }
+enum [[nodiscard]] Result {
+    ResultOk,
+    Exception, // either the frame and stack were modified to run the exception handler or thread.current_exception was set
+};
+
 /** https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-2.html#jvms-2.6 */
 struct Frame {
     ClassFile *clazz;
@@ -33,7 +42,9 @@ struct Frame {
     // (only used when a parent frame is popped).
     unsigned char invoke_length;
 
-    Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top);
+    bool is_root_frame;
+
+    Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top, bool is_root_frame);
 
     inline u1 read_u1() {
         return (*code)[pc + 1];
@@ -213,11 +224,11 @@ struct Stack {
     //    TLDR: All Values are 64 bit. The slot after longs and dobles is unused.
     //
     // WARNING: This must never be resized because we create spans of the elements!
-    std::vector<Value> memory;
+    std::vector<Value> memory{};
     size_t memory_used = 0;
 
     // In the interpreter we will keep the current frame in a local variable.
-    std::vector<Frame> parent_frames;
+    std::vector<Frame> parent_frames{};
 
     /// Pushes current_frame onto the list of parent frames and sets to current frame to run `method` in `clazz`
     void push_frame(Frame &current_frame, ClassFile *clazz, method_info *method) {
@@ -225,7 +236,7 @@ struct Stack {
         current_frame.operands_top += -method->stack_slots_for_parameters + method->return_category;
         parent_frames.push_back(current_frame);
 
-        current_frame = {*this, clazz, method, operand_stack_top};
+        current_frame = {*this, clazz, method, operand_stack_top, false};
         if (memory_used > memory.size()) {
             throw std::runtime_error("stack overflow");
         }
@@ -236,7 +247,7 @@ struct Thread {
     Stack stack{};
     // TODO should be of type jthrowable
     Reference current_exception = JAVA_NULL;
-    JNIEnv *jni_env;
+    JNIEnv *jni_env{};
 };
 
 struct BootstrapClassLoader;

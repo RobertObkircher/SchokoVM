@@ -51,15 +51,35 @@ void fill_multi_array(Reference &reference, ClassFile *element_type, const std::
 static void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &frame, bool &should_exit);
 
 Value interpret(Thread &thread, ClassFile *main, method_info *method) {
-    Frame frame{thread.stack, main, method, thread.stack.memory_used};
+    if (thread.current_exception != JAVA_NULL) {
+        // TODO is it possible to call a function while an exception is being thrown?
+        assert(false);
+        return Value();
+    }
 
-    // push the class initializer if necessary
-    resolve_class(main->this_class, thread, frame);
+    [[maybe_unused]] auto frames = thread.stack.parent_frames.size();
+    [[maybe_unused]] auto memory_used = thread.stack.memory_used;
+    Frame frame{thread.stack, main, method, thread.stack.memory_used, true};
+
+    if (!main->is_initialized) {
+        if (resolve_class(main->this_class)) {
+            assert(thread.current_exception != JAVA_NULL);
+            return Value();
+        }
+        if (initialize_class(main, thread, frame)) {
+            assert(thread.current_exception != JAVA_NULL);
+            return Value();
+        }
+        assert(thread.current_exception == JAVA_NULL);
+    }
 
     bool shouldExit = false;
-    while (!shouldExit) {
+    while (!shouldExit && thread.current_exception == JAVA_NULL) {
         execute_instruction(thread, frame, shouldExit);
     }
+
+    assert(thread.stack.parent_frames.size() == frames);
+    assert(thread.stack.memory_used == memory_used);
 
     return method->return_category == 0 ? Value() : frame.locals[0];
 }
@@ -108,86 +128,19 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             break;
         }
         case OpCodes::ldc: {
-            auto index = frame.read_u1();
+            auto index = frame.consume_u1();
             auto &entry = frame.clazz->constant_pool.table[index];
             if (auto i = std::get_if<CONSTANT_Integer_info>(&entry.variant)) {
                 frame.push<s4>(i->value);
-                frame.pc++;
             } else if (auto f = std::get_if<CONSTANT_Float_info>(&entry.variant)) {
                 frame.push<float>(f->value);
-                frame.pc++;
             } else if (auto c = std::get_if<CONSTANT_Class_info>(&entry.variant)) {
-                // TODO: handle a special case for to at least initialize classes containing assertions:
-                // 0: ldc           #5                  // class XYZ
-                // 2: invokevirtual #6                  // Method java/lang/Class.desiredAssertionStatus:()Z
-                if (static_cast<OpCodes>(code[frame.pc + 2]) == OpCodes::invokevirtual) {
-                    auto method_index = static_cast<u2>((code[frame.pc + 3] << 8) | code[frame.pc + 4]);
-                    auto &declared_method_ref = frame.clazz->constant_pool.get<CONSTANT_Methodref_info>(
-                            method_index).method;
-                    if (declared_method_ref.class_->name->value == "java/lang/Class" &&
-                        declared_method_ref.name_and_type->name->value == "desiredAssertionStatus" &&
-                        declared_method_ref.name_and_type->descriptor->value == "()Z") {
-                        frame.pc += 2; // ldc
-                        frame.pc += 3; // invokevirtual
-                        frame.push<s1>(0);
-                        return;
-                    }
-                }
-                if (resolve_class(c, thread, frame)) {
+                if (resolve_class(c)) {
                     return;
                 }
-                frame.pc++;
                 frame.push<Reference>(Reference{c->clazz});
             } else if (auto s = std::get_if<CONSTANT_String_info>(&entry.variant)) {
-                // TODO where should we initialize the string class? This is definitely not the right place
-                auto clazz = BootstrapClassLoader::constants().java_lang_String;
-                if (resolve_class(clazz->this_class, thread, frame)) {
-                    return;
-                }
-                frame.pc++;
-
-                std::string &modified_utf8 = s->string->value;
-                std::string string_utf8;
-                string_utf8.reserve(modified_utf8.length());
-                for (size_t i = 0; i < modified_utf8.length(); ++i) {
-                    u1 c = static_cast<u1>(modified_utf8[i]);
-
-                    if (c == 0b11101101) {
-                        u1 v = static_cast<u1>(modified_utf8[i + 1]);
-                        u1 w = static_cast<u1>(modified_utf8[i + 2]);
-                        u1 x = static_cast<u1>(modified_utf8[i + 3]);
-                        u1 y = static_cast<u1>(modified_utf8[i + 4]);
-                        u1 z = static_cast<u1>(modified_utf8[i + 5]);
-
-                        if (((v & 0xf0) == 0b10100000) && ((w & 0b11000000) == 0b10000000)
-                            && (x == 0b11101101) && ((y & 0xf0) == 0b10110000) && ((z & 11000000) == 0b10000000)) {
-                            int codepoint =
-                                    0x10000 + ((v & 0x0f) << 16) + ((w & 0x3f) << 10) + ((y & 0x0f) << 6) + (z & 0x3f);
-                            // convert into the 4-byte utf8 variant
-                            string_utf8.push_back(static_cast<char>(0b11110000 | ((codepoint >> 18) & 0b1111)));
-                            string_utf8.push_back(static_cast<char>(0b10000000 | ((codepoint >> 12) & 0b111111)));
-                            string_utf8.push_back(static_cast<char>(0b10000000 | ((codepoint >> 6) & 0b111111)));
-                            string_utf8.push_back(static_cast<char>(0b10000000 | ((codepoint) & 0b111111)));
-                            i += 5;
-                            continue;
-                        }
-                    }
-
-                    if ((c & 0b10000000) == 0) { // copy 1 byte over
-                        string_utf8.push_back(static_cast<char>(c));
-                    } else if ((c & 0b11100000) == 0b11000000) { // copy 2 byte over
-                        string_utf8.push_back(static_cast<char>(c));
-                        string_utf8.push_back(modified_utf8[++i]);
-                    } else if ((c & 0b11110000) == 0b11100000) { // copy 3 byte over
-                        string_utf8.push_back(static_cast<char>(c));
-                        string_utf8.push_back(modified_utf8[++i]);
-                        string_utf8.push_back(modified_utf8[++i]);
-                    } else {
-                        throw std::runtime_error("Invalid byte in modified utf8 string: " + std::to_string((int) c));
-                    }
-                }
-
-                frame.push<Reference>(Heap::get().make_string(string_utf8));
+                frame.push<Reference>(Heap::get().make_string(s->string->value));
             } else {
                 // TODO: "a symbolic reference to a method type, a method handle, or a dynamically-computed constant." (?)
                 throw std::runtime_error("ldc refers to invalid/unimplemented type");
@@ -195,7 +148,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             break;
         }
         case OpCodes::ldc_w: {
-            size_t index = frame.read_u2();
+            size_t index = frame.consume_u2();
             auto &entry = frame.clazz->constant_pool.table[index];
             // TODO common function to turn constan pool reference into value
             if (auto i = std::get_if<CONSTANT_Integer_info>(&entry.variant)) {
@@ -203,14 +156,15 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             } else if (auto f = std::get_if<CONSTANT_Float_info>(&entry.variant)) {
                 frame.push<float>(f->value);
             } else if (auto c = std::get_if<CONSTANT_Class_info>(&entry.variant)) {
-                if (resolve_class(c, thread, frame)) {
+                if (resolve_class(c)) {
                     return;
                 }
                 frame.push<Reference>(Reference{c->clazz});
+            } else if (auto s = std::get_if<CONSTANT_String_info>(&entry.variant)) {
+                frame.push<Reference>(Heap::get().make_string(s->string->value));
             } else {
                 throw std::runtime_error("ldc_w refers to invalid/unimplemented type");
             }
-            frame.pc += 2;
             break;
         }
         case OpCodes::ldc2_w: {
@@ -922,7 +876,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             auto field = frame.clazz->constant_pool.get<CONSTANT_Fieldref_info>(index);
 
             if (!field.resolved) {
-                if (resolve_class(field.class_, thread, frame)) {
+                if (resolve_class(field.class_)) {
                     return;
                 }
 
@@ -939,6 +893,9 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 case OpCodes::getstatic: {
                     if (!field.is_static)
                         throw std::runtime_error("field is not static");
+                    if (initialize_class(field.class_->clazz, thread, frame)) {
+                        return;
+                    }
                     auto value = field.class_->clazz->static_field_values[field.index];
                     if (field.category == ValueCategory::C1) {
                         frame.push(value);
@@ -950,6 +907,9 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 case OpCodes::putstatic: {
                     if (!field.is_static)
                         throw std::runtime_error("field is not static");
+                    if (initialize_class(field.class_->clazz, thread, frame)) {
+                        return;
+                    }
                     Value value;
                     if (field.category == ValueCategory::C1) {
                         value = frame.pop();
@@ -1007,7 +967,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             method_info *declared_method = declared_method_ref.method;
 
             if (declared_method == nullptr) {
-                if (resolve_class(declared_method_ref.class_, thread, frame)) {
+                if (resolve_class(declared_method_ref.class_)) {
                     return;
                 }
 
@@ -1056,7 +1016,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             ClassFile *clazz = method_ref->class_->clazz;
 
             if (method == nullptr) {
-                if (resolve_class(method_ref->class_, thread, frame)) {
+                if (resolve_class(method_ref->class_)) {
                     return;
                 }
 
@@ -1188,11 +1148,14 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             ClassFile *clazz = method_ref->class_->clazz;
 
             if (method == nullptr) {
-                if (resolve_class(method_ref->class_, thread, frame)) {
+                if (resolve_class(method_ref->class_)) {
                     return;
                 }
 
                 clazz = method_ref->class_->clazz;
+                if (initialize_class(clazz, thread, frame)) {
+                    return;
+                }
 
                 if (method_resolution(*method_ref)) {
                     return;
@@ -1216,7 +1179,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             method_info *declared_method = declared_method_ref.method;
 
             if (declared_method == nullptr) {
-                if (resolve_class(declared_method_ref.class_, thread, frame)) {
+                if (resolve_class(declared_method_ref.class_)) {
                     return;
                 }
 
@@ -1249,11 +1212,15 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             u2 index = frame.read_u2();
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
 
-            if (resolve_class(&class_info, thread, frame)) {
+            if (resolve_class(&class_info)) {
                 return;
             }
+
             frame.pc += 2;
             auto clazz = class_info.clazz;
+            if (initialize_class(clazz, thread, frame)) {
+                return;
+            }
 
             auto reference = Heap::get().new_instance(clazz);
             frame.push<Reference>(reference);
@@ -1315,7 +1282,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         case OpCodes::anewarray: {
             u2 index = frame.read_u2();
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
-            if (resolve_class(&class_info, thread, frame)) {
+            if (resolve_class(&class_info)) {
                 return;
             }
             frame.pc += 2;
@@ -1359,13 +1326,19 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             frame.push<Reference>(objectref);
 
             if (objectref != JAVA_NULL) {
-                if (resolve_class(&class_info, thread, frame)) {
+                if (resolve_class(&class_info)) {
                     return;
                 }
 
                 if (!objectref.object()->clazz->is_instance_of(class_info.clazz)) {
-                    // TODO properly allocate a new exception (initialize clazz)
+                    // TODO factor this out into a method
                     ClassFile *clazz = BootstrapClassLoader::get().load("java/lang/ClassCastException");
+                    if (resolve_class(clazz->this_class)) {
+                        return;
+                    }
+                    if (initialize_class(clazz, thread, frame)) {
+                        return;
+                    }
                     Reference ref = Heap::get().new_instance(clazz);
                     return handle_throw(thread, frame, ref);
                 }
@@ -1383,7 +1356,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 frame.push<s4>(0);
             } else {
                 frame.push<Reference>(objectref);
-                if (resolve_class(&class_info, thread, frame)) {
+                if (resolve_class(&class_info)) {
                     return;
                 }
                 frame.pop<Reference>();
@@ -1449,7 +1422,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         case OpCodes::multianewarray: {
             u2 index = frame.read_u2();
             auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
-            if (resolve_class(&class_info, thread, frame)) {
+            if (resolve_class(&class_info)) {
                 return;
             }
             frame.pc += 2;
@@ -1618,7 +1591,8 @@ static inline void pop_frame(Thread &thread, Frame &frame) {
 }
 
 static void pop_frame_after_return(Thread &thread, Frame &frame, bool &should_exit) {
-    if (thread.stack.parent_frames.empty()) {
+    if (frame.is_root_frame) {
+        thread.stack.memory_used = frame.previous_stack_memory_usage;
         should_exit = true;
     } else {
         pop_frame(thread, frame);
@@ -1627,14 +1601,15 @@ static void pop_frame_after_return(Thread &thread, Frame &frame, bool &should_ex
 }
 
 
-Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top)
+Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top, bool is_root_frame)
         : clazz(clazz),
           method(method),
           code(nullptr),
           operands_top(0),
           previous_stack_memory_usage(stack.memory_used),
           pc(0),
-          invoke_length(0) {
+          invoke_length(0),
+          is_root_frame(is_root_frame) {
     //assert(method->code_attribute->max_locals >= method->parameter_count);
     assert(stack.memory_used >= method->stack_slots_for_parameters);
     assert(operand_stack_top >= method->stack_slots_for_parameters);

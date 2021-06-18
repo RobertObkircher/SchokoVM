@@ -88,6 +88,9 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
 
     *pvm = new JavaVM{&jni_invoke_interface};
     *penv = thread->jni_env = new JNIEnv{native}; // TODO store JNIEnv as member of thread instead of allocating?
+
+    BootstrapClassLoader::get().resolve_and_initialize_constants(*thread);
+
     return 0;
 }
 

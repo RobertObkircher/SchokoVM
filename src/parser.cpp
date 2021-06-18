@@ -20,9 +20,7 @@ Parser::Parser(std::istream &in) : in(in) {
     in.exceptions(std::ios::failbit | std::ios::badbit | std::ios::eofbit);
 }
 
-ClassFile Parser::parse() {
-    ClassFile result{};
-
+void Parser::parse(ClassFile &result) {
     result.magic = eat_u4();
     if (result.magic != 0xCAFEBABE)
         throw ParseError("expected 0xCAFEBABE, not " + std::to_string(result.magic));
@@ -115,8 +113,6 @@ ClassFile Parser::parse() {
     u1 unexpected = eat_u1();
     if (!in.eof())
         throw ParseError("Expected EOF but got " + std::to_string((int) unexpected));
-
-    return result;
 }
 
 std::string Parser::eat_utf8_string(u4 length) {

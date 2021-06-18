@@ -126,7 +126,7 @@ struct Heap {
         return reference;
     }
 
-    Reference make_string(std::string const &value_utf8);
+    Reference make_string(std::string const &modified_utf8);
 
     ClassFile *allocate_class();
 

@@ -2,6 +2,19 @@ public class Instanceof {
     static void println(int i) { System.out.println(i); }
 
     public static void main(String[] args) {
+        Object a = new Empty();
+    	if (a instanceof StaticInitializerShouldNotRun) {
+    	    println(888);
+    	}
+    	try {
+    	    StaticInitializerShouldNotRun i = (StaticInitializerShouldNotRun) a;
+    	} catch(ClassCastException e) {
+    	    println(999);
+    	}
+
+    	a = null;
+    	StaticInitializerShouldNotRun i = (StaticInitializerShouldNotRun) a;
+
         check(new A());
         check(new B());
         check(new C());
@@ -73,4 +86,10 @@ public class Instanceof {
     static class D extends A implements J, K {};
 
     static class X {};
+
+    static class StaticInitializerShouldNotRun {
+        static {
+            println(8743838);
+        }
+    }
 }
