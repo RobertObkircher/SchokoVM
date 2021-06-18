@@ -1,6 +1,7 @@
+#include "unsafe.hpp"
+
 #include <string>
 
-#include "jni.h"
 #include "classfile.hpp"
 #include "memory.hpp"
 #include "classloading.hpp"
@@ -9,14 +10,14 @@
 #define LOG(x)
 
 JNIEXPORT jobject JNICALL
-Unsafe_GetObjectVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset) {
+static Unsafe_GetObjectVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset) {
     // TODO "get with volatile load semantics, otherwise identical to getObject()"
     auto field = reinterpret_cast<Value *>(reinterpret_cast<char *>(obj) + offset);
     return reinterpret_cast<jobject>(field->reference.memory);
 }
 
 JNIEXPORT jlong JNICALL
-Unsafe_ObjectFieldOffset1(JNIEnv *env, jobject unsafe, jclass cls, jstring name) {
+static Unsafe_ObjectFieldOffset1(JNIEnv *env, jobject unsafe, jclass cls, jstring name) {
     auto clazz = reinterpret_cast<ClassFile *>(cls);
 
     auto data = env->GetStringUTFChars(name, nullptr);
@@ -35,7 +36,7 @@ Unsafe_ObjectFieldOffset1(JNIEnv *env, jobject unsafe, jclass cls, jstring name)
 
 
 JNIEXPORT jint JNICALL
-Unsafe_ArrayBaseOffset0(JNIEnv *env, jobject unsafe, jclass cls) {
+static Unsafe_ArrayBaseOffset0(JNIEnv *env, jobject unsafe, jclass cls) {
     LOG("JVM_GetClassModifiers");
     auto clazz = reinterpret_cast<ClassFile *>(cls);
 
@@ -63,7 +64,7 @@ Unsafe_ArrayBaseOffset0(JNIEnv *env, jobject unsafe, jclass cls) {
 }
 
 JNIEXPORT jint JNICALL
-Unsafe_ArrayIndexScale0(JNIEnv *env, jobject unsafe, jclass cls) {
+static Unsafe_ArrayIndexScale0(JNIEnv *env, jobject unsafe, jclass cls) {
     LOG("Unsafe_ArrayIndexScale0");
     auto clazz = reinterpret_cast<ClassFile *>(cls);
 
@@ -92,7 +93,7 @@ Unsafe_ArrayIndexScale0(JNIEnv *env, jobject unsafe, jclass cls) {
 }
 
 JNIEXPORT jboolean JNICALL
-Unsafe_CompareAndSetObject(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jobject expected, jobject x) {
+static Unsafe_CompareAndSetObject(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jobject expected, jobject x) {
     // TODO "volatile semantics"
     // TODO locking
     auto *field = reinterpret_cast<Value *>(reinterpret_cast<char *>(obj) + offset);
@@ -105,7 +106,7 @@ Unsafe_CompareAndSetObject(JNIEnv *env, jobject unsafe, jobject obj, jlong offse
 }
 
 JNIEXPORT jboolean JNICALL
-Unsafe_CompareAndSetInt(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jint expected, jint x) {
+static Unsafe_CompareAndSetInt(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jint expected, jint x) {
     // TODO locking
     auto *field = reinterpret_cast<Value *>(reinterpret_cast<char *>(obj) + offset);
     if (field->s4 == expected) {
@@ -117,7 +118,7 @@ Unsafe_CompareAndSetInt(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, 
 }
 
 JNIEXPORT jboolean JNICALL
-Unsafe_CompareAndSetLong(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong expected, jlong x) {
+static Unsafe_CompareAndSetLong(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong expected, jlong x) {
     // TODO locking
     auto *field = reinterpret_cast<Value *>(reinterpret_cast<char *>(obj) + offset);
     if (field->s8 == expected) {
@@ -130,17 +131,17 @@ Unsafe_CompareAndSetLong(JNIEnv *env, jobject unsafe, jobject obj, jlong offset,
 
 
 JNIEXPORT jint JNICALL
-Unsafe_AddressSize0(JNIEnv *env, jobject unsafe) {
+static Unsafe_AddressSize0(JNIEnv *env, jobject unsafe) {
     return sizeof(void *);
 }
 
 JNIEXPORT jboolean JNICALL
-Unsafe_isBigEndian0(JNIEnv *env, jobject unsafe) {
+static Unsafe_isBigEndian0(JNIEnv *env, jobject unsafe) {
     return std::endian::native == std::endian::big;
 }
 
 JNIEXPORT jboolean JNICALL
-Unsafe_unalignedAccess0(JNIEnv *env, jobject unsafe) {
+static Unsafe_unalignedAccess0(JNIEnv *env, jobject unsafe) {
     // TODO ???
     return false;
 }
@@ -236,7 +237,7 @@ static JNINativeMethod methods[] = {
 #undef PD
 
 extern "C" {
-[[maybe_unused]] _JNI_IMPORT_OR_EXPORT_
+_JNI_IMPORT_OR_EXPORT_
 void JNICALL Java_jdk_internal_misc_Unsafe_registerNatives(JNIEnv *env, jclass clazz) {
     env->RegisterNatives(clazz, methods, sizeof(methods) / sizeof(JNINativeMethod));
 }
