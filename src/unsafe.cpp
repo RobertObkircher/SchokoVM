@@ -93,40 +93,24 @@ static Unsafe_ArrayIndexScale0(JNIEnv *env, jobject unsafe, jclass cls) {
 }
 
 JNIEXPORT jboolean JNICALL
-static Unsafe_CompareAndSetObject(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jobject expected, jobject x) {
+static
+Unsafe_CompareAndSetObject(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jobject expected, jobject desired) {
     // TODO "volatile semantics"
-    // TODO locking
-    auto *field = reinterpret_cast<Value *>(reinterpret_cast<char *>(obj) + offset);
-    if (field->reference.memory == expected) {
-        field->reference = Reference{x};
-        return true;
-    } else {
-        return false;
-    }
+    auto *field = (reinterpret_cast<jobject *>(reinterpret_cast<char *>(obj) + offset));
+    return __atomic_compare_exchange_n(field, &expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 }
 
 JNIEXPORT jboolean JNICALL
-static Unsafe_CompareAndSetInt(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jint expected, jint x) {
-    // TODO locking
-    auto *field = reinterpret_cast<Value *>(reinterpret_cast<char *>(obj) + offset);
-    if (field->s4 == expected) {
-        field->s4 = x;
-        return true;
-    } else {
-        return false;
-    }
+static Unsafe_CompareAndSetInt(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jint expected, jint desired) {
+    auto *field = &(reinterpret_cast<Value *>(reinterpret_cast<char *>(obj) + offset))->s4;
+    return __atomic_compare_exchange_n(field, &expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 }
 
 JNIEXPORT jboolean JNICALL
-static Unsafe_CompareAndSetLong(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong expected, jlong x) {
-    // TODO locking
-    auto *field = reinterpret_cast<Value *>(reinterpret_cast<char *>(obj) + offset);
-    if (field->s8 == expected) {
-        field->s8 = x;
-        return true;
-    } else {
-        return false;
-    }
+static Unsafe_CompareAndSetLong(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong expected, jlong desired) {
+    auto *field = &(reinterpret_cast<Value *>(reinterpret_cast<char *>(obj) + offset))->s8;
+    auto expected_s8 = static_cast<s8>(expected);
+    return __atomic_compare_exchange_n(field, &expected_s8, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 }
 
 
