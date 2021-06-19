@@ -1376,6 +1376,13 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             frame.pc += 2;
             break;
         }
+        case OpCodes::monitorenter:
+        case OpCodes::monitorexit: {
+            // TODO noop for now
+            // TODO NullPointerException
+            frame.pop<Reference>();
+            break;
+        }
 
         case OpCodes::wide: {
             u1 type = frame.consume_u1();
