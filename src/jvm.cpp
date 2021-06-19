@@ -181,8 +181,8 @@ JVM_MaxMemory(void) {
 JNIEXPORT jint JNICALL
 JVM_ActiveProcessorCount(void) {
     LOG("JVM_ActiveProcessorCount");
-    auto hint =  std::thread::hardware_concurrency();
-    if(hint > 0) {
+    auto hint = std::thread::hardware_concurrency();
+    if (hint > 0) {
         return static_cast<jint>(hint);
     } else {
         return 1;
@@ -1326,7 +1326,17 @@ JVM_NativePath(char *) {
 
 JNIEXPORT int
 jio_vsnprintf(char *str, size_t count, const char *fmt, va_list args) {
-    UNIMPLEMENTED("jio_vsnprintf");
+    // Reject count values that are negative signed values converted to
+    // unsigned; see bug 4399518, 4417214
+    if ((intptr_t) count <= 0) return -1;
+
+    int result = vsnprintf(str, count, fmt, args);
+    if (result > 0 && (size_t) result >= count) {
+        str[count - 1] = 0;
+        result = -1;
+    }
+
+    return result;
 }
 
 JNIEXPORT int
