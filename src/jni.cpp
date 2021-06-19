@@ -91,6 +91,12 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
 
     BootstrapClassLoader::get().resolve_and_initialize_constants(*thread);
 
+    auto *system = BootstrapClassLoader::get().load_or_throw("java/lang/System");
+    assert(system);
+    jmethodID method = thread->jni_env->GetStaticMethodID((jclass) system, "initPhase1", "()V");
+    assert(method);
+    thread->jni_env->CallStaticVoidMethod((jclass) system, method);
+
     return 0;
 }
 
