@@ -9,15 +9,13 @@
 #define UNIMPLEMENTED(x) std::cerr << x; exit(42);
 #define LOG(x)
 
-JNIEXPORT jobject JNICALL
-static Unsafe_GetObjectVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset) {
+JNICALL static jobject Unsafe_GetObjectVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset) {
     // TODO "get with volatile load semantics, otherwise identical to getObject()"
     auto field = reinterpret_cast<Value *>(reinterpret_cast<char *>(obj) + offset);
     return reinterpret_cast<jobject>(field->reference.memory);
 }
 
-JNIEXPORT jlong JNICALL
-static Unsafe_ObjectFieldOffset1(JNIEnv *env, jobject unsafe, jclass cls, jstring name) {
+JNICALL static jlong Unsafe_ObjectFieldOffset1(JNIEnv *env, jobject unsafe, jclass cls, jstring name) {
     auto clazz = reinterpret_cast<ClassFile *>(cls);
 
     auto data = env->GetStringUTFChars(name, nullptr);
@@ -35,8 +33,7 @@ static Unsafe_ObjectFieldOffset1(JNIEnv *env, jobject unsafe, jclass cls, jstrin
 }
 
 
-JNIEXPORT jint JNICALL
-static Unsafe_ArrayBaseOffset0(JNIEnv *env, jobject unsafe, jclass cls) {
+JNICALL static jint Unsafe_ArrayBaseOffset0(JNIEnv *env, jobject unsafe, jclass cls) {
     LOG("JVM_GetClassModifiers");
     auto clazz = reinterpret_cast<ClassFile *>(cls);
 
@@ -63,8 +60,7 @@ static Unsafe_ArrayBaseOffset0(JNIEnv *env, jobject unsafe, jclass cls) {
     }
 }
 
-JNIEXPORT jint JNICALL
-static Unsafe_ArrayIndexScale0(JNIEnv *env, jobject unsafe, jclass cls) {
+JNICALL static jint Unsafe_ArrayIndexScale0(JNIEnv *env, jobject unsafe, jclass cls) {
     LOG("Unsafe_ArrayIndexScale0");
     auto clazz = reinterpret_cast<ClassFile *>(cls);
 
@@ -92,40 +88,36 @@ static Unsafe_ArrayIndexScale0(JNIEnv *env, jobject unsafe, jclass cls) {
     }
 }
 
-JNIEXPORT jboolean JNICALL
-static
+JNICALL static jboolean
 Unsafe_CompareAndSetObject(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jobject expected, jobject desired) {
     // TODO "volatile semantics"
     auto *field = (reinterpret_cast<jobject *>(reinterpret_cast<char *>(obj) + offset));
     return __atomic_compare_exchange_n(field, &expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 }
 
-JNIEXPORT jboolean JNICALL
-static Unsafe_CompareAndSetInt(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jint expected, jint desired) {
+JNICALL static jboolean
+Unsafe_CompareAndSetInt(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jint expected, jint desired) {
     auto *field = &(reinterpret_cast<Value *>(reinterpret_cast<char *>(obj) + offset))->s4;
     return __atomic_compare_exchange_n(field, &expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 }
 
-JNIEXPORT jboolean JNICALL
-static Unsafe_CompareAndSetLong(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong expected, jlong desired) {
+JNICALL static jboolean
+Unsafe_CompareAndSetLong(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong expected, jlong desired) {
     auto *field = &(reinterpret_cast<Value *>(reinterpret_cast<char *>(obj) + offset))->s8;
     auto expected_s8 = static_cast<s8>(expected);
     return __atomic_compare_exchange_n(field, &expected_s8, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 }
 
 
-JNIEXPORT jint JNICALL
-static Unsafe_AddressSize0(JNIEnv *env, jobject unsafe) {
+JNICALL static jint Unsafe_AddressSize0(JNIEnv *env, jobject unsafe) {
     return sizeof(void *);
 }
 
-JNIEXPORT jboolean JNICALL
-static Unsafe_isBigEndian0(JNIEnv *env, jobject unsafe) {
+JNICALL static jboolean Unsafe_isBigEndian0(JNIEnv *env, jobject unsafe) {
     return std::endian::native == std::endian::big;
 }
 
-JNIEXPORT jboolean JNICALL
-static Unsafe_unalignedAccess0(JNIEnv *env, jobject unsafe) {
+JNICALL static jboolean Unsafe_unalignedAccess0(JNIEnv *env, jobject unsafe) {
     // TODO ???
     return false;
 }
