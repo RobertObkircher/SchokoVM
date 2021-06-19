@@ -262,9 +262,24 @@ jobject NewLocalRef
     UNIMPLEMENTED("NewLocalRef");
 }
 
+// TODO should this be configureable?
+//  jdk11u-dev/src/hotspot/share/runtime/globals.hpp
+//  https://docs.oracle.com/javase/9/docs/specs/jni/functions.html#ensurelocalcapacity
+static const jint MaxJNILocalCapacity = -1;
+
 jint EnsureLocalCapacity
         (JNIEnv *env, jint capacity) {
-    UNIMPLEMENTED("EnsureLocalCapacity");
+    LOG("EnsureLocalCapacity");
+
+    jint ret;
+    if (capacity >= 0 &&
+        ((MaxJNILocalCapacity <= 0) || (capacity <= MaxJNILocalCapacity))) {
+        ret = JNI_OK;
+    } else {
+        ret = JNI_ERR;
+    }
+
+    return ret;
 }
 
 jobject AllocObject
@@ -906,7 +921,9 @@ void DeleteWeakGlobalRef
 
 jboolean ExceptionCheck
         (JNIEnv *env) {
-    UNIMPLEMENTED("ExceptionCheck");
+    LOG("ExceptionCheck");
+    auto *thread = (Thread *) env->functions->reserved0;
+    return thread->current_exception != JAVA_NULL;
 }
 
 jobject NewDirectByteBuffer
