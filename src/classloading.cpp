@@ -65,13 +65,8 @@ ClassFile *BootstrapClassLoader::load(std::string const &name) {
     if (name.size() >= 2 && name[0] == '[') {
         std::string element_name;
         if (name[1] == 'L') {
-            // turn [Ljava.lang.Boolean; into java/lang/Boolean
+            // turn [Ljava.lang.Boolean; into java.lang.Boolean
             element_name = name.substr(2, name.size() - 3);
-            for (auto &item : element_name) {
-                if (item == '.') {
-                    item = '/';
-                }
-            }
         } else if (name[1] == '[') {
             element_name = name.substr(1);
         } else {

@@ -863,16 +863,7 @@ struct ClassFile {
         if (!n.empty() && n[0] == '[') {
             return "[" + n;
         } else {
-            std::string result = "[L";
-            for (auto const &c : n) {
-                if (c == '/') {
-                    result += '.';
-                } else {
-                    result += c;
-                }
-            }
-            result += ';';
-            return result;
+            return "[L" + n + ";";
         }
     }
 };
