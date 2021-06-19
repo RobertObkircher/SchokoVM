@@ -1812,9 +1812,8 @@ method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_inf
                 (
                         m.is_protected() || m.is_public()
                         ||
-                        // TODO there is one missing case here (the very last bullet point of the spec paragraph)
-                        //  because we currently don't store the package of classes
-                        dynamic_class == clazz
+                        dynamic_class->package_name == clazz->package_name
+                        // TODO || (bullet point 3b)
                 )
                     ) {
                 out_method = &m;

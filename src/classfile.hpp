@@ -816,6 +816,8 @@ struct ClassFile {
     struct Thread *initializing_thread = nullptr;
     bool is_erroneous_state = false;
 
+    std::string_view package_name;
+
     // Computes whether `this` is a subclass of `other` (regarding both `extends` and `implements`).
     // Note that `x.is_subclass_of(x) == false`
     bool is_subclass_of(ClassFile *other) const {
