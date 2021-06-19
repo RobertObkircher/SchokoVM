@@ -88,24 +88,26 @@ JNICALL static jint Unsafe_ArrayIndexScale0(JNIEnv *env, jobject unsafe, jclass 
     }
 }
 
+template<typename T>
+static bool compare_and_set(jobject obj, jlong offset, T expected, T desired) {
+    auto *field = (reinterpret_cast<T *>(reinterpret_cast<char *>(obj) + offset));
+    return __atomic_compare_exchange_n(field, &expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+}
+
 JNICALL static jboolean
 Unsafe_CompareAndSetObject(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jobject expected, jobject desired) {
     // TODO "volatile semantics"
-    auto *field = (reinterpret_cast<jobject *>(reinterpret_cast<char *>(obj) + offset));
-    return __atomic_compare_exchange_n(field, &expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+    return compare_and_set(obj, offset, expected, desired);
 }
 
 JNICALL static jboolean
 Unsafe_CompareAndSetInt(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jint expected, jint desired) {
-    auto *field = &(reinterpret_cast<Value *>(reinterpret_cast<char *>(obj) + offset))->s4;
-    return __atomic_compare_exchange_n(field, &expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+    return compare_and_set(obj, offset, expected, desired);
 }
 
 JNICALL static jboolean
 Unsafe_CompareAndSetLong(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong expected, jlong desired) {
-    auto *field = &(reinterpret_cast<Value *>(reinterpret_cast<char *>(obj) + offset))->s8;
-    auto expected_s8 = static_cast<s8>(expected);
-    return __atomic_compare_exchange_n(field, &expected_s8, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+    return compare_and_set(obj, offset, expected, desired);
 }
 
 
