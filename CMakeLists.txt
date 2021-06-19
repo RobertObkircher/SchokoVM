@@ -152,6 +152,7 @@ find_library(LIBJAVA java PATHS ${JDK_HOME}/lib REQUIRED)
 #file(GLOB JAVA_TEST_SOURCES CONFIGURE_DEPENDS tests/*.java)
 set(JAVA_TEST_SOURCES
         tests/Annotations.java
+        tests/ArrayCopy.java
         tests/Assertions.java
         tests/Bitwise.java
 #        tests/Boxing.java

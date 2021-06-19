@@ -117,7 +117,78 @@ JVM_GetNanoTimeAdjustment(JNIEnv *env, jclass ignored, jlong offset_secs) {
 JNIEXPORT void JNICALL
 JVM_ArrayCopy(JNIEnv *env, jclass ignored, jobject src, jint src_pos,
               jobject dst, jint dst_pos, jint length) {
-    UNIMPLEMENTED("JVM_ArrayCopy");
+    LOG("JVM_ArrayCopy");
+    auto src_ref = Reference{src};
+    auto dst_ref = Reference{dst};
+
+    if (src_ref == JAVA_NULL || dst_ref == JAVA_NULL) {
+        // TODO NullPointerException
+        throw std::runtime_error("TODO NullPointerException");
+    }
+
+    auto src_class = src_ref.object()->clazz;
+    auto dst_class = dst_ref.object()->clazz;
+    auto src_is_primitive = src_class->name()[1] != 'L';
+    auto dst_is_primitive = dst_class->name()[1] != 'L';
+    if (!src_class->is_array() || !dst_class->is_array() || (src_is_primitive != dst_is_primitive) ||
+        (src_is_primitive && dst_is_primitive && src_class != dst_class)
+            ) {
+        // TODO ArrayStoreException
+        throw std::runtime_error("TODO ArrayStoreException");
+    }
+
+
+    auto src_length = src_ref.object()->length;
+    auto dst_length = dst_ref.object()->length;
+
+    if (src_pos < 0 || dst_pos < 0 || length < 0 ||
+        (src_pos + length > src_length) || (dst_pos + length > dst_length)) {
+        // TODO IndexOutOfBoundsException
+        throw std::runtime_error("TODO IndexOutOfBoundsException");
+    }
+
+    auto length_u = static_cast<size_t>(length);
+
+    if (src_is_primitive && dst_is_primitive) {
+        if (src_class->array_element_type->name() == "boolean" || src_class->array_element_type->name() == "byte") {
+            memmove(dst_ref.data<s1>() + dst_pos, src_ref.data<s1>() + src_pos, length_u * sizeof(s1));
+        } else if (src_class->array_element_type->name() == "char") {
+            memmove(dst_ref.data<u2>() + dst_pos, src_ref.data<u2>() + src_pos, length_u * sizeof(u2));
+        } else if (src_class->array_element_type->name() == "short") {
+            memmove(dst_ref.data<s2>() + dst_pos, src_ref.data<s2>() + src_pos, length_u * sizeof(s2));
+        } else if (src_class->array_element_type->name() == "int") {
+            memmove(dst_ref.data<s4>() + dst_pos, src_ref.data<s4>() + src_pos, length_u * sizeof(s4));
+        } else if (src_class->array_element_type->name() == "long") {
+            memmove(dst_ref.data<s8>() + dst_pos, src_ref.data<s8>() + src_pos, length_u * sizeof(s8));
+        } else if (src_class->array_element_type->name() == "float") {
+            memmove(dst_ref.data<float>() + dst_pos, src_ref.data<float>() + src_pos, length_u * sizeof(float));
+        } else if (src_class->array_element_type->name() == "double") {
+            memmove(dst_ref.data<double>() + dst_pos, src_ref.data<double>() + src_pos, length_u * sizeof(double));
+        }
+    } else {
+        if (src_ref != dst_ref) {
+            auto dst_element_type = dst_class->array_element_type;
+            size_t compatible_prefix_length = length_u;
+            for (size_t i = 0; i < length_u; i++) {
+                const auto &from = src_ref.data<Value>()[static_cast<size_t>(src_pos) + i];
+                const auto &from_clazz = from.reference.object()->clazz;
+                if (!(from_clazz == dst_element_type || from_clazz->is_subclass_of(dst_element_type))) {
+                    // not assignable
+                    compatible_prefix_length = i;
+                    break;
+                }
+            }
+            memmove(dst_ref.data<Value>() + dst_pos, src_ref.data<Value>() + src_pos,
+                    compatible_prefix_length * sizeof(Value));
+            if (compatible_prefix_length != length_u) {
+                // TODO ArrayStoreException
+                throw std::runtime_error("TODO ArrayStoreException");
+            }
+        } else {
+            // all objects in the (src) array are compatible with themselves (dst)
+            memmove(dst_ref.data<Value>() + dst_pos, src_ref.data<Value>() + src_pos, length_u * sizeof(Value));
+        }
+    }
 }
 
 JNIEXPORT jobject JNICALL
