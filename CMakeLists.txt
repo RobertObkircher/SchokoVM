@@ -98,7 +98,7 @@ add_library(jvm SHARED
         src/native.cpp src/native.hpp
         src/jni.cpp
         src/jvm.cpp
-        )
+        src/unsafe.cpp src/unsafe.hpp)
 add_sanitizers(jvm)
 target_include_directories(jvm PRIVATE ${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/jdk/include)
 target_compile_options(jvm PRIVATE -Wno-unused-parameter)
@@ -153,7 +153,9 @@ find_library(LIBJAVA java PATHS ${JDK_HOME}/lib REQUIRED)
 set(JAVA_TEST_SOURCES
         tests/Assertions.java
         tests/Bitwise.java
+#        tests/Boxing.java
         tests/Clazz.java
+        tests/Collections.java
         tests/Empty.java
         tests/Exceptions.java
         # tests/ExceptionsConstruct.java

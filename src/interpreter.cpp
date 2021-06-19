@@ -1237,42 +1237,42 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
 
             switch (static_cast<ArrayPrimitiveTypes>(type)) {
                 case ArrayPrimitiveTypes::T_INT: {
-                    auto reference = Heap::get().new_array<s4>(BootstrapClassLoader::get().load("[I"), count);
+                    auto reference = Heap::get().new_array<s4>(BootstrapClassLoader::primitive(Primitive::Int).array, count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_BOOLEAN: {
-                    auto reference = Heap::get().new_array<s1>(BootstrapClassLoader::get().load("[Z"), count);
+                    auto reference = Heap::get().new_array<s1>(BootstrapClassLoader::primitive(Primitive::Boolean).array, count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_CHAR: {
-                    auto reference = Heap::get().new_array<u2>(BootstrapClassLoader::get().load("[C"), count);
+                    auto reference = Heap::get().new_array<u2>(BootstrapClassLoader::primitive(Primitive::Char).array, count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_FLOAT: {
-                    auto reference = Heap::get().new_array<float>(BootstrapClassLoader::get().load("[F"), count);
+                    auto reference = Heap::get().new_array<float>(BootstrapClassLoader::primitive(Primitive::Float).array, count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_DOUBLE: {
-                    auto reference = Heap::get().new_array<double>(BootstrapClassLoader::get().load("[D"), count);
+                    auto reference = Heap::get().new_array<double>(BootstrapClassLoader::primitive(Primitive::Double).array, count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_BYTE: {
-                    auto reference = Heap::get().new_array<s1>(BootstrapClassLoader::get().load("[B"), count);
+                    auto reference = Heap::get().new_array<s1>(BootstrapClassLoader::primitive(Primitive::Byte).array, count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_SHORT: {
-                    auto reference = Heap::get().new_array<s4>(BootstrapClassLoader::get().load("[S"), count);
+                    auto reference = Heap::get().new_array<s2>(BootstrapClassLoader::primitive(Primitive::Short).array, count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_LONG: {
-                    auto reference = Heap::get().new_array<s8>(BootstrapClassLoader::get().load("[J"), count);
+                    auto reference = Heap::get().new_array<s8>(BootstrapClassLoader::primitive(Primitive::Long).array, count);
                     frame.push<Reference>(reference);
                     break;
                 }
