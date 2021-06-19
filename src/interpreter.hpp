@@ -252,6 +252,8 @@ struct Thread {
 
 struct BootstrapClassLoader;
 
+method_info *method_resolution(ClassFile *clazz, std::string const &name, std::string const &descriptor);
+
 [[nodiscard]] bool
 method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
                  ClassFile *&out_class, method_info *&out_method);

@@ -249,7 +249,8 @@ void DeleteGlobalRef
 
 void DeleteLocalRef
         (JNIEnv *env, jobject obj) {
-    UNIMPLEMENTED("DeleteLocalRef");
+    LOG("DeleteLocalRef");
+    // TODO implemence once we have GC
 }
 
 jboolean IsSameObject
@@ -316,8 +317,19 @@ jboolean IsInstanceOf
 }
 
 jmethodID GetMethodID
-        (JNIEnv *env, jclass clazz, const char *name, const char *sig) {
-    UNIMPLEMENTED("GetMethodID");
+        (JNIEnv *env, jclass cls, const char *name, const char *sig) {
+    LOG("GetMethodID");
+    auto *thread = static_cast<Thread *>(env->functions->reserved0);
+    auto *clazz = (ClassFile *) cls;
+
+    // TODO "GetMethodID() causes an uninitialized class to be initialized."
+//    if (resolve_class(declared_method_ref.class_)) {
+//        return;
+//    }
+
+    auto result = method_resolution(clazz, name, sig);
+
+    return reinterpret_cast<jmethodID>(result);
 }
 
 /**
@@ -533,6 +545,8 @@ jmethodID GetStaticMethodID(JNIEnv *env, jclass clazz, const char *name, const c
 
     auto *clazzz = (ClassFile *) (clazz);
 
+    // TODO "GetStaticMethodID() causes an uninitialized class to be initialized."
+
     auto method_iter = std::find_if(clazzz->methods.begin(), clazzz->methods.end(),
                                     [name, sig](const method_info &m) {
                                         return m.name_index->value == name && m.descriptor_index->value == sig;
@@ -569,8 +583,10 @@ void ReleaseStringChars
 }
 
 jstring NewStringUTF
-        (JNIEnv *env, const char *utf) {
-    UNIMPLEMENTED("NewStringUTF");
+        (JNIEnv *env, const char *utf8_mod) {
+    LOG("NewStringUTF");
+    auto str = Heap::get().make_string(utf8_mod);
+    return reinterpret_cast<jstring>(str.memory);
 }
 
 jsize GetStringUTFLength

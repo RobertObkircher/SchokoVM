@@ -1736,18 +1736,15 @@ resolve_method_interfaces(ClassFile *clazz, const std::string &name, const std::
     }
 }
 
-[[nodiscard]] static bool method_resolution(ClassInterface_Methodref &method) {
-    const auto &name = method.name_and_type->name->value;
-    const auto &descriptor = method.name_and_type->descriptor->value;
+method_info *method_resolution(ClassFile *clazz, std::string const &name, std::string const &descriptor) {
     // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.4.3.3
 
     // 2.
-    for (ClassFile *c = method.class_->clazz; c != nullptr; c = c->super_class) {
+    for (ClassFile *c = clazz; c != nullptr; c = c->super_class) {
         for (auto &m : c->methods) {
             if (m.name_index->value == name &&
                 m.descriptor_index->value == descriptor) {
-                method.method = &m;
-                return false;
+                return &m;
             }
         }
     }
@@ -1757,21 +1754,32 @@ resolve_method_interfaces(ClassFile *clazz, const std::string &name, const std::
     method_info *out_method_max_specific = nullptr;
     ClassFile *out_clazz_fallback = nullptr;
     method_info *out_method_fallback = nullptr;
-    resolve_method_interfaces(method.class_->clazz, name, descriptor,
+    resolve_method_interfaces(clazz, name, descriptor,
                               out_clazz_max_specific, out_method_max_specific,
                               out_clazz_fallback, out_method_fallback);
 
     if (out_method_max_specific != nullptr) {
-        method.method = out_method_max_specific;
-        return false;
+        return out_method_max_specific;
     } else if (out_method_fallback != nullptr) {
-        method.method = out_method_fallback;
-        return false;
+        return out_method_fallback;
     }
 
     // TODO throw the appropriate JVM exception instead
     throw std::runtime_error(
-            "Couldn't find method (static): " + name + descriptor + " in class " + method.class_->name->value);
+            "Couldn't find method (static): " + name + descriptor + " in class " + clazz->name());
+
+}
+
+[[nodiscard]] static bool method_resolution(ClassInterface_Methodref &method) {
+    auto result = method_resolution(method.class_->clazz, method.name_and_type->name->value,
+                                    method.name_and_type->descriptor->value);
+
+    if (result == nullptr) {
+        return true;
+    } else {
+        method.method = result;
+        return false;
+    }
 }
 
 [[nodiscard]] bool
