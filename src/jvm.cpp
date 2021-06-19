@@ -121,8 +121,10 @@ JVM_ArrayCopy(JNIEnv *env, jclass ignored, jobject src, jint src_pos,
 }
 
 JNIEXPORT jobject JNICALL
-JVM_InitProperties(JNIEnv *env, jobject p) {
-    UNIMPLEMENTED("JVM_InitProperties");
+JVM_InitProperties(JNIEnv *env, jobject properties) {
+    LOG("JVM_InitProperties");
+    // TODO forward default and CLI parameters to the properties object
+    return properties;
 }
 
 
@@ -421,7 +423,30 @@ JVM_SetPrimitiveArrayElement(JNIEnv *env, jobject arr, jint index, jvalue v,
 
 JNIEXPORT jobject JNICALL
 JVM_NewArray(JNIEnv *env, jclass eltClass, jint length) {
-    UNIMPLEMENTED("JVM_NewArray");
+    LOG("JVM_NewArray");
+    auto element_class = reinterpret_cast<ClassFile *>(eltClass);
+    ClassFile *array_class;
+    if (element_class->name() == "boolean" || element_class->name() == "byte") {
+        array_class = BootstrapClassLoader::primitive(Primitive::Type::Byte).array;
+    } else if (element_class->name() == "char") {
+        array_class = BootstrapClassLoader::primitive(Primitive::Type::Char).array;
+    } else if (element_class->name() == "short") {
+        array_class = BootstrapClassLoader::primitive(Primitive::Type::Short).array;
+    } else if (element_class->name() == "int") {
+        array_class = BootstrapClassLoader::primitive(Primitive::Type::Int).array;
+    } else if (element_class->name() == "long") {
+        array_class = BootstrapClassLoader::primitive(Primitive::Type::Long).array;
+    } else if (element_class->name() == "float") {
+        array_class = BootstrapClassLoader::primitive(Primitive::Type::Float).array;
+    } else if (element_class->name() == "double") {
+        array_class = BootstrapClassLoader::primitive(Primitive::Type::Double).array;
+    } else {
+        // object
+        array_class = BootstrapClassLoader::get().load(element_class->as_array_element());
+    }
+
+    auto reference = Heap::get().new_array<Reference>(array_class, length);
+    return reinterpret_cast<jobject>(reference.memory);
 }
 
 JNIEXPORT jobject JNICALL
@@ -627,7 +652,9 @@ JVM_GetProtectionDomain(JNIEnv *env, jclass cls) {
 
 JNIEXPORT jboolean JNICALL
 JVM_IsArrayClass(JNIEnv *env, jclass cls) {
-    UNIMPLEMENTED("JVM_IsArrayClass");
+    LOG("JVM_IsArrayClass");
+    auto clazz = reinterpret_cast<ClassFile *>(cls);
+    return clazz->is_array();
 }
 
 JNIEXPORT jboolean JNICALL

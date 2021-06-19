@@ -162,8 +162,14 @@ jclass DefineClass
 }
 
 jclass FindClass
-        (JNIEnv *env, const char *name) {
-    UNIMPLEMENTED("FindClass");
+        (JNIEnv *env, const char *utf8_mod) {
+    LOG("FindClass");
+
+    // TODO should be the class loader of the class that declared the native method
+    auto clazz = BootstrapClassLoader::get().load(utf8_mod);
+
+    // TODO initialize_class?
+    return reinterpret_cast<jclass>(clazz);
 }
 
 jmethodID FromReflectedMethod
@@ -239,7 +245,8 @@ jobject PopLocalFrame
 
 jobject NewGlobalRef
         (JNIEnv *env, jobject lobj) {
-    UNIMPLEMENTED("NewGlobalRef");
+    // TODO GC
+    return lobj;
 }
 
 void DeleteGlobalRef
@@ -563,8 +570,14 @@ jmethodID GetStaticMethodID(JNIEnv *env, jclass clazz, const char *name, const c
 }
 
 jstring NewString
-        (JNIEnv *env, const jchar *unicode, jsize len) {
-    UNIMPLEMENTED("NewString");
+        (JNIEnv *env, const jchar *utf16_data, jsize len) {
+    LOG("NewString");
+    std::string utf8_string = std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t>{}.to_bytes(
+            (char16_t *) utf16_data, (char16_t *) (utf16_data + len));
+
+    // TODO utf8 vs modified utf8
+    auto str = Heap::get().make_string(utf8_string);
+    return reinterpret_cast<jstring>(str.memory);
 }
 
 jsize GetStringLength

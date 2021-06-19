@@ -177,6 +177,7 @@ set(JAVA_TEST_SOURCES
         tests/ObjectArray.java
         tests/PropertiesTest.java
         tests/ReferenceComparisons.java
+        tests/ReflectionTest.java
         tests/Strings.java
         tests/Switch.java
         tests/UnitBoolean.java
