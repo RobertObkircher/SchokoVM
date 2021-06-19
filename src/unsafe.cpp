@@ -115,6 +115,18 @@ JNICALL static jint Unsafe_AddressSize0(JNIEnv *env, jobject unsafe) {
     return sizeof(void *);
 }
 
+JNICALL void static Unsafe_LoadFence(JNIEnv *env, jobject unsafe) {
+    std::atomic_thread_fence(std::memory_order_acquire);
+}
+
+JNICALL void static Unsafe_StoreFence(JNIEnv *env, jobject unsafe) {
+    std::atomic_thread_fence(std::memory_order_release);
+}
+
+JNICALL void static Unsafe_FullFence(JNIEnv *env, jobject unsafe) {
+    std::atomic_thread_fence(std::memory_order_acq_rel);
+}
+
 JNICALL static jboolean Unsafe_isBigEndian0(JNIEnv *env, jobject unsafe) {
     return std::endian::native == std::endian::big;
 }
@@ -198,10 +210,10 @@ static JNINativeMethod methods[] = {
 //
 //        {CC("shouldBeInitialized0"), CC("(" CLS ")Z"), Unsafe_ShouldBeInitialized0},
 //
-//        {CC("loadFence"), CC("()V"), Unsafe_LoadFence},
-//        {CC("storeFence"), CC("()V"), Unsafe_StoreFence},
-//        {CC("fullFence"), CC("()V"), Unsafe_FullFence},
-//
+        {CC("loadFence"),           CC("()V"),                        reinterpret_cast<void *>(Unsafe_LoadFence)},
+        {CC("storeFence"),          CC("()V"),                        reinterpret_cast<void *>(Unsafe_StoreFence)},
+        {CC("fullFence"),           CC("()V"),                        reinterpret_cast<void *>(Unsafe_FullFence)},
+
         {CC("isBigEndian0"),        CC("()Z"),                        reinterpret_cast<void *>(Unsafe_isBigEndian0)},
         {CC("unalignedAccess0"),    CC("()Z"),                        reinterpret_cast<void *>(Unsafe_unalignedAccess0)}
 };
