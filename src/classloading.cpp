@@ -149,6 +149,7 @@ ClassFile *BootstrapClassLoader::make_builtin_class(std::string name, ClassFile 
         clazz->super_class_ref = add_name_and_class(clazz->super_class = constants().java_lang_Object);
         clazz->interfaces.push_back(add_name_and_class(constants().java_lang_Cloneable));
         clazz->interfaces.push_back(add_name_and_class(constants().java_io_Serializable));
+        clazz->field_component_type = Value{Reference{array_element_type}};
     } else {
         clazz->constant_pool.table.resize(1 * 2);
     }
