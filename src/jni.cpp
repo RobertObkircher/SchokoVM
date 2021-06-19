@@ -347,7 +347,7 @@ static jint Name(JNIEnv *env, jclass java_class, bool is_virtual,               
     auto *method = (method_info *) methodID;                                                                           \
                                                                                                                        \
     size_t saved_operand_stack_top = thread->stack.memory_used;                                                        \
-    thread->stack.memory_used += method->parameter_count;                                                              \
+    thread->stack.memory_used += method->stack_slots_for_parameters;                                                              \
     if (thread->stack.memory_used > thread->stack.memory.size()) {                                                     \
         return JNI_ENOMEM;                                                                                             \
     }                                                                                                                  \
