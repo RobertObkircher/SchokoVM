@@ -175,7 +175,7 @@ set(JAVA_TEST_SOURCES
         tests/MultiArrays.java
         tests/Native.java
         tests/ObjectArray.java
-        # tests/PropertiesTest.java
+        tests/PropertiesTest.java
         tests/ReferenceComparisons.java
         tests/Strings.java
         tests/Switch.java
