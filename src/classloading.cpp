@@ -29,6 +29,8 @@ void BootstrapClassLoader::initialize_with_boot_classpath(std::string const &boo
     m_constants.java_lang_Cloneable = load_or_throw("java/lang/Cloneable");
     m_constants.java_lang_Object = load_or_throw("java/lang/Object");
     m_constants.java_lang_String = load_or_throw("java/lang/String");
+    m_constants.java_lang_Thread = load_or_throw("java/lang/Thread");
+    m_constants.java_lang_ThreadGroup = load_or_throw("java/lang/ThreadGroup");
 
     for (auto &primitive : m_constants.primitives) {
         primitive.primitive = make_builtin_class(primitive.primitive_name, nullptr);
@@ -488,4 +490,6 @@ void Constants::resolve_and_initialize(Thread &thread) {
     resolve_and_initialize(java_lang_String);
     resolve_and_initialize(java_io_Serializable);
     resolve_and_initialize(java_lang_Cloneable);
+    resolve_and_initialize(java_lang_Thread);
+    resolve_and_initialize(java_lang_ThreadGroup);
 }

@@ -48,6 +48,8 @@ struct Constants {
     ClassFile *java_lang_Cloneable{};
     ClassFile *java_lang_Object{};
     ClassFile *java_lang_String{};
+    ClassFile *java_lang_ThreadGroup{};
+    ClassFile *java_lang_Thread{};
 
     Primitive primitives[Primitive::TYPE_COUNT] = {
             {Primitive::Byte,    "byte",    nullptr, "java/lang/Byte",      nullptr, 'B', "[B", nullptr},

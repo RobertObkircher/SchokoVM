@@ -83,7 +83,8 @@ JVM_MonitorNotify(JNIEnv *env, jobject obj) {
 
 JNIEXPORT void JNICALL
 JVM_MonitorNotifyAll(JNIEnv *env, jobject obj) {
-    UNIMPLEMENTED("JVM_MonitorNotifyAll");
+    LOG("JVM_MonitorNotifyAll");
+    // TODO stub
 }
 
 JNIEXPORT jobject JNICALL
@@ -377,7 +378,8 @@ JVM_ResumeThread(JNIEnv *env, jobject thread) {
 
 JNIEXPORT void JNICALL
 JVM_SetThreadPriority(JNIEnv *env, jobject thread, jint prio) {
-    UNIMPLEMENTED("JVM_SetThreadPriority");
+    LOG("JVM_SetThreadPriority");
+    // TODO stub
 }
 
 JNIEXPORT void JNICALL
@@ -392,7 +394,9 @@ JVM_Sleep(JNIEnv *env, jclass threadClass, jlong millis) {
 
 JNIEXPORT jobject JNICALL
 JVM_CurrentThread(JNIEnv *env, jclass threadClass) {
-    UNIMPLEMENTED("JVM_CurrentThread");
+    LOG("JVM_CurrentThread");
+    auto thread = reinterpret_cast<Thread *>(env->functions->reserved0);
+    return reinterpret_cast<jobject>(thread->thread_object.memory);
 }
 
 JNIEXPORT jint JNICALL
@@ -974,7 +978,9 @@ JVM_GetInheritedAccessControlContext(JNIEnv *env, jclass cls) {
 
 JNIEXPORT jobject JNICALL
 JVM_GetStackAccessControlContext(JNIEnv *env, jclass cls) {
-    UNIMPLEMENTED("JVM_GetStackAccessControlContext");
+    LOG("JVM_GetStackAccessControlContext");
+    // TODO stub
+    return nullptr;
 }
 
 /*

@@ -91,6 +91,42 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
 
     BootstrapClassLoader::get().resolve_and_initialize_constants(*thread);
 
+    {
+        auto class_ThreadGroup = reinterpret_cast<jclass>(BootstrapClassLoader::constants().java_lang_ThreadGroup);
+        auto class_Thread = reinterpret_cast<jclass>(BootstrapClassLoader::constants().java_lang_Thread);
+
+        jmethodID thread_group_init = thread->jni_env->GetMethodID(class_ThreadGroup, "<init>", "()V");
+        jmethodID thread_group_sub_init = thread->jni_env->GetMethodID(class_ThreadGroup, "<init>",
+                                                                       "(Ljava/lang/ThreadGroup;Ljava/lang/String;)V");
+        assert(thread_group_init);
+        assert(thread_group_sub_init);
+
+        auto thread_group_system_obj = thread->jni_env->AllocObject(class_ThreadGroup);
+        // TODO invokeSpecial
+        thread->jni_env->CallNonvirtualVoidMethod(thread_group_system_obj, class_ThreadGroup, thread_group_init);
+
+        auto thread_group_main_obj = thread->jni_env->AllocObject(class_ThreadGroup);
+        std::u16string main_str{u"main"};
+        auto main_str_obj = thread->jni_env->NewString(reinterpret_cast<const jchar *>(main_str.c_str()),
+                                                       static_cast<jsize>(main_str.length()));
+        thread->jni_env->CallNonvirtualVoidMethod(thread_group_main_obj, class_ThreadGroup, thread_group_sub_init,
+                                                  thread_group_system_obj, main_str_obj);
+
+        auto thread_obj = thread->jni_env->AllocObject(class_Thread);
+        auto thread_ref = Reference{thread_obj};
+        // Important to set this before calling the constructor, because the Thread calls currentThread()
+        thread->thread_object = Reference{thread_obj};
+        [[maybe_unused]] auto thread_priority_field = reinterpret_cast<ClassFile *>(class_Thread)->fields[1];
+        assert(thread_priority_field.name_index->value == "priority" && thread_priority_field.index == 1);
+        thread_ref.data<Value>()[1] /* thread.priority */ = Value{5 /* Thread.NORM_PRIORITY */ };
+
+        jmethodID thread_init = thread->jni_env->GetMethodID(class_Thread, "<init>",
+                                                             "(Ljava/lang/ThreadGroup;Ljava/lang/String;)V");
+        assert(thread_init);
+        thread->jni_env->CallNonvirtualVoidMethod(thread_obj, class_Thread, thread_init, thread_group_main_obj,
+                                                  main_str_obj);
+    }
+
     auto *system = BootstrapClassLoader::get().load_or_throw("java/lang/System");
     assert(system);
     jmethodID method = thread->jni_env->GetStaticMethodID((jclass) system, "initPhase1", "()V");
@@ -291,8 +327,10 @@ jint EnsureLocalCapacity
 }
 
 jobject AllocObject
-        (JNIEnv *env, jclass clazz) {
-    UNIMPLEMENTED("AllocObject");
+        (JNIEnv *env, jclass cls) {
+    LOG("AllocObject");
+    auto clazz = reinterpret_cast<ClassFile *>(cls);
+    return reinterpret_cast<jobject>(Heap::get().new_instance(clazz).memory);
 }
 
 jobject NewObject

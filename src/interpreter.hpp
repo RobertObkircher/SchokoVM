@@ -248,6 +248,8 @@ struct Thread {
     // TODO should be of type jthrowable
     Reference current_exception = JAVA_NULL;
     JNIEnv *jni_env{};
+
+    Reference thread_object = JAVA_NULL;
 };
 
 struct BootstrapClassLoader;
