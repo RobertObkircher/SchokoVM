@@ -7,6 +7,7 @@ public class Fields {
     public static void println(short s) { System.out.println(s); }
     public static void println(byte b) { System.out.println(b); }
     public static void println(boolean z) { System.out.println(z); }
+    public static void println(String s) { System.out.println(s); }
 
     static class MyObject implements MyInterface {
         boolean bool;
@@ -57,6 +58,10 @@ public class Fields {
             i *= 2;
         }
 
+        static {
+            println("MyStatic");
+        }
+
         public static void print() {
             println(bool);
             println(b);
@@ -75,7 +80,12 @@ public class Fields {
         }
     }
 
-    class MyStaticSub extends MyStatic {}
+    static class MyStaticSub extends MyStatic {
+        public static int sub = 123;
+        static {
+            println("MyStaticSub");
+        }
+    }
 
     public static void main(String[] args) {
         MyObject object1 = new MyObject();
@@ -115,9 +125,10 @@ public class Fields {
         printMyObjectChild(object3);
 
         // initial static values
-        MyStatic.print();
         println(MyStaticSub.b);
         println(MyStaticSub.i);
+        println(MyStaticSub.sub);
+        MyStatic.print();
 
         MyStatic.b = 2;
         MyStatic.s = 3;
@@ -128,6 +139,8 @@ public class Fields {
         MyStatic.next = object1;
 
         MyStaticSub.d = 8.0;
+        println(MyStatic.d);
+        println(MyStaticSub.d);
 
         // changed static values
         MyStatic.print();
