@@ -140,7 +140,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 }
                 frame.push<Reference>(Reference{c->clazz});
             } else if (auto s = std::get_if<CONSTANT_String_info>(&entry.variant)) {
-                frame.push<Reference>(Heap::get().make_string(s->string->value));
+                frame.push<Reference>(Heap::get().load_string(s->string));
             } else {
                 // TODO: "a symbolic reference to a method type, a method handle, or a dynamically-computed constant." (?)
                 throw std::runtime_error("ldc refers to invalid/unimplemented type");
@@ -161,7 +161,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 }
                 frame.push<Reference>(Reference{c->clazz});
             } else if (auto s = std::get_if<CONSTANT_String_info>(&entry.variant)) {
-                frame.push<Reference>(Heap::get().make_string(s->string->value));
+                frame.push<Reference>(Heap::get().load_string(s->string));
             } else {
                 throw std::runtime_error("ldc_w refers to invalid/unimplemented type");
             }

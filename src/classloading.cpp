@@ -184,7 +184,7 @@ static void initialize_static_fields(ClassFile *clazz) {
                     } else if (descriptor == "D") {
                         clazz->static_field_values[field.index] = Value(std::get<CONSTANT_Double_info>(value).value);
                     } else if (descriptor == "Ljava/lang/String;") {
-                        auto java_string = Heap::get().make_string(std::get<CONSTANT_String_info>(value).string->value);
+                        auto java_string = Heap::get().load_string(std::get<CONSTANT_String_info>(value).string);
                         clazz->static_field_values[field.index] = Value(java_string);
                     } else {
                         assert(false);

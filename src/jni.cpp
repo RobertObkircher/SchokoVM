@@ -623,12 +623,9 @@ jmethodID GetStaticMethodID(JNIEnv *env, jclass clazz, const char *name, const c
 jstring NewString
         (JNIEnv *env, const jchar *utf16_data, jsize len) {
     LOG("NewString");
-    std::string utf8_string = std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t>{}.to_bytes(
-            (char16_t *) utf16_data, (char16_t *) (utf16_data + len));
-
-    // TODO utf8 vs modified utf8
-    auto str = Heap::get().make_string(utf8_string);
-    return reinterpret_cast<jstring>(str.memory);
+    std::u16string_view str{reinterpret_cast<const char16_t *>(utf16_data), static_cast<size_t>(len)};
+    auto ref = Heap::get().make_string(str);
+    return reinterpret_cast<jstring>(ref.memory);
 }
 
 jsize GetStringLength
@@ -661,6 +658,7 @@ jsize GetStringUTFLength
 const char *GetStringUTFChars
         (JNIEnv *env, jstring str, jboolean *isCopy) {
     LOG("GetStringUTFChars");
+    // TODO this should really be using modified utf8 and not real utf8
     auto ref = Reference{str};
     auto charArray = ref.data<Value>()[0].reference;
     auto utf16_length_bytes = static_cast<size_t>(charArray.object()->length);
