@@ -12,5 +12,9 @@ public class Collections {
 
         println(map.size());
         println(map.get("abc"));
+
+        for(String key : map.keySet()) {
+            println(key);
+        }
     }
 }

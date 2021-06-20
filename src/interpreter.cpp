@@ -140,7 +140,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 }
                 frame.push<Reference>(Reference{c->clazz});
             } else if (auto s = std::get_if<CONSTANT_String_info>(&entry.variant)) {
-                frame.push<Reference>(Heap::get().make_string(s->string->value));
+                frame.push<Reference>(Heap::get().load_string(s->string));
             } else {
                 // TODO: "a symbolic reference to a method type, a method handle, or a dynamically-computed constant." (?)
                 throw std::runtime_error("ldc refers to invalid/unimplemented type");
@@ -161,7 +161,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 }
                 frame.push<Reference>(Reference{c->clazz});
             } else if (auto s = std::get_if<CONSTANT_String_info>(&entry.variant)) {
-                frame.push<Reference>(Heap::get().make_string(s->string->value));
+                frame.push<Reference>(Heap::get().load_string(s->string));
             } else {
                 throw std::runtime_error("ldc_w refers to invalid/unimplemented type");
             }
@@ -980,6 +980,10 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             }
 
             auto object = frame.peek_at(declared_method->stack_slots_for_parameters - 1).reference;
+            if (object == JAVA_NULL) {
+                // TODO NullPointerException
+                throw std::runtime_error("TODO NullPointerException");
+            }
 
             ClassFile *clazz;
             method_info *method;
@@ -1054,6 +1058,12 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 method_ref->name_and_type->descriptor->value == "(I)V") {
                 exit(EXIT_FAILURE);
                 return;
+            } else if (method_ref->class_->name->value == "java/lang/System" &&
+                       method_ref->name_and_type->name->value == "loadLibrary" &&
+                       method_ref->name_and_type->descriptor->value == "(Ljava/lang/String;)V") {
+                // Ignore for now
+                frame.pc += 2;
+                break;
             } else if (method_ref->class_->name->value == "java/lang/StringUTF16" &&
                        method_ref->name_and_type->name->value == "isBigEndian" &&
                        method_ref->name_and_type->descriptor->value == "()Z") {
@@ -1374,6 +1384,13 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 frame.push<bool>(objectref.object()->clazz->is_instance_of(class_info.clazz));
             }
             frame.pc += 2;
+            break;
+        }
+        case OpCodes::monitorenter:
+        case OpCodes::monitorexit: {
+            // TODO noop for now
+            // TODO NullPointerException
+            frame.pop<Reference>();
             break;
         }
 
@@ -1736,18 +1753,15 @@ resolve_method_interfaces(ClassFile *clazz, const std::string &name, const std::
     }
 }
 
-[[nodiscard]] static bool method_resolution(ClassInterface_Methodref &method) {
-    const auto &name = method.name_and_type->name->value;
-    const auto &descriptor = method.name_and_type->descriptor->value;
+method_info *method_resolution(ClassFile *clazz, std::string const &name, std::string const &descriptor) {
     // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.4.3.3
 
     // 2.
-    for (ClassFile *c = method.class_->clazz; c != nullptr; c = c->super_class) {
+    for (ClassFile *c = clazz; c != nullptr; c = c->super_class) {
         for (auto &m : c->methods) {
             if (m.name_index->value == name &&
                 m.descriptor_index->value == descriptor) {
-                method.method = &m;
-                return false;
+                return &m;
             }
         }
     }
@@ -1757,21 +1771,32 @@ resolve_method_interfaces(ClassFile *clazz, const std::string &name, const std::
     method_info *out_method_max_specific = nullptr;
     ClassFile *out_clazz_fallback = nullptr;
     method_info *out_method_fallback = nullptr;
-    resolve_method_interfaces(method.class_->clazz, name, descriptor,
+    resolve_method_interfaces(clazz, name, descriptor,
                               out_clazz_max_specific, out_method_max_specific,
                               out_clazz_fallback, out_method_fallback);
 
     if (out_method_max_specific != nullptr) {
-        method.method = out_method_max_specific;
-        return false;
+        return out_method_max_specific;
     } else if (out_method_fallback != nullptr) {
-        method.method = out_method_fallback;
-        return false;
+        return out_method_fallback;
     }
 
     // TODO throw the appropriate JVM exception instead
     throw std::runtime_error(
-            "Couldn't find method (static): " + name + descriptor + " in class " + method.class_->name->value);
+            "Couldn't find method (static): " + name + descriptor + " in class " + clazz->name());
+
+}
+
+[[nodiscard]] static bool method_resolution(ClassInterface_Methodref &method) {
+    auto result = method_resolution(method.class_->clazz, method.name_and_type->name->value,
+                                    method.name_and_type->descriptor->value);
+
+    if (result == nullptr) {
+        return true;
+    } else {
+        method.method = result;
+        return false;
+    }
 }
 
 [[nodiscard]] bool
@@ -1797,9 +1822,8 @@ method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_inf
                 (
                         m.is_protected() || m.is_public()
                         ||
-                        // TODO there is one missing case here (the very last bullet point of the spec paragraph)
-                        //  because we currently don't store the package of classes
-                        dynamic_class == clazz
+                        dynamic_class->package_name == clazz->package_name
+                        // TODO || (bullet point 3b)
                 )
                     ) {
                 out_method = &m;

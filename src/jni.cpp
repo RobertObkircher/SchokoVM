@@ -39,6 +39,8 @@ JNI_GetDefaultJavaVMInitArgs(void *args) {
 extern const struct JNIInvokeInterface_ jni_invoke_interface;
 extern const struct JNINativeInterface_ jni_native_interface;
 
+std::string java_home{};
+
 _JNI_IMPORT_OR_EXPORT_ jint JNICALL
 JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
     auto *vm_args = static_cast<JavaVMInitArgs *>(args);
@@ -49,7 +51,6 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
 
     std::string bootclasspath{};
     std::string classpath{};
-    std::string java_home{};
 
     for (int i = 0; i < vm_args->nOptions; ++i) {
         std::string option{vm_args->options[i].optionString};
@@ -90,6 +91,60 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
     *penv = thread->jni_env = new JNIEnv{native}; // TODO store JNIEnv as member of thread instead of allocating?
 
     BootstrapClassLoader::get().resolve_and_initialize_constants(*thread);
+
+    {
+        auto class_ThreadGroup = reinterpret_cast<jclass>(BootstrapClassLoader::constants().java_lang_ThreadGroup);
+        auto class_Thread = reinterpret_cast<jclass>(BootstrapClassLoader::constants().java_lang_Thread);
+
+        jmethodID thread_group_init = thread->jni_env->GetMethodID(class_ThreadGroup, "<init>", "()V");
+        jmethodID thread_group_sub_init = thread->jni_env->GetMethodID(class_ThreadGroup, "<init>",
+                                                                       "(Ljava/lang/ThreadGroup;Ljava/lang/String;)V");
+        assert(thread_group_init);
+        assert(thread_group_sub_init);
+
+        auto thread_group_system_obj = thread->jni_env->AllocObject(class_ThreadGroup);
+        // TODO invokeSpecial
+        thread->jni_env->CallNonvirtualVoidMethod(thread_group_system_obj, class_ThreadGroup, thread_group_init);
+        if (thread->jni_env->ExceptionCheck()) {
+            abort();
+        }
+
+        auto thread_group_main_obj = thread->jni_env->AllocObject(class_ThreadGroup);
+        std::u16string main_str{u"main"};
+        auto main_str_obj = thread->jni_env->NewString(reinterpret_cast<const jchar *>(main_str.c_str()),
+                                                       static_cast<jsize>(main_str.length()));
+        thread->jni_env->CallNonvirtualVoidMethod(thread_group_main_obj, class_ThreadGroup, thread_group_sub_init,
+                                                  thread_group_system_obj, main_str_obj);
+        if (thread->jni_env->ExceptionCheck()) {
+            abort();
+        }
+
+        auto thread_obj = thread->jni_env->AllocObject(class_Thread);
+        auto thread_ref = Reference{thread_obj};
+        // Important to set this before calling the constructor, because the Thread calls currentThread()
+        thread->thread_object = Reference{thread_obj};
+        [[maybe_unused]] auto thread_priority_field = reinterpret_cast<ClassFile *>(class_Thread)->fields[1];
+        assert(thread_priority_field.name_index->value == "priority" && thread_priority_field.index == 1);
+        thread_ref.data<Value>()[1] /* thread.priority */ = Value{5 /* Thread.NORM_PRIORITY */ };
+
+        jmethodID thread_init = thread->jni_env->GetMethodID(class_Thread, "<init>",
+                                                             "(Ljava/lang/ThreadGroup;Ljava/lang/String;)V");
+        assert(thread_init);
+        thread->jni_env->CallNonvirtualVoidMethod(thread_obj, class_Thread, thread_init, thread_group_main_obj,
+                                                  main_str_obj);
+        if (thread->jni_env->ExceptionCheck()) {
+            abort();
+        }
+    }
+
+    auto *system = BootstrapClassLoader::get().load_or_throw("java/lang/System");
+    assert(system);
+    jmethodID method = thread->jni_env->GetStaticMethodID((jclass) system, "initPhase1", "()V");
+    assert(method);
+    thread->jni_env->CallStaticVoidMethod((jclass) system, method);
+    if (thread->jni_env->ExceptionCheck()) {
+        abort();
+    }
 
     return 0;
 }
@@ -156,8 +211,14 @@ jclass DefineClass
 }
 
 jclass FindClass
-        (JNIEnv *env, const char *name) {
-    UNIMPLEMENTED("FindClass");
+        (JNIEnv *env, const char *utf8_mod) {
+    LOG("FindClass");
+
+    // TODO should be the class loader of the class that declared the native method
+    auto clazz = BootstrapClassLoader::get().load(utf8_mod);
+
+    // TODO initialize_class?
+    return reinterpret_cast<jclass>(clazz);
 }
 
 jmethodID FromReflectedMethod
@@ -233,7 +294,8 @@ jobject PopLocalFrame
 
 jobject NewGlobalRef
         (JNIEnv *env, jobject lobj) {
-    UNIMPLEMENTED("NewGlobalRef");
+    // TODO GC
+    return lobj;
 }
 
 void DeleteGlobalRef
@@ -243,7 +305,8 @@ void DeleteGlobalRef
 
 void DeleteLocalRef
         (JNIEnv *env, jobject obj) {
-    UNIMPLEMENTED("DeleteLocalRef");
+    LOG("DeleteLocalRef");
+    // TODO implemence once we have GC
 }
 
 jboolean IsSameObject
@@ -256,14 +319,31 @@ jobject NewLocalRef
     UNIMPLEMENTED("NewLocalRef");
 }
 
+// TODO should this be configureable?
+//  jdk11u-dev/src/hotspot/share/runtime/globals.hpp
+//  https://docs.oracle.com/javase/9/docs/specs/jni/functions.html#ensurelocalcapacity
+static const jint MaxJNILocalCapacity = -1;
+
 jint EnsureLocalCapacity
         (JNIEnv *env, jint capacity) {
-    UNIMPLEMENTED("EnsureLocalCapacity");
+    LOG("EnsureLocalCapacity");
+
+    jint ret;
+    if (capacity >= 0 &&
+        ((MaxJNILocalCapacity <= 0) || (capacity <= MaxJNILocalCapacity))) {
+        ret = JNI_OK;
+    } else {
+        ret = JNI_ERR;
+    }
+
+    return ret;
 }
 
 jobject AllocObject
-        (JNIEnv *env, jclass clazz) {
-    UNIMPLEMENTED("AllocObject");
+        (JNIEnv *env, jclass cls) {
+    LOG("AllocObject");
+    auto clazz = reinterpret_cast<ClassFile *>(cls);
+    return reinterpret_cast<jobject>(Heap::get().new_instance(clazz).memory);
 }
 
 jobject NewObject
@@ -295,8 +375,19 @@ jboolean IsInstanceOf
 }
 
 jmethodID GetMethodID
-        (JNIEnv *env, jclass clazz, const char *name, const char *sig) {
-    UNIMPLEMENTED("GetMethodID");
+        (JNIEnv *env, jclass cls, const char *name, const char *sig) {
+    LOG("GetMethodID");
+    auto *thread = static_cast<Thread *>(env->functions->reserved0);
+    auto *clazz = (ClassFile *) cls;
+
+    if (resolve_class(clazz) == Exception)
+        return nullptr;
+
+    if (initialize_class(clazz, *thread) == Exception)
+        return nullptr;
+
+    auto result = method_resolution(clazz, name, sig);
+    return reinterpret_cast<jmethodID>(result);
 }
 
 /**
@@ -314,7 +405,7 @@ static jint Name(JNIEnv *env, jclass java_class, bool is_virtual,               
     auto *method = (method_info *) methodID;                                                                           \
                                                                                                                        \
     size_t saved_operand_stack_top = thread->stack.memory_used;                                                        \
-    thread->stack.memory_used += method->parameter_count;                                                              \
+    thread->stack.memory_used += method->stack_slots_for_parameters;                                                              \
     if (thread->stack.memory_used > thread->stack.memory.size()) {                                                     \
         return JNI_ENOMEM;                                                                                             \
     }                                                                                                                  \
@@ -512,6 +603,8 @@ jmethodID GetStaticMethodID(JNIEnv *env, jclass clazz, const char *name, const c
 
     auto *clazzz = (ClassFile *) (clazz);
 
+    // TODO "GetStaticMethodID() causes an uninitialized class to be initialized."
+
     auto method_iter = std::find_if(clazzz->methods.begin(), clazzz->methods.end(),
                                     [name, sig](const method_info &m) {
                                         return m.name_index->value == name && m.descriptor_index->value == sig;
@@ -528,8 +621,11 @@ jmethodID GetStaticMethodID(JNIEnv *env, jclass clazz, const char *name, const c
 }
 
 jstring NewString
-        (JNIEnv *env, const jchar *unicode, jsize len) {
-    UNIMPLEMENTED("NewString");
+        (JNIEnv *env, const jchar *utf16_data, jsize len) {
+    LOG("NewString");
+    std::u16string_view str{reinterpret_cast<const char16_t *>(utf16_data), static_cast<size_t>(len)};
+    auto ref = Heap::get().make_string(str);
+    return reinterpret_cast<jstring>(ref.memory);
 }
 
 jsize GetStringLength
@@ -548,8 +644,10 @@ void ReleaseStringChars
 }
 
 jstring NewStringUTF
-        (JNIEnv *env, const char *utf) {
-    UNIMPLEMENTED("NewStringUTF");
+        (JNIEnv *env, const char *utf8_mod) {
+    LOG("NewStringUTF");
+    auto str = Heap::get().make_string(utf8_mod);
+    return reinterpret_cast<jstring>(str.memory);
 }
 
 jsize GetStringUTFLength
@@ -560,6 +658,7 @@ jsize GetStringUTFLength
 const char *GetStringUTFChars
         (JNIEnv *env, jstring str, jboolean *isCopy) {
     LOG("GetStringUTFChars");
+    // TODO this should really be using modified utf8 and not real utf8
     auto ref = Reference{str};
     auto charArray = ref.data<Value>()[0].reference;
     auto utf16_length_bytes = static_cast<size_t>(charArray.object()->length);
@@ -900,7 +999,9 @@ void DeleteWeakGlobalRef
 
 jboolean ExceptionCheck
         (JNIEnv *env) {
-    UNIMPLEMENTED("ExceptionCheck");
+    LOG("ExceptionCheck");
+    auto *thread = (Thread *) env->functions->reserved0;
+    return thread->current_exception != JAVA_NULL;
 }
 
 jobject NewDirectByteBuffer

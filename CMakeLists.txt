@@ -98,7 +98,7 @@ add_library(jvm SHARED
         src/native.cpp src/native.hpp
         src/jni.cpp
         src/jvm.cpp
-        src/unsafe.cpp src/unsafe.hpp)
+        src/unsafe.cpp src/unsafe.hpp src/data.hpp)
 add_sanitizers(jvm)
 target_include_directories(jvm PRIVATE ${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/jdk/include)
 target_compile_options(jvm PRIVATE -Wno-unused-parameter)
@@ -152,6 +152,7 @@ find_library(LIBJAVA java PATHS ${JDK_HOME}/lib REQUIRED)
 #file(GLOB JAVA_TEST_SOURCES CONFIGURE_DEPENDS tests/*.java)
 set(JAVA_TEST_SOURCES
         tests/Annotations.java
+        tests/ArrayCopy.java
         tests/Assertions.java
         tests/Bitwise.java
 #        tests/Boxing.java
@@ -175,8 +176,9 @@ set(JAVA_TEST_SOURCES
         tests/MultiArrays.java
         tests/Native.java
         tests/ObjectArray.java
-        # tests/PropertiesTest.java
+        tests/PropertiesTest.java
         tests/ReferenceComparisons.java
+        tests/ReflectionTest.java
         tests/Strings.java
         tests/Switch.java
         tests/UnitBoolean.java

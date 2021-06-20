@@ -29,6 +29,8 @@ void BootstrapClassLoader::initialize_with_boot_classpath(std::string const &boo
     m_constants.java_lang_Cloneable = load_or_throw("java/lang/Cloneable");
     m_constants.java_lang_Object = load_or_throw("java/lang/Object");
     m_constants.java_lang_String = load_or_throw("java/lang/String");
+    m_constants.java_lang_Thread = load_or_throw("java/lang/Thread");
+    m_constants.java_lang_ThreadGroup = load_or_throw("java/lang/ThreadGroup");
 
     for (auto &primitive : m_constants.primitives) {
         primitive.primitive = make_builtin_class(primitive.primitive_name, nullptr);
@@ -65,13 +67,8 @@ ClassFile *BootstrapClassLoader::load(std::string const &name) {
     if (name.size() >= 2 && name[0] == '[') {
         std::string element_name;
         if (name[1] == 'L') {
-            // turn [Ljava.lang.Boolean; into java/lang/Boolean
+            // turn [Ljava.lang.Boolean; into java.lang.Boolean
             element_name = name.substr(2, name.size() - 3);
-            for (auto &item : element_name) {
-                if (item == '.') {
-                    item = '/';
-                }
-            }
         } else if (name[1] == '[') {
             element_name = name.substr(1);
         } else {
@@ -149,6 +146,7 @@ ClassFile *BootstrapClassLoader::make_builtin_class(std::string name, ClassFile 
         clazz->super_class_ref = add_name_and_class(clazz->super_class = constants().java_lang_Object);
         clazz->interfaces.push_back(add_name_and_class(constants().java_lang_Cloneable));
         clazz->interfaces.push_back(add_name_and_class(constants().java_io_Serializable));
+        clazz->field_component_type = Value{Reference{array_element_type}};
     } else {
         clazz->constant_pool.table.resize(1 * 2);
     }
@@ -186,7 +184,7 @@ static void initialize_static_fields(ClassFile *clazz) {
                     } else if (descriptor == "D") {
                         clazz->static_field_values[field.index] = Value(std::get<CONSTANT_Double_info>(value).value);
                     } else if (descriptor == "Ljava/lang/String;") {
-                        auto java_string = Heap::get().make_string(std::get<CONSTANT_String_info>(value).string->value);
+                        auto java_string = Heap::get().load_string(std::get<CONSTANT_String_info>(value).string);
                         clazz->static_field_values[field.index] = Value(java_string);
                     } else {
                         assert(false);
@@ -340,6 +338,49 @@ Result initialize_class(ClassFile *C, Thread &thread) {
     return Exception;
 }
 
+Result resolve_class(ClassFile *clazz) {
+    if (clazz->resolved) {
+        return ResultOk;
+    }
+
+    for (const auto &field : clazz->fields) {
+        if (!field.is_static())
+            ++clazz->declared_instance_field_count;
+    }
+
+    size_t parent_instance_field_count = 0;
+    if (clazz->super_class == nullptr && clazz->super_class_ref != nullptr) {
+        if (resolve_class(clazz->super_class_ref))
+            return Exception;
+
+        clazz->super_class = clazz->super_class_ref->clazz;
+        parent_instance_field_count = clazz->super_class->total_instance_field_count;
+    }
+
+    // instance and static fields
+    clazz->total_instance_field_count = clazz->declared_instance_field_count + parent_instance_field_count;
+    for (size_t static_index = 0, instance_index = parent_instance_field_count; auto &field : clazz->fields) {
+        if (field.is_static()) {
+            // used to index into clazz->static_field_values
+            field.index = static_index++;
+        } else {
+            // used to index into instance fields
+            field.index = instance_index++;
+        }
+        field.category = (field.descriptor_index->value == "D" || field.descriptor_index->value == "J")
+                         ? ValueCategory::C2 : ValueCategory::C1;
+    }
+    clazz->static_field_values.resize(clazz->fields.size() - clazz->declared_instance_field_count);
+
+    for (auto &interface : clazz->interfaces) {
+        if (resolve_class(interface))
+            return Exception;
+    }
+
+    clazz->resolved = true;
+    clazz->this_class->clazz = clazz;
+    return ResultOk;
+}
 
 Result resolve_class(CONSTANT_Class_info *class_info) {
     if (class_info->clazz == nullptr) {
@@ -357,47 +398,10 @@ Result resolve_class(CONSTANT_Class_info *class_info) {
             throw std::runtime_error("class not found: '" + name + "'");
         }
 
-        if (clazz->resolved) {
-            class_info->clazz = clazz;
-            return ResultOk;
+        if (resolve_class(clazz) == Exception) {
+            return Exception;
         }
 
-        for (const auto &field : clazz->fields) {
-            if (!field.is_static())
-                ++clazz->declared_instance_field_count;
-        }
-
-        size_t parent_instance_field_count = 0;
-        if (clazz->super_class == nullptr && clazz->super_class_ref != nullptr) {
-            if (resolve_class(clazz->super_class_ref))
-                return Exception;
-
-            clazz->super_class = clazz->super_class_ref->clazz;
-            parent_instance_field_count = clazz->super_class->total_instance_field_count;
-        }
-
-        // instance and static fields
-        clazz->total_instance_field_count = clazz->declared_instance_field_count + parent_instance_field_count;
-        for (size_t static_index = 0, instance_index = parent_instance_field_count; auto &field : clazz->fields) {
-            if (field.is_static()) {
-                // used to index into clazz->static_field_values
-                field.index = static_index++;
-            } else {
-                // used to index into instance fields
-                field.index = instance_index++;
-            }
-            field.category = (field.descriptor_index->value == "D" || field.descriptor_index->value == "J")
-                             ? ValueCategory::C2 : ValueCategory::C1;
-        }
-        clazz->static_field_values.resize(clazz->fields.size() - clazz->declared_instance_field_count);
-
-        for (auto &interface : clazz->interfaces) {
-            if (resolve_class(interface))
-                return Exception;
-        }
-
-        clazz->resolved = true;
-        clazz->this_class->clazz = clazz;
         class_info->clazz = clazz;
     }
     return ResultOk;
@@ -486,4 +490,6 @@ void Constants::resolve_and_initialize(Thread &thread) {
     resolve_and_initialize(java_lang_String);
     resolve_and_initialize(java_io_Serializable);
     resolve_and_initialize(java_lang_Cloneable);
+    resolve_and_initialize(java_lang_Thread);
+    resolve_and_initialize(java_lang_ThreadGroup);
 }

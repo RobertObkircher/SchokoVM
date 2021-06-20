@@ -48,6 +48,8 @@ void Parser::parse(ClassFile &result) {
             result.super_class_ref = nullptr;
     }
     result.super_class = nullptr; // resolved later
+    
+    result.package_name = std::string_view(result.name()).substr(0, result.name().find_last_of('/'));
 
     u2 interfaces_count = eat_u2();
     for (int i = 0; i < interfaces_count; ++i)
@@ -497,7 +499,7 @@ void MethodDescriptorParts::token() {
         }
         case 'L': {
             ++m_length; // skip 'L'
-            while(m_start[m_length] && m_start[m_length] != ';') {
+            while (m_start[m_length] && m_start[m_length] != ';') {
                 ++m_length;
             }
             if (!m_start[m_length]) {

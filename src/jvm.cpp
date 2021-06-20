@@ -1,9 +1,15 @@
 #include <cstdlib>
 #include <thread>
 #include <iostream>
+#include <map>
+#include <cstdio>
+#include <locale>
+#include <codecvt>
 
 #include "jvm.h"
 #include "classloading.hpp"
+#include "util.hpp"
+#include "data.hpp"
 
 // This file was created from the function declarations in jvm.h.
 // FIND: (JNICALL\s+)(JVM_[^(\s]*)([^;]*);
@@ -28,7 +34,8 @@ JVM_AreNestMates(JNIEnv *env, jclass current, jclass member) {
 
 JNIEXPORT void JNICALL
 JVM_InitializeFromArchive(JNIEnv *env, jclass cls) {
-    UNIMPLEMENTED("JVM_InitializeFromArchive")
+    LOG("JVM_InitializeFromArchive")
+    // TODO is this optional? can this just be a noop?
 }
 
 JNIEXPORT jstring JNICALL
@@ -65,7 +72,14 @@ JVM_GetInterfaceVersion(void) {
  */
 JNIEXPORT jint JNICALL
 JVM_IHashCode(JNIEnv *env, jobject obj) {
-    UNIMPLEMENTED("JVM_IHashCode");
+    LOG("JVM_IHashCode");
+    auto ref = Reference{obj};
+    if (ref == JAVA_NULL) {
+        return 0;
+    } else {
+        // TODO does this have to be more elaborate?
+        return static_cast<jint>(reinterpret_cast<unsigned long>(ref.memory));
+    }
 }
 
 JNIEXPORT void JNICALL
@@ -80,7 +94,8 @@ JVM_MonitorNotify(JNIEnv *env, jobject obj) {
 
 JNIEXPORT void JNICALL
 JVM_MonitorNotifyAll(JNIEnv *env, jobject obj) {
-    UNIMPLEMENTED("JVM_MonitorNotifyAll");
+    LOG("JVM_MonitorNotifyAll");
+    // TODO stub
 }
 
 JNIEXPORT jobject JNICALL
@@ -117,12 +132,102 @@ JVM_GetNanoTimeAdjustment(JNIEnv *env, jclass ignored, jlong offset_secs) {
 JNIEXPORT void JNICALL
 JVM_ArrayCopy(JNIEnv *env, jclass ignored, jobject src, jint src_pos,
               jobject dst, jint dst_pos, jint length) {
-    UNIMPLEMENTED("JVM_ArrayCopy");
+    LOG("JVM_ArrayCopy");
+    auto src_ref = Reference{src};
+    auto dst_ref = Reference{dst};
+
+    if (src_ref == JAVA_NULL || dst_ref == JAVA_NULL) {
+        // TODO NullPointerException
+        throw std::runtime_error("TODO NullPointerException");
+    }
+
+    auto src_class = src_ref.object()->clazz;
+    auto dst_class = dst_ref.object()->clazz;
+    auto src_is_primitive = src_class->name()[1] != 'L';
+    auto dst_is_primitive = dst_class->name()[1] != 'L';
+    if (!src_class->is_array() || !dst_class->is_array() || (src_is_primitive != dst_is_primitive) ||
+        (src_is_primitive && dst_is_primitive && src_class != dst_class)
+            ) {
+        // TODO ArrayStoreException
+        throw std::runtime_error("TODO ArrayStoreException");
+    }
+
+
+    auto src_length = src_ref.object()->length;
+    auto dst_length = dst_ref.object()->length;
+
+    if (src_pos < 0 || dst_pos < 0 || length < 0 ||
+        (src_pos + length > src_length) || (dst_pos + length > dst_length)) {
+        // TODO IndexOutOfBoundsException
+        throw std::runtime_error("TODO IndexOutOfBoundsException");
+    }
+
+    auto length_u = static_cast<size_t>(length);
+
+    if (src_is_primitive && dst_is_primitive) {
+        if (src_class->array_element_type->name() == "boolean" || src_class->array_element_type->name() == "byte") {
+            memmove(dst_ref.data<s1>() + dst_pos, src_ref.data<s1>() + src_pos, length_u * sizeof(s1));
+        } else if (src_class->array_element_type->name() == "char") {
+            memmove(dst_ref.data<u2>() + dst_pos, src_ref.data<u2>() + src_pos, length_u * sizeof(u2));
+        } else if (src_class->array_element_type->name() == "short") {
+            memmove(dst_ref.data<s2>() + dst_pos, src_ref.data<s2>() + src_pos, length_u * sizeof(s2));
+        } else if (src_class->array_element_type->name() == "int") {
+            memmove(dst_ref.data<s4>() + dst_pos, src_ref.data<s4>() + src_pos, length_u * sizeof(s4));
+        } else if (src_class->array_element_type->name() == "long") {
+            memmove(dst_ref.data<s8>() + dst_pos, src_ref.data<s8>() + src_pos, length_u * sizeof(s8));
+        } else if (src_class->array_element_type->name() == "float") {
+            memmove(dst_ref.data<float>() + dst_pos, src_ref.data<float>() + src_pos, length_u * sizeof(float));
+        } else if (src_class->array_element_type->name() == "double") {
+            memmove(dst_ref.data<double>() + dst_pos, src_ref.data<double>() + src_pos, length_u * sizeof(double));
+        }
+    } else {
+        if (src_ref != dst_ref) {
+            auto dst_element_type = dst_class->array_element_type;
+            size_t compatible_prefix_length = length_u;
+            for (size_t i = 0; i < length_u; i++) {
+                const auto &from = src_ref.data<Value>()[static_cast<size_t>(src_pos) + i];
+                const auto &from_clazz = from.reference.object()->clazz;
+                if (!(from_clazz == dst_element_type || from_clazz->is_subclass_of(dst_element_type))) {
+                    // not assignable
+                    compatible_prefix_length = i;
+                    break;
+                }
+            }
+            memmove(dst_ref.data<Value>() + dst_pos, src_ref.data<Value>() + src_pos,
+                    compatible_prefix_length * sizeof(Value));
+            if (compatible_prefix_length != length_u) {
+                // TODO ArrayStoreException
+                throw std::runtime_error("TODO ArrayStoreException");
+            }
+        } else {
+            // all objects in the (src) array are compatible with themselves (dst)
+            memmove(dst_ref.data<Value>() + dst_pos, src_ref.data<Value>() + src_pos, length_u * sizeof(Value));
+        }
+    }
 }
 
 JNIEXPORT jobject JNICALL
-JVM_InitProperties(JNIEnv *env, jobject p) {
-    UNIMPLEMENTED("JVM_InitProperties");
+JVM_InitProperties(JNIEnv *env, jobject properties) {
+    LOG("JVM_InitProperties");
+    // TODO forward default and CLI parameters to the properties object
+
+    auto ref = Reference{properties};
+
+    jmethodID method = env->GetMethodID(reinterpret_cast<jclass>(ref.object()->clazz), "put",
+                                        "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
+    assert(method);
+
+    std::map<std::u16string, std::u16string> props{};
+    props[u"java.home"] = std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t>{}.from_bytes(java_home);
+
+    for (auto const &x : props) {
+        auto key_str = env->NewString(reinterpret_cast<const jchar *>(x.first.c_str()),
+                                      static_cast<jsize>(x.first.length()));
+        auto value_str = env->NewString(reinterpret_cast<const jchar *>(x.second.c_str()),
+                                        static_cast<jsize>(x.second.length()));
+        env->CallObjectMethod(properties, method, key_str, value_str);
+    }
+    return properties;
 }
 
 
@@ -181,8 +286,8 @@ JVM_MaxMemory(void) {
 JNIEXPORT jint JNICALL
 JVM_ActiveProcessorCount(void) {
     LOG("JVM_ActiveProcessorCount");
-    auto hint =  std::thread::hardware_concurrency();
-    if(hint > 0) {
+    auto hint = std::thread::hardware_concurrency();
+    if (hint > 0) {
         return static_cast<jint>(hint);
     } else {
         return 1;
@@ -284,7 +389,8 @@ JVM_ResumeThread(JNIEnv *env, jobject thread) {
 
 JNIEXPORT void JNICALL
 JVM_SetThreadPriority(JNIEnv *env, jobject thread, jint prio) {
-    UNIMPLEMENTED("JVM_SetThreadPriority");
+    LOG("JVM_SetThreadPriority");
+    // TODO stub
 }
 
 JNIEXPORT void JNICALL
@@ -299,7 +405,9 @@ JVM_Sleep(JNIEnv *env, jclass threadClass, jlong millis) {
 
 JNIEXPORT jobject JNICALL
 JVM_CurrentThread(JNIEnv *env, jclass threadClass) {
-    UNIMPLEMENTED("JVM_CurrentThread");
+    LOG("JVM_CurrentThread");
+    auto thread = reinterpret_cast<Thread *>(env->functions->reserved0);
+    return reinterpret_cast<jobject>(thread->thread_object.memory);
 }
 
 JNIEXPORT jint JNICALL
@@ -421,7 +529,30 @@ JVM_SetPrimitiveArrayElement(JNIEnv *env, jobject arr, jint index, jvalue v,
 
 JNIEXPORT jobject JNICALL
 JVM_NewArray(JNIEnv *env, jclass eltClass, jint length) {
-    UNIMPLEMENTED("JVM_NewArray");
+    LOG("JVM_NewArray");
+    auto element_class = reinterpret_cast<ClassFile *>(eltClass);
+    ClassFile *array_class;
+    if (element_class->name() == "boolean" || element_class->name() == "byte") {
+        array_class = BootstrapClassLoader::primitive(Primitive::Type::Byte).array;
+    } else if (element_class->name() == "char") {
+        array_class = BootstrapClassLoader::primitive(Primitive::Type::Char).array;
+    } else if (element_class->name() == "short") {
+        array_class = BootstrapClassLoader::primitive(Primitive::Type::Short).array;
+    } else if (element_class->name() == "int") {
+        array_class = BootstrapClassLoader::primitive(Primitive::Type::Int).array;
+    } else if (element_class->name() == "long") {
+        array_class = BootstrapClassLoader::primitive(Primitive::Type::Long).array;
+    } else if (element_class->name() == "float") {
+        array_class = BootstrapClassLoader::primitive(Primitive::Type::Float).array;
+    } else if (element_class->name() == "double") {
+        array_class = BootstrapClassLoader::primitive(Primitive::Type::Double).array;
+    } else {
+        // object
+        array_class = BootstrapClassLoader::get().load(element_class->as_array_element());
+    }
+
+    auto reference = Heap::get().new_array<Reference>(array_class, length);
+    return reinterpret_cast<jobject>(reference.memory);
 }
 
 JNIEXPORT jobject JNICALL
@@ -627,7 +758,9 @@ JVM_GetProtectionDomain(JNIEnv *env, jclass cls) {
 
 JNIEXPORT jboolean JNICALL
 JVM_IsArrayClass(JNIEnv *env, jclass cls) {
-    UNIMPLEMENTED("JVM_IsArrayClass");
+    LOG("JVM_IsArrayClass");
+    auto clazz = reinterpret_cast<ClassFile *>(cls);
+    return clazz->is_array();
 }
 
 JNIEXPORT jboolean JNICALL
@@ -856,7 +989,9 @@ JVM_GetInheritedAccessControlContext(JNIEnv *env, jclass cls) {
 
 JNIEXPORT jobject JNICALL
 JVM_GetStackAccessControlContext(JNIEnv *env, jclass cls) {
-    UNIMPLEMENTED("JVM_GetStackAccessControlContext");
+    LOG("JVM_GetStackAccessControlContext");
+    // TODO stub
+    return nullptr;
 }
 
 /*
@@ -868,7 +1003,9 @@ JVM_GetStackAccessControlContext(JNIEnv *env, jclass cls) {
 
 JNIEXPORT void *JNICALL
 JVM_RegisterSignal(jint sig, void *handler) {
-    UNIMPLEMENTED("JVM_RegisterSignal");
+    LOG("JVM_RegisterSignal");
+    // TODO ?
+    return nullptr;
 }
 
 JNIEXPORT jboolean JNICALL
@@ -878,7 +1015,8 @@ JVM_RaiseSignal(jint sig) {
 
 JNIEXPORT jint JNICALL
 JVM_FindSignal(const char *name) {
-    UNIMPLEMENTED("JVM_FindSignal");
+    LOG("JVM_FindSignal");
+    return get_signal_number(name);
 }
 
 /*
@@ -1326,22 +1464,46 @@ JVM_NativePath(char *) {
 
 JNIEXPORT int
 jio_vsnprintf(char *str, size_t count, const char *fmt, va_list args) {
-    UNIMPLEMENTED("jio_vsnprintf");
+    LOG("jio_vsnprintf");
+    // Reject count values that are negative signed values converted to
+    // unsigned; see bug 4399518, 4417214
+    if ((intptr_t) count <= 0) return -1;
+
+    int result = vsnprintf(str, count, fmt, args);
+    if (result > 0 && (size_t) result >= count) {
+        str[count - 1] = 0;
+        result = -1;
+    }
+
+    return result;
 }
 
 JNIEXPORT int
 jio_snprintf(char *str, size_t count, const char *fmt, ...) {
-    UNIMPLEMENTED("jio_snprintf");
+    LOG("jio_snprintf");
+    va_list args;
+    int len;
+    va_start(args, fmt);
+    len = jio_vsnprintf(str, count, fmt, args);
+    va_end(args);
+    return len;
 }
 
 JNIEXPORT int
-jio_fprintf(FILE *, const char *fmt, ...) {
-    UNIMPLEMENTED("jio_fprintf");
+jio_fprintf(FILE *f, const char *fmt, ...) {
+    LOG("jio_fprintf");
+    int len;
+    va_list args;
+    va_start(args, fmt);
+    len = jio_vfprintf(f, fmt, args);
+    va_end(args);
+    return len;
 }
 
 JNIEXPORT int
-jio_vfprintf(FILE *, const char *fmt, va_list args) {
-    UNIMPLEMENTED("jio_vfprintf");
+jio_vfprintf(FILE *f, const char *fmt, va_list args) {
+    LOG("jio_vfprintf");
+    return vfprintf(f, fmt, args);
 }
 
 

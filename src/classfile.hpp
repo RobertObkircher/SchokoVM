@@ -781,7 +781,9 @@ enum class ClassFileAccessFlags : u2 {
 
 struct ClassFile {
     Object header;
-    Value padding_for_java_instance_fields[20]; // TODO
+    Value padding_for_java_instance_fields_a[6]; // TODO
+    Value field_component_type;
+    Value padding_for_java_instance_fields_b[13]; // TODO
 
     u4 magic;
     u2 minor_version;
@@ -813,6 +815,8 @@ struct ClassFile {
     bool is_initialized = false;
     struct Thread *initializing_thread = nullptr;
     bool is_erroneous_state = false;
+
+    std::string_view package_name;
 
     // Computes whether `this` is a subclass of `other` (regarding both `extends` and `implements`).
     // Note that `x.is_subclass_of(x) == false`
@@ -861,16 +865,7 @@ struct ClassFile {
         if (!n.empty() && n[0] == '[') {
             return "[" + n;
         } else {
-            std::string result = "[L";
-            for (auto const &c : n) {
-                if (c == '/') {
-                    result += '.';
-                } else {
-                    result += c;
-                }
-            }
-            result += ';';
-            return result;
+            return "[L" + n + ";";
         }
     }
 };

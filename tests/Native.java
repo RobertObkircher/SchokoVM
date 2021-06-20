@@ -29,10 +29,7 @@ public class Native {
     );
 
     static {
-        // TODO this is a hack to detect if we are not running in SchokoVM
-        if (System.out != null) {
-            System.loadLibrary("NativeLib");
-        }
+        System.loadLibrary("NativeLib");
     }
 
     public static void main(String[] args) {

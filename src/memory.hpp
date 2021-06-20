@@ -85,6 +85,8 @@ struct Object {
     s4 length;
 };
 
+struct CONSTANT_Utf8_info;
+
 struct Heap {
     static inline Heap &get() { return the_heap; }
 
@@ -127,6 +129,8 @@ struct Heap {
     }
 
     Reference make_string(std::string const &modified_utf8);
+    Reference make_string(std::u16string_view const &data);
+    Reference load_string(CONSTANT_Utf8_info *data);
 
     ClassFile *allocate_class();
 
