@@ -32,7 +32,9 @@ static void execute_comparison(Frame &frame, bool condition);
 
 static void goto_(Frame &frame);
 
-static void handle_throw(Thread &thread, Frame &frame, Reference exception);
+static void throw_new(Thread &thread, Frame &frame, const char *name);
+
+static void handle_throw(Thread &thread, Frame &frame, Reference exception, bool &should_exit);
 
 static inline void pop_frame(Thread &thread, Frame &frame);
 
@@ -73,9 +75,13 @@ Value interpret(Thread &thread, ClassFile *main, method_info *method) {
         assert(thread.current_exception == JAVA_NULL);
     }
 
-    bool shouldExit = false;
-    while (!shouldExit && thread.current_exception == JAVA_NULL) {
-        execute_instruction(thread, frame, shouldExit);
+    bool should_exit = false;
+    while (!should_exit) {
+        if (thread.current_exception != JAVA_NULL) {
+            handle_throw(thread, frame, thread.current_exception, should_exit);
+        } else {
+            execute_instruction(thread, frame, should_exit);
+        }
     }
 
     assert(thread.stack.parent_frames.size() == frames);
@@ -1236,7 +1242,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 // TODO If objectref is null, athrow throws a NullPointerException instead of objectref.
                 throw std::runtime_error("TODO NullPointerException");
             }
-            handle_throw(thread, frame, value);
+            thread.current_exception = value;
             return;
         }
 
@@ -1253,16 +1259,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 }
 
                 if (!objectref.object()->clazz->is_instance_of(class_info.clazz)) {
-                    // TODO factor this out into a method
-                    ClassFile *clazz = BootstrapClassLoader::get().load("java/lang/ClassCastException");
-                    if (resolve_class(clazz->this_class)) {
-                        return;
-                    }
-                    if (initialize_class(clazz, thread, frame)) {
-                        return;
-                    }
-                    Reference ref = Heap::get().new_instance(clazz);
-                    return handle_throw(thread, frame, ref);
+                    return throw_new(thread, frame, "java/lang/ClassCastException");
                 }
             }
             frame.pc += 2;
@@ -1415,7 +1412,35 @@ static void goto_(Frame &frame) {
     frame.pc = static_cast<size_t>(static_cast<long>(frame.pc) + offset);
 }
 
-static void handle_throw(Thread &thread, Frame &frame, Reference exception) {
+static void throw_new(Thread &thread, Frame &frame, const char *name) {
+    ClassFile *clazz = BootstrapClassLoader::get().load(name);
+    if (clazz == nullptr) {
+        std::cerr << "Attempted to throw unknown class " << name << "\n";
+        abort();
+    }
+
+    if (resolve_class(clazz->this_class)) {
+        return;
+    }
+
+    assert(clazz->is_subclass_of(BootstrapClassLoader::constants().java_lang_Throwable));
+
+    if (initialize_class(clazz, thread, frame)) {
+        return;
+    }
+
+    Reference ref = Heap::get().new_instance(clazz);
+
+    // TODO what if heap allocation fails?
+    // TODO call constructor
+    // TODO jni Throw, ThrowNew, NewObject
+
+    thread.current_exception = ref;
+}
+
+static void handle_throw(Thread &thread, Frame &frame, Reference exception, bool &should_exit) {
+    assert(exception != JAVA_NULL);
+
     auto obj = exception.object();
     // TODO this is actually wrong, the stack should be generated when the Throwable is constructed
     std::vector<Frame> stack_trace;
@@ -1450,6 +1475,7 @@ static void handle_throw(Thread &thread, Frame &frame, Reference exception) {
         );
 
         if (handler_iter == std::end(exception_table)) {
+            // TODO the then branch should just be the same as the else branch once the jdk can print this
             if (thread.stack.parent_frames.empty()) {
                 // Bubbled to the top, no exception handler was found, so exit thread
 
@@ -1499,6 +1525,11 @@ static void handle_throw(Thread &thread, Frame &frame, Reference exception) {
                 exit(EXIT_FAILURE);
                 return;
             } else {
+                if (frame.is_root_frame) {
+                    // the native caller has to deal with thread.current_exception
+                    should_exit = true;
+                    return;
+                }
                 pop_frame(thread, frame);
                 frame.clear();
                 continue;
@@ -1508,6 +1539,7 @@ static void handle_throw(Thread &thread, Frame &frame, Reference exception) {
             frame.clear();
             frame.push<Reference>(exception);
             frame.pc = handler_iter->handler_pc;
+            thread.current_exception = JAVA_NULL;
             return;
         }
     }
