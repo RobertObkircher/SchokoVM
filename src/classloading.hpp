@@ -54,6 +54,7 @@ namespace Names {
     ccc java_lang_Float = "java/lang/Float";
     ccc java_lang_Integer = "java/lang/Integer";
     ccc java_lang_Long = "java/lang/Long";
+    ccc java_lang_NullPointerException = "java/lang/NullPointerException";
     ccc java_lang_Object = "java/lang/Object";
     ccc java_lang_Short = "java/lang/Short";
     ccc java_lang_String = "java/lang/String";

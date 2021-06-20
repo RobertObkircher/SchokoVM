@@ -41,10 +41,10 @@ static inline void pop_frame(Thread &thread, Frame &frame);
 static void pop_frame_after_return(Thread &thread, Frame &frame, bool &should_exit);
 
 template<typename Element>
-void array_store(Frame &frame);
+void array_store(Thread &thread, Frame &frame);
 
 template<typename Element>
-void array_load(Frame &frame);
+void array_load(Thread &thread, Frame &frame);
 
 void fill_multi_array(Reference &reference, ClassFile *element_type, const std::span<s4> &counts);
 
@@ -234,28 +234,28 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             frame.push<Reference>(frame.locals[static_cast<u1>(opcode - static_cast<u1>(OpCodes::aload_0))].reference);
             break;
         case OpCodes::iaload:
-            array_load<s4>(frame);
+            array_load<s4>(thread, frame);
             break;
         case OpCodes::laload:
-            array_load<s8>(frame);
+            array_load<s8>(thread, frame);
             break;
         case OpCodes::faload:
-            array_load<float>(frame);
+            array_load<float>(thread, frame);
             break;
         case OpCodes::daload:
-            array_load<double>(frame);
+            array_load<double>(thread, frame);
             break;
         case OpCodes::aaload:
-            array_load<Reference>(frame);
+            array_load<Reference>(thread, frame);
             break;
         case OpCodes::baload:
-            array_load<s1>(frame);
+            array_load<s1>(thread, frame);
             break;
         case OpCodes::caload:
-            array_load<u2>(frame);
+            array_load<u2>(thread, frame);
             break;
         case OpCodes::saload:
-            array_load<s4>(frame);
+            array_load<s4>(thread, frame);
             break;
 
             /* ======================= Stores ======================= */
@@ -305,28 +305,28 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             frame.locals[opcode - static_cast<u1>(OpCodes::astore_0)] = Value(frame.pop<Reference>());
             break;
         case OpCodes::iastore:
-            array_store<s4>(frame);
+            array_store<s4>(thread, frame);
             break;
         case OpCodes::lastore:
-            array_store<s8>(frame);
+            array_store<s8>(thread, frame);
             break;
         case OpCodes::fastore:
-            array_store<float>(frame);
+            array_store<float>(thread, frame);
             break;
         case OpCodes::dastore:
-            array_store<double>(frame);
+            array_store<double>(thread, frame);
             break;
         case OpCodes::aastore:
-            array_store<Reference>(frame);
+            array_store<Reference>(thread, frame);
             break;
         case OpCodes::bastore:
-            array_store<s1>(frame);
+            array_store<s1>(thread, frame);
             break;
         case OpCodes::castore:
-            array_store<u2>(frame);
+            array_store<u2>(thread, frame);
             break;
         case OpCodes::sastore:
-            array_store<s4>(frame);
+            array_store<s4>(thread, frame);
             break;
 
             /* ======================= Stack =======================*/
@@ -934,7 +934,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                         throw std::runtime_error("field is static");
                     auto objectref = frame.pop<Reference>();
                     if (objectref == JAVA_NULL) {
-                        throw std::runtime_error("TODO NullPointerException");
+                        return throw_new(thread, frame, Names::java_lang_NullPointerException);
                     }
                     auto value = objectref.data<Value>()[field.index];
                     if (field.category == ValueCategory::C1) {
@@ -957,7 +957,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                     }
                     auto objectref = frame.pop<Reference>();
                     if (objectref == JAVA_NULL) {
-                        throw std::runtime_error("TODO NullPointerException");
+                        return throw_new(thread, frame, Names::java_lang_NullPointerException);
                     }
                     objectref.data<Value>()[field.index] = value;
                     break;
@@ -987,8 +987,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
 
             auto object = frame.peek_at(declared_method->stack_slots_for_parameters - 1).reference;
             if (object == JAVA_NULL) {
-                // TODO NullPointerException
-                throw std::runtime_error("TODO NullPointerException");
+                return throw_new(thread, frame, Names::java_lang_NullPointerException);
             }
 
             ClassFile *clazz;
@@ -1230,7 +1229,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         case OpCodes::arraylength: {
             auto arrayref = frame.pop<Reference>();
             if (arrayref == JAVA_NULL) {
-                throw std::runtime_error("TODO NullPointerException");
+                return throw_new(thread, frame, Names::java_lang_NullPointerException);
             }
             frame.push<s4>(arrayref.object()->length);
             break;
@@ -1239,8 +1238,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         case OpCodes::athrow: {
             auto value = frame.pop<Reference>();
             if (value == JAVA_NULL) {
-                // TODO If objectref is null, athrow throws a NullPointerException instead of objectref.
-                throw std::runtime_error("TODO NullPointerException");
+                return throw_new(thread, frame, Names::java_lang_NullPointerException);
             }
             thread.current_exception = value;
             return;
@@ -1288,8 +1286,10 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         case OpCodes::monitorenter:
         case OpCodes::monitorexit: {
             // TODO noop for now
-            // TODO NullPointerException
-            frame.pop<Reference>();
+            auto reference = frame.pop<Reference>();
+            if (reference == JAVA_NULL) {
+                return throw_new(thread, frame, Names::java_lang_NullPointerException);
+            }
             break;
         }
 
@@ -1600,13 +1600,13 @@ Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand
 }
 
 template<typename Element>
-void array_store(Frame &frame) {
+void array_store(Thread &thread, Frame &frame) {
     auto value = frame.pop<Element>();
     auto index = frame.pop<s4>();
 
     auto arrayref = frame.pop<Reference>();
     if (arrayref == JAVA_NULL) {
-        throw std::runtime_error("TODO NullPointerException");
+        return throw_new(thread, frame, Names::java_lang_NullPointerException);
     }
 
     if (index < 0 || index >= arrayref.object()->length) {
@@ -1617,12 +1617,12 @@ void array_store(Frame &frame) {
 }
 
 template<typename Element>
-void array_load(Frame &frame) {
+void array_load(Thread &thread, Frame &frame) {
     auto index = frame.pop<s4>();
 
     auto arrayref = frame.pop<Reference>();
     if (arrayref == JAVA_NULL) {
-        throw std::runtime_error("TODO NullPointerException");
+        return throw_new(thread, frame, Names::java_lang_NullPointerException);
     }
 
     if (index < 0 || index >= arrayref.object()->length) {
