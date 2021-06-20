@@ -2,6 +2,7 @@
 #include <thread>
 #include <iostream>
 #include <map>
+#include <cstdio>
 
 #include "jvm.h"
 #include "classloading.hpp"
@@ -1460,6 +1461,7 @@ JVM_NativePath(char *) {
 
 JNIEXPORT int
 jio_vsnprintf(char *str, size_t count, const char *fmt, va_list args) {
+    LOG("jio_vsnprintf");
     // Reject count values that are negative signed values converted to
     // unsigned; see bug 4399518, 4417214
     if ((intptr_t) count <= 0) return -1;
@@ -1475,17 +1477,30 @@ jio_vsnprintf(char *str, size_t count, const char *fmt, va_list args) {
 
 JNIEXPORT int
 jio_snprintf(char *str, size_t count, const char *fmt, ...) {
-    UNIMPLEMENTED("jio_snprintf");
+    LOG("jio_snprintf");
+    va_list args;
+    int len;
+    va_start(args, fmt);
+    len = jio_vsnprintf(str, count, fmt, args);
+    va_end(args);
+    return len;
 }
 
 JNIEXPORT int
-jio_fprintf(FILE *, const char *fmt, ...) {
-    UNIMPLEMENTED("jio_fprintf");
+jio_fprintf(FILE *f, const char *fmt, ...) {
+    LOG("jio_fprintf");
+    int len;
+    va_list args;
+    va_start(args, fmt);
+    len = jio_vfprintf(f, fmt, args);
+    va_end(args);
+    return len;
 }
 
 JNIEXPORT int
-jio_vfprintf(FILE *, const char *fmt, va_list args) {
-    UNIMPLEMENTED("jio_vfprintf");
+jio_vfprintf(FILE *f, const char *fmt, va_list args) {
+    LOG("jio_vfprintf");
+    return vfprintf(f, fmt, args);
 }
 
 
