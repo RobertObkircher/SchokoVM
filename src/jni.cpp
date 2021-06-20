@@ -104,6 +104,9 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
         auto thread_group_system_obj = thread->jni_env->AllocObject(class_ThreadGroup);
         // TODO invokeSpecial
         thread->jni_env->CallNonvirtualVoidMethod(thread_group_system_obj, class_ThreadGroup, thread_group_init);
+        if (thread->jni_env->ExceptionCheck()) {
+            abort();
+        }
 
         auto thread_group_main_obj = thread->jni_env->AllocObject(class_ThreadGroup);
         std::u16string main_str{u"main"};
@@ -111,6 +114,9 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
                                                        static_cast<jsize>(main_str.length()));
         thread->jni_env->CallNonvirtualVoidMethod(thread_group_main_obj, class_ThreadGroup, thread_group_sub_init,
                                                   thread_group_system_obj, main_str_obj);
+        if (thread->jni_env->ExceptionCheck()) {
+            abort();
+        }
 
         auto thread_obj = thread->jni_env->AllocObject(class_Thread);
         auto thread_ref = Reference{thread_obj};
@@ -125,6 +131,9 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
         assert(thread_init);
         thread->jni_env->CallNonvirtualVoidMethod(thread_obj, class_Thread, thread_init, thread_group_main_obj,
                                                   main_str_obj);
+        if (thread->jni_env->ExceptionCheck()) {
+            abort();
+        }
     }
 
     auto *system = BootstrapClassLoader::get().load_or_throw("java/lang/System");
@@ -132,6 +141,9 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
     jmethodID method = thread->jni_env->GetStaticMethodID((jclass) system, "initPhase1", "()V");
     assert(method);
     thread->jni_env->CallStaticVoidMethod((jclass) system, method);
+    if (thread->jni_env->ExceptionCheck()) {
+        abort();
+    }
 
     return 0;
 }
