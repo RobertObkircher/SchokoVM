@@ -685,7 +685,9 @@ void ReleaseStringUTFChars
 
 jsize GetArrayLength
         (JNIEnv *env, jarray array) {
-    UNIMPLEMENTED("GetArrayLength");
+    LOG("GetArrayLength");
+    auto ref = Reference{array};
+    return ref.object()->length;
 }
 
 jobjectArray NewObjectArray
@@ -833,7 +835,9 @@ void GetBooleanArrayRegion
 
 void GetByteArrayRegion
         (JNIEnv *env, jbyteArray array, jsize start, jsize len, jbyte *buf) {
-    UNIMPLEMENTED("GetByteArrayRegion");
+    LOG("GetByteArrayRegion");
+    auto ref = Reference{array};
+    memcpy(buf, ref.data<s1>() + start, static_cast<size_t>(len) * sizeof(u1));
 }
 
 void GetCharArrayRegion
