@@ -22,16 +22,16 @@ void BootstrapClassLoader::initialize_with_boot_classpath(std::string const &boo
         }
     }
 
-    m_constants.java_lang_Class = load_or_throw("java/lang/Class");
+    m_constants.java_lang_Class = load_or_throw(Names::java_lang_Class);
     m_constants.java_lang_Class->header.clazz = m_constants.java_lang_Class;
 
-    m_constants.java_io_Serializable = load_or_throw("java/io/Serializable");
-    m_constants.java_lang_Cloneable = load_or_throw("java/lang/Cloneable");
-    m_constants.java_lang_Object = load_or_throw("java/lang/Object");
-    m_constants.java_lang_String = load_or_throw("java/lang/String");
-    m_constants.java_lang_Thread = load_or_throw("java/lang/Thread");
-    m_constants.java_lang_ThreadGroup = load_or_throw("java/lang/ThreadGroup");
-    m_constants.java_lang_Throwable = load_or_throw("java/lang/Throwable");
+    m_constants.java_io_Serializable = load_or_throw(Names::java_io_Serializable);
+    m_constants.java_lang_Cloneable = load_or_throw(Names::java_lang_Cloneable);
+    m_constants.java_lang_Object = load_or_throw(Names::java_lang_Object);
+    m_constants.java_lang_String = load_or_throw(Names::java_lang_String);
+    m_constants.java_lang_Thread = load_or_throw(Names::java_lang_Thread);
+    m_constants.java_lang_ThreadGroup = load_or_throw(Names::java_lang_ThreadGroup);
+    m_constants.java_lang_Throwable = load_or_throw(Names::java_lang_Throwable);
 
     for (auto &primitive : m_constants.primitives) {
         primitive.primitive = make_builtin_class(primitive.primitive_name, nullptr);

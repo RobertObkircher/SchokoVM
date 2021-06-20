@@ -1259,7 +1259,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 }
 
                 if (!objectref.object()->clazz->is_instance_of(class_info.clazz)) {
-                    return throw_new(thread, frame, "java/lang/ClassCastException");
+                    return throw_new(thread, frame, Names::java_lang_ClassCastException);
                 }
             }
             frame.pc += 2;
