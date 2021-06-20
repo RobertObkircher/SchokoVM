@@ -1,9 +1,11 @@
 #include <cstdlib>
 #include <thread>
 #include <iostream>
+#include <map>
 
 #include "jvm.h"
 #include "classloading.hpp"
+#include "util.hpp"
 
 // This file was created from the function declarations in jvm.h.
 // FIND: (JNICALL\s+)(JVM_[^(\s]*)([^;]*);
@@ -28,7 +30,8 @@ JVM_AreNestMates(JNIEnv *env, jclass current, jclass member) {
 
 JNIEXPORT void JNICALL
 JVM_InitializeFromArchive(JNIEnv *env, jclass cls) {
-    UNIMPLEMENTED("JVM_InitializeFromArchive")
+    LOG("JVM_InitializeFromArchive")
+    // TODO is this optional? can this just be a noop?
 }
 
 JNIEXPORT jstring JNICALL
@@ -195,6 +198,23 @@ JNIEXPORT jobject JNICALL
 JVM_InitProperties(JNIEnv *env, jobject properties) {
     LOG("JVM_InitProperties");
     // TODO forward default and CLI parameters to the properties object
+
+    auto ref = Reference{properties};
+
+    jmethodID method = env->GetMethodID(reinterpret_cast<jclass>(ref.object()->clazz), "put",
+                                        "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
+    assert(method);
+
+    std::map<std::u16string, std::u16string> props{};
+    props[u"java.home"] = u"/Library/Java/JavaVirtualMachines/openjdk-11.jdk/Contents/Home";
+
+    for (auto const &x : props) {
+        auto key_str = env->NewString(reinterpret_cast<const jchar *>(x.first.c_str()),
+                                      static_cast<jsize>(x.first.length()));
+        auto value_str = env->NewString(reinterpret_cast<const jchar *>(x.second.c_str()),
+                                        static_cast<jsize>(x.second.length()));
+        env->CallObjectMethod(properties, method, key_str, value_str);
+    }
     return properties;
 }
 
