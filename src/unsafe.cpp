@@ -15,6 +15,12 @@ JNICALL static jobject Unsafe_GetObjectVolatile(JNIEnv *env, jobject unsafe, job
     return reinterpret_cast<jobject>(field->reference.memory);
 }
 
+JNICALL static jint Unsafe_GetIntVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset) {
+    // TODO "volatile"
+    auto field = reinterpret_cast<Value *>(reinterpret_cast<char *>(obj) + offset);
+    return field->s4;
+}
+
 JNICALL static jlong Unsafe_ObjectFieldOffset1(JNIEnv *env, jobject unsafe, jclass cls, jstring name) {
     auto clazz = reinterpret_cast<ClassFile *>(cls);
 
@@ -161,7 +167,8 @@ static JNINativeMethod methods[] = {
 //        {CC("putObject"), CC("(" OBJ "J" OBJ ")V"), Unsafe_PutObject},
         {CC("getObjectVolatile"),   CC("(" OBJ "J)" OBJ ""),          reinterpret_cast<void *>(Unsafe_GetObjectVolatile)},
 //        {CC("putObjectVolatile"), CC("(" OBJ "J" OBJ ")V"), Unsafe_PutObjectVolatile},
-//
+        {CC("getIntVolatile"),      CC("(" OBJ "J)I"),                reinterpret_cast<void *>(Unsafe_GetIntVolatile)},
+
 //        {CC("getUncompressedObject"), CC("(" ADR ")" OBJ), Unsafe_GetUncompressedObject},
 //
 //        DECLARE_GETPUTOOP(Boolean, Z),
