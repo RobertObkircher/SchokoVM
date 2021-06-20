@@ -1058,6 +1058,12 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 method_ref->name_and_type->descriptor->value == "(I)V") {
                 exit(EXIT_FAILURE);
                 return;
+            } else if (method_ref->class_->name->value == "java/lang/System" &&
+                       method_ref->name_and_type->name->value == "loadLibrary" &&
+                       method_ref->name_and_type->descriptor->value == "(Ljava/lang/String;)V") {
+                // Ignore for now
+                frame.pc += 2;
+                break;
             } else if (method_ref->class_->name->value == "java/lang/StringUTF16" &&
                        method_ref->name_and_type->name->value == "isBigEndian" &&
                        method_ref->name_and_type->descriptor->value == "()Z") {
