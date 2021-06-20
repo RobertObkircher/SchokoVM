@@ -68,7 +68,14 @@ JVM_GetInterfaceVersion(void) {
  */
 JNIEXPORT jint JNICALL
 JVM_IHashCode(JNIEnv *env, jobject obj) {
-    UNIMPLEMENTED("JVM_IHashCode");
+    LOG("JVM_IHashCode");
+    auto ref = Reference{obj};
+    if (ref == JAVA_NULL) {
+        return 0;
+    } else {
+        // TODO does this have to be more elaborate?
+        return static_cast<jint>(reinterpret_cast<unsigned long>(ref.memory));
+    }
 }
 
 JNIEXPORT void JNICALL
