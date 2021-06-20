@@ -980,6 +980,10 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             }
 
             auto object = frame.peek_at(declared_method->stack_slots_for_parameters - 1).reference;
+            if (object == JAVA_NULL) {
+                // TODO NullPointerException
+                throw std::runtime_error("TODO NullPointerException");
+            }
 
             ClassFile *clazz;
             method_info *method;
