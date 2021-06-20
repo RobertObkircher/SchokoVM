@@ -880,7 +880,9 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                     return;
                 }
 
-                resolve_field(field.class_->clazz, &field, thread.current_exception);
+                if (resolve_field(field.class_->clazz, &field, thread.current_exception)) {
+                    return;
+                }
                 if (thread.current_exception != JAVA_NULL)
                     throw std::runtime_error(
                             "field not found: " + field.class_->name->value + "." + field.name_and_type->name->value +
@@ -893,10 +895,10 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 case OpCodes::getstatic: {
                     if (!field.is_static)
                         throw std::runtime_error("field is not static");
-                    if (initialize_class(field.class_->clazz, thread, frame)) {
+                    if (initialize_class(field.value_clazz, thread, frame)) {
                         return;
                     }
-                    auto value = field.class_->clazz->static_field_values[field.index];
+                    auto value = field.value_clazz->static_field_values[field.index];
                     if (field.category == ValueCategory::C1) {
                         frame.push(value);
                     } else {
@@ -907,7 +909,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 case OpCodes::putstatic: {
                     if (!field.is_static)
                         throw std::runtime_error("field is not static");
-                    if (initialize_class(field.class_->clazz, thread, frame)) {
+                    if (initialize_class(field.value_clazz, thread, frame)) {
                         return;
                     }
                     Value value;
@@ -918,7 +920,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                     } else {
                         value = frame.pop2();
                     }
-                    field.class_->clazz->static_field_values[field.index] = value;
+                    field.value_clazz->static_field_values[field.index] = value;
                     break;
                 }
                 case OpCodes::getfield: {
@@ -1237,42 +1239,50 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
 
             switch (static_cast<ArrayPrimitiveTypes>(type)) {
                 case ArrayPrimitiveTypes::T_INT: {
-                    auto reference = Heap::get().new_array<s4>(BootstrapClassLoader::primitive(Primitive::Int).array, count);
+                    auto reference = Heap::get().new_array<s4>(BootstrapClassLoader::primitive(Primitive::Int).array,
+                                                               count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_BOOLEAN: {
-                    auto reference = Heap::get().new_array<s1>(BootstrapClassLoader::primitive(Primitive::Boolean).array, count);
+                    auto reference = Heap::get().new_array<s1>(
+                            BootstrapClassLoader::primitive(Primitive::Boolean).array, count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_CHAR: {
-                    auto reference = Heap::get().new_array<u2>(BootstrapClassLoader::primitive(Primitive::Char).array, count);
+                    auto reference = Heap::get().new_array<u2>(BootstrapClassLoader::primitive(Primitive::Char).array,
+                                                               count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_FLOAT: {
-                    auto reference = Heap::get().new_array<float>(BootstrapClassLoader::primitive(Primitive::Float).array, count);
+                    auto reference = Heap::get().new_array<float>(
+                            BootstrapClassLoader::primitive(Primitive::Float).array, count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_DOUBLE: {
-                    auto reference = Heap::get().new_array<double>(BootstrapClassLoader::primitive(Primitive::Double).array, count);
+                    auto reference = Heap::get().new_array<double>(
+                            BootstrapClassLoader::primitive(Primitive::Double).array, count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_BYTE: {
-                    auto reference = Heap::get().new_array<s1>(BootstrapClassLoader::primitive(Primitive::Byte).array, count);
+                    auto reference = Heap::get().new_array<s1>(BootstrapClassLoader::primitive(Primitive::Byte).array,
+                                                               count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_SHORT: {
-                    auto reference = Heap::get().new_array<s2>(BootstrapClassLoader::primitive(Primitive::Short).array, count);
+                    auto reference = Heap::get().new_array<s2>(BootstrapClassLoader::primitive(Primitive::Short).array,
+                                                               count);
                     frame.push<Reference>(reference);
                     break;
                 }
                 case ArrayPrimitiveTypes::T_LONG: {
-                    auto reference = Heap::get().new_array<s8>(BootstrapClassLoader::primitive(Primitive::Long).array, count);
+                    auto reference = Heap::get().new_array<s8>(BootstrapClassLoader::primitive(Primitive::Long).array,
+                                                               count);
                     frame.push<Reference>(reference);
                     break;
                 }
