@@ -3,10 +3,13 @@
 #include <iostream>
 #include <map>
 #include <cstdio>
+#include <locale>
+#include <codecvt>
 
 #include "jvm.h"
 #include "classloading.hpp"
 #include "util.hpp"
+#include "data.hpp"
 
 // This file was created from the function declarations in jvm.h.
 // FIND: (JNICALL\s+)(JVM_[^(\s]*)([^;]*);
@@ -215,7 +218,7 @@ JVM_InitProperties(JNIEnv *env, jobject properties) {
     assert(method);
 
     std::map<std::u16string, std::u16string> props{};
-    props[u"java.home"] = u"/Library/Java/JavaVirtualMachines/openjdk-11.jdk/Contents/Home";
+    props[u"java.home"] = std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t>{}.from_bytes(java_home);
 
     for (auto const &x : props) {
         auto key_str = env->NewString(reinterpret_cast<const jchar *>(x.first.c_str()),

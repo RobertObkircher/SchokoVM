@@ -39,6 +39,8 @@ JNI_GetDefaultJavaVMInitArgs(void *args) {
 extern const struct JNIInvokeInterface_ jni_invoke_interface;
 extern const struct JNINativeInterface_ jni_native_interface;
 
+std::string java_home{};
+
 _JNI_IMPORT_OR_EXPORT_ jint JNICALL
 JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
     auto *vm_args = static_cast<JavaVMInitArgs *>(args);
@@ -49,7 +51,6 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
 
     std::string bootclasspath{};
     std::string classpath{};
-    std::string java_home{};
 
     for (int i = 0; i < vm_args->nOptions; ++i) {
         std::string option{vm_args->options[i].optionString};

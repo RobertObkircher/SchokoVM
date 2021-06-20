@@ -98,7 +98,7 @@ add_library(jvm SHARED
         src/native.cpp src/native.hpp
         src/jni.cpp
         src/jvm.cpp
-        src/unsafe.cpp src/unsafe.hpp)
+        src/unsafe.cpp src/unsafe.hpp src/data.hpp)
 add_sanitizers(jvm)
 target_include_directories(jvm PRIVATE ${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/jdk/include)
 target_compile_options(jvm PRIVATE -Wno-unused-parameter)
