@@ -56,6 +56,7 @@ void Parser::parse(ClassFile &result) {
     u2 fields_count = eat_u2();
     for (int i = 0; i < fields_count; ++i) {
         field_info field_info;
+        field_info.clazz = result.this_class;
         field_info.access_flags = eat_u2();
         field_info.name_index = &check_cp_range_and_type<CONSTANT_Utf8_info>(result.constant_pool, eat_u2());
         field_info.descriptor_index = &check_cp_range_and_type<CONSTANT_Utf8_info>(result.constant_pool, eat_u2());

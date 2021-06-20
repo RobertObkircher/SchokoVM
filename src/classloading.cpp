@@ -402,20 +402,28 @@ Result resolve_class(CONSTANT_Class_info *class_info) {
     return ResultOk;
 }
 
-void resolve_field(ClassFile *clazz, CONSTANT_Fieldref_info *fieldref_info, Reference &exception) {
+Result resolve_field(ClassFile *clazz, CONSTANT_Fieldref_info *fieldref_info, Reference &exception) {
     assert(!fieldref_info->resolved);
 
     field_info *info = find_field(clazz, fieldref_info->name_and_type->name->value,
                                   fieldref_info->name_and_type->descriptor->value, exception);
     if (exception != JAVA_NULL) {
-        return;
+        return Exception;
     }
 
     fieldref_info->resolved = true;
     fieldref_info->is_boolean = info->descriptor_index->value == "Z";
     fieldref_info->is_static = info->is_static();
+    if (info->clazz->clazz == nullptr) {
+        if (resolve_class(info->clazz)) {
+            return Exception;
+        }
+    }
+    fieldref_info->value_clazz = info->clazz->clazz;
     fieldref_info->index = info->index;
     fieldref_info->category = info->category;
+
+    return ResultOk;
 }
 
 field_info *find_field_recursive(ClassFile *clazz, std::string_view name, std::string_view descriptor) {

@@ -116,7 +116,7 @@ Result resolve_class(CONSTANT_Class_info *class_info);
 
 field_info *find_field(ClassFile *clazz, std::string_view name, std::string_view descriptor, Reference &exception);
 
-void resolve_field(ClassFile *clazz, CONSTANT_Fieldref_info *fieldref_info, Reference &exception);
+Result resolve_field(ClassFile *clazz, CONSTANT_Fieldref_info *fieldref_info, Reference &exception);
 
 
 #endif //SCHOKOVM_CLASSLOADING_HPP

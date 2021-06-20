@@ -105,6 +105,8 @@ struct CONSTANT_Fieldref_info {
     bool is_boolean;
     bool is_static;
     ValueCategory category;
+    // Might be a superclass of class_
+    ClassFile *value_clazz;
     size_t index;
 };
 
@@ -237,6 +239,7 @@ struct field_info {
     CONSTANT_Utf8_info *descriptor_index;
     std::vector<attribute_info> attributes;
 
+    CONSTANT_Class_info* clazz;
     size_t index;
     ValueCategory category;
 

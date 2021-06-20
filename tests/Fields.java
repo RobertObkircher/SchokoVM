@@ -116,6 +116,8 @@ public class Fields {
 
         // initial static values
         MyStatic.print();
+        println(MyStaticSub.b);
+        println(MyStaticSub.i);
 
         MyStatic.b = 2;
         MyStatic.s = 3;
@@ -123,11 +125,9 @@ public class Fields {
         MyStatic.i = 5;
         MyStatic.f = 6f;
         MyStatic.l = 7L;
-        MyStatic.d = 8.0;
         MyStatic.next = object1;
 
-        println(MyStaticSub.b);
-        println(MyStaticSub.i);
+        MyStaticSub.d = 8.0;
 
         // changed static values
         MyStatic.print();
