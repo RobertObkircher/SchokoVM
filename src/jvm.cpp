@@ -1469,7 +1469,11 @@ jio_vsnprintf(char *str, size_t count, const char *fmt, va_list args) {
     // unsigned; see bug 4399518, 4417214
     if ((intptr_t) count <= 0) return -1;
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
     int result = vsnprintf(str, count, fmt, args);
+#pragma clang diagnostic pop
+
     if (result > 0 && (size_t) result >= count) {
         str[count - 1] = 0;
         result = -1;
@@ -1503,7 +1507,10 @@ jio_fprintf(FILE *f, const char *fmt, ...) {
 JNIEXPORT int
 jio_vfprintf(FILE *f, const char *fmt, va_list args) {
     LOG("jio_vfprintf");
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
     return vfprintf(f, fmt, args);
+#pragma clang diagnostic pop
 }
 
 
