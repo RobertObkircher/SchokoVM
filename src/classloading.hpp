@@ -109,6 +109,8 @@ inline Result initialize_class(ClassFile *C, Thread &thread, Frame &frame) {
 }
 
 
+Result resolve_class(ClassFile *clazz);
+
 /**
  * Throws if the class was not found
  */

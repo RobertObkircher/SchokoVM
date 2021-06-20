@@ -336,6 +336,49 @@ Result initialize_class(ClassFile *C, Thread &thread) {
     return Exception;
 }
 
+Result resolve_class(ClassFile *clazz) {
+    if (clazz->resolved) {
+        return ResultOk;
+    }
+
+    for (const auto &field : clazz->fields) {
+        if (!field.is_static())
+            ++clazz->declared_instance_field_count;
+    }
+
+    size_t parent_instance_field_count = 0;
+    if (clazz->super_class == nullptr && clazz->super_class_ref != nullptr) {
+        if (resolve_class(clazz->super_class_ref))
+            return Exception;
+
+        clazz->super_class = clazz->super_class_ref->clazz;
+        parent_instance_field_count = clazz->super_class->total_instance_field_count;
+    }
+
+    // instance and static fields
+    clazz->total_instance_field_count = clazz->declared_instance_field_count + parent_instance_field_count;
+    for (size_t static_index = 0, instance_index = parent_instance_field_count; auto &field : clazz->fields) {
+        if (field.is_static()) {
+            // used to index into clazz->static_field_values
+            field.index = static_index++;
+        } else {
+            // used to index into instance fields
+            field.index = instance_index++;
+        }
+        field.category = (field.descriptor_index->value == "D" || field.descriptor_index->value == "J")
+                         ? ValueCategory::C2 : ValueCategory::C1;
+    }
+    clazz->static_field_values.resize(clazz->fields.size() - clazz->declared_instance_field_count);
+
+    for (auto &interface : clazz->interfaces) {
+        if (resolve_class(interface))
+            return Exception;
+    }
+
+    clazz->resolved = true;
+    clazz->this_class->clazz = clazz;
+    return ResultOk;
+}
 
 Result resolve_class(CONSTANT_Class_info *class_info) {
     if (class_info->clazz == nullptr) {
@@ -353,47 +396,10 @@ Result resolve_class(CONSTANT_Class_info *class_info) {
             throw std::runtime_error("class not found: '" + name + "'");
         }
 
-        if (clazz->resolved) {
-            class_info->clazz = clazz;
-            return ResultOk;
+        if (resolve_class(clazz) == Exception) {
+            return Exception;
         }
 
-        for (const auto &field : clazz->fields) {
-            if (!field.is_static())
-                ++clazz->declared_instance_field_count;
-        }
-
-        size_t parent_instance_field_count = 0;
-        if (clazz->super_class == nullptr && clazz->super_class_ref != nullptr) {
-            if (resolve_class(clazz->super_class_ref))
-                return Exception;
-
-            clazz->super_class = clazz->super_class_ref->clazz;
-            parent_instance_field_count = clazz->super_class->total_instance_field_count;
-        }
-
-        // instance and static fields
-        clazz->total_instance_field_count = clazz->declared_instance_field_count + parent_instance_field_count;
-        for (size_t static_index = 0, instance_index = parent_instance_field_count; auto &field : clazz->fields) {
-            if (field.is_static()) {
-                // used to index into clazz->static_field_values
-                field.index = static_index++;
-            } else {
-                // used to index into instance fields
-                field.index = instance_index++;
-            }
-            field.category = (field.descriptor_index->value == "D" || field.descriptor_index->value == "J")
-                             ? ValueCategory::C2 : ValueCategory::C1;
-        }
-        clazz->static_field_values.resize(clazz->fields.size() - clazz->declared_instance_field_count);
-
-        for (auto &interface : clazz->interfaces) {
-            if (resolve_class(interface))
-                return Exception;
-        }
-
-        clazz->resolved = true;
-        clazz->this_class->clazz = clazz;
         class_info->clazz = clazz;
     }
     return ResultOk;

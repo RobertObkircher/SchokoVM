@@ -329,13 +329,13 @@ jmethodID GetMethodID
     auto *thread = static_cast<Thread *>(env->functions->reserved0);
     auto *clazz = (ClassFile *) cls;
 
-    // TODO "GetMethodID() causes an uninitialized class to be initialized."
-//    if (resolve_class(declared_method_ref.class_)) {
-//        return;
-//    }
+    if (resolve_class(clazz) == Exception)
+        return nullptr;
+
+    if (initialize_class(clazz, *thread) == Exception)
+        return nullptr;
 
     auto result = method_resolution(clazz, name, sig);
-
     return reinterpret_cast<jmethodID>(result);
 }
 
