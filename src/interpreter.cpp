@@ -1010,14 +1010,6 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 method_ref = &std::get_if<CONSTANT_InterfaceMethodref_info>(&ref)->method;
             }
 
-            // TODO we can't run this until we have strings (and whatever else Exception requires)
-            if (method_ref->class_->name->value == "java/lang/Exception" &&
-                method_ref->name_and_type->name->value == "<init>") {
-                frame.pop<Reference>();
-                frame.pc += 2;
-                break;
-            }
-
             method_info *method = method_ref->method;
             ClassFile *clazz = method_ref->class_->clazz;
 

@@ -325,7 +325,8 @@ JVM_GetVmArguments(JNIEnv *env) {
  */
 JNIEXPORT void JNICALL
 JVM_FillInStackTrace(JNIEnv *env, jobject throwable) {
-    UNIMPLEMENTED("JVM_FillInStackTrace");
+    LOG("JVM_FillInStackTrace");
+    // TODO FillInStackTrace
 }
 
 /*
