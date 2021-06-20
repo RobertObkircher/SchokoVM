@@ -986,7 +986,9 @@ JVM_GetStackAccessControlContext(JNIEnv *env, jclass cls) {
 
 JNIEXPORT void *JNICALL
 JVM_RegisterSignal(jint sig, void *handler) {
-    UNIMPLEMENTED("JVM_RegisterSignal");
+    LOG("JVM_RegisterSignal");
+    // TODO ?
+    return nullptr;
 }
 
 JNIEXPORT jboolean JNICALL
@@ -996,7 +998,8 @@ JVM_RaiseSignal(jint sig) {
 
 JNIEXPORT jint JNICALL
 JVM_FindSignal(const char *name) {
-    UNIMPLEMENTED("JVM_FindSignal");
+    LOG("JVM_FindSignal");
+    return get_signal_number(name);
 }
 
 /*
