@@ -75,6 +75,8 @@ public class Fields {
         }
     }
 
+    class MyStaticSub extends MyStatic {}
+
     public static void main(String[] args) {
         MyObject object1 = new MyObject();
 
@@ -123,6 +125,9 @@ public class Fields {
         MyStatic.l = 7L;
         MyStatic.d = 8.0;
         MyStatic.next = object1;
+
+        println(MyStaticSub.b);
+        println(MyStaticSub.i);
 
         // changed static values
         MyStatic.print();
