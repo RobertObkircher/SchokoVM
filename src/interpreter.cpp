@@ -1064,12 +1064,6 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 // Ignore for now
                 frame.pc += 2;
                 break;
-            } else if (method_ref->class_->name->value == "java/lang/StringUTF16" &&
-                       method_ref->name_and_type->name->value == "isBigEndian" &&
-                       method_ref->name_and_type->descriptor->value == "()Z") {
-                frame.pc += 2;
-                frame.push<s1>(std::endian::native == std::endian::big ? 1 : 0); // NOLINT
-                break;
             }
 
             method_info *method = method_ref->method;
