@@ -168,6 +168,7 @@ set(JAVA_TEST_SOURCES
         tests/ExceptionsInheritance.java
         tests/Fields.java
         tests/Initialization.java
+        tests/InvokeMethodHandle.java
         tests/InvokeStatic.java
         tests/Instanceof.java
         # tests/KarelTheRobot.java
