@@ -951,12 +951,12 @@ jint RegisterNatives
         if (method_iter == java_class->methods.end()) {
             // TODO error
             std::cerr << "not found" << "\n";
-            return -1;
+            return JNI_ERR;
         }
 
         method_iter->native_function = NativeFunction{&*method_iter, ptr};
     }
-    return 1;
+    return JNI_OK;
 }
 
 jint UnregisterNatives
