@@ -14,7 +14,7 @@ inline void throw_it(Thread &thread, Reference it) {
 }
 
 inline void throw_it(Thread &thread, Frame &frame, Reference it) {
-    thread.stack.frames.push_back(frame);
+    thread.stack.push_frame(frame);
     throw_it(thread, it);
 }
 

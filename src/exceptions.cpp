@@ -7,7 +7,7 @@
 #include "exceptions.hpp"
 
 void throw_new(Thread &thread, Frame &frame, const char *name) {
-    thread.stack.frames.push_back(frame);
+    thread.stack.push_frame(frame);
     throw_new(thread, name);
 }
 

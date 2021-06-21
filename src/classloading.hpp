@@ -126,12 +126,11 @@ inline Result initialize_class(ClassFile *C, Thread &thread, Frame &frame) {
     if (C->is_initialized) {
         return ResultOk;
     }
-    thread.stack.frames.push_back(frame);
+    thread.stack.push_frame(frame);
 
     auto result = initialize_class(C, thread);
 
-    frame = thread.stack.frames[thread.stack.frames.size() - 1];
-    thread.stack.frames.pop_back();
+    frame = thread.stack.pop_frame();
 
     return result;
 }

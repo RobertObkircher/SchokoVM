@@ -1413,8 +1413,7 @@ static void handle_throw(Thread &thread, Frame &frame, Reference exception, bool
     auto obj = exception.object();
 
     // The current frame must always be on the stack after an exception is thrown
-    frame = thread.stack.frames[thread.stack.frames.size() - 1];
-    thread.stack.frames.pop_back();
+    frame = thread.stack.pop_frame();
 
     for (;;) {
         auto &exception_table = frame.method->code_attribute->exception_table;
@@ -1465,8 +1464,7 @@ static void pop_frame(Thread &thread, Frame &frame, bool &should_exit) {
     if (frame.is_root_frame) {
         should_exit = true;
     } else {
-        frame = thread.stack.frames.back();
-        thread.stack.frames.pop_back();
+        frame = thread.stack.pop_frame();
 
         if (thread.current_exception == JAVA_NULL) {
             frame.pc += frame.invoke_length;
@@ -1705,7 +1703,7 @@ method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_inf
 
 void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &frame, bool &should_exit) {
     // during native calls we push the current frame
-    thread.stack.frames.push_back(frame);
+    thread.stack.push_frame(frame);
 
     if (!method->native_function) {
         auto *function_pointer = get_native_function_pointer(clazz, method);
@@ -1743,8 +1741,7 @@ void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &f
         frame.locals[0] = return_value;
     }
 
-    frame = thread.stack.frames[thread.stack.frames.size() - 1];
-    thread.stack.frames.pop_back();
+    frame = thread.stack.pop_frame();
     pop_frame(thread, frame, should_exit);
 }
 
