@@ -165,7 +165,6 @@ set(JAVA_TEST_SOURCES
         tests/ExceptionsExitNested.java
         tests/ExceptionsInheritance.java
         tests/Fields.java
-        tests/HelloWorld.java
         tests/Initialization.java
         tests/InvokeStatic.java
         tests/Instanceof.java
@@ -235,17 +234,22 @@ add_custom_command(
 )
 
 # https://cmake.org/cmake/help/latest/module/UseJava.html
-add_jar(tests ${JAVA_TEST_SOURCES} ${JAVA_TEST_GENERATED_SOURCES})
+add_jar(tests
+        ${JAVA_TEST_SOURCES}
+        tests/HelloWorld.java
+        ${JAVA_TEST_GENERATED_SOURCES})
 add_dependencies(jvm tests)
 
 enable_testing()
 # https://cmake.org/cmake/help/latest/command/add_test.html
 # https://cmake.org/cmake/help/latest/guide/tutorial/index.html#id11
-function(do_test path)
+function(do_test path args)
     get_filename_component(name ${path} NAME_WE)
-    add_test(NAME ${name} COMMAND sh "${CMAKE_SOURCE_DIR}/compare.sh" ${Java_JAVA_EXECUTABLE} ${name} ${JDK_HOME})
+    add_test(NAME ${name} COMMAND sh "${CMAKE_SOURCE_DIR}/compare.sh" ${Java_JAVA_EXECUTABLE} ${name} ${JDK_HOME} ${args})
 endfunction(do_test)
 
 foreach (source ${JAVA_TEST_SOURCES} ${JAVA_TEST_GENERATED_SOURCES})
-    do_test(${source})
+    do_test(${source} "")
 endforeach ()
+
+do_test(tests/HelloWorld.java "x yz u")
