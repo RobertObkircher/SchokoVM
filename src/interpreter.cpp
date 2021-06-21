@@ -33,9 +33,7 @@ static void goto_(Frame &frame);
 
 static void handle_throw(Thread &thread, Frame &frame, Reference exception, bool &should_exit);
 
-static inline void pop_frame(Thread &thread, Frame &frame);
-
-static void pop_frame_after_return(Thread &thread, Frame &frame, bool &should_exit);
+static void pop_frame(Thread &thread, Frame &frame, bool &should_exit);
 
 template<typename Element>
 void array_store(Thread &thread, Frame &frame);
@@ -865,7 +863,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             }
             // fallthrough
         case OpCodes::return_: {
-            pop_frame_after_return(thread, frame, should_exit);
+            pop_frame(thread, frame, should_exit);
             return;
         }
 
@@ -1447,64 +1445,10 @@ static void handle_throw(Thread &thread, Frame &frame, Reference exception, bool
         );
 
         if (handler_iter == std::end(exception_table)) {
-            // TODO the then branch should just be the same as the else branch once the jdk can print this
-            if (thread.stack.frames.empty()) {
-                // Bubbled to the top, no exception handler was found, so exit thread
-
-                std::string message = "Exception in thread \"main\" ";
-                message.append(obj->clazz->name());
-                message.append("\n");
-                for (const Frame &f : stack_trace) {
-                    message.append("\tat ");
-                    message.append(f.clazz->name());
-                    message.append(".");
-                    message.append(f.method->name_index->value);
-
-                    auto source_file = std::find_if(f.clazz->attributes.begin(), f.clazz->attributes.end(),
-                                                    [](const attribute_info &a) {
-                                                        return std::holds_alternative<SourceFile_attribute>(a.variant);
-                                                    });
-                    // TODO there can be multiple LNT attributes
-                    auto line_numbers_iter = std::find_if(f.method->code_attribute->attributes.begin(),
-                                                          f.method->code_attribute->attributes.end(),
-                                                          [](const attribute_info &a) {
-                                                              return std::holds_alternative<LineNumberTable_attribute>(
-                                                                      a.variant);
-                                                          });
-                    message.append("(");
-                    if (source_file != std::end(f.clazz->attributes) &&
-                        line_numbers_iter != std::end(f.method->code_attribute->attributes)) {
-                        auto &line_number_table = std::get<LineNumberTable_attribute>(
-                                line_numbers_iter->variant).line_number_table;
-                        message.append(std::get<SourceFile_attribute>(source_file->variant).sourcefile_index->value);
-                        message.append(":");
-                        // NOLINTNEXTLINE
-                        for (auto entry = line_number_table.rbegin(); entry != line_number_table.rend(); ++entry) {
-                            if (entry->start_pc <= f.pc) {
-                                message.append(std::to_string(entry->line_number));
-                                break;
-                            }
-                        }
-                    } else {
-                        message.append(std::to_string(f.pc));
-                    }
-                    message.append(")\n");
-                }
-                std::cerr << message;
-
-                frame.clear();
-                frame.push<s4>(1);
-                exit(EXIT_FAILURE);
+            pop_frame(thread, frame, should_exit);
+            if (should_exit) {
+                // the native caller has to deal with thread.current_exception
                 return;
-            } else {
-                if (frame.is_root_frame) {
-                    // the native caller has to deal with thread.current_exception
-                    should_exit = true;
-                    return;
-                }
-                pop_frame(thread, frame);
-                frame.clear();
-                continue;
             }
         } else {
             // Push exception back on stack, continue normal execution.
@@ -1517,19 +1461,18 @@ static void handle_throw(Thread &thread, Frame &frame, Reference exception, bool
     }
 }
 
-static inline void pop_frame(Thread &thread, Frame &frame) {
+static void pop_frame(Thread &thread, Frame &frame, bool &should_exit) {
     thread.stack.memory_used = frame.previous_stack_memory_usage;
-    frame = thread.stack.frames.back();
-    thread.stack.frames.pop_back();
-}
 
-static void pop_frame_after_return(Thread &thread, Frame &frame, bool &should_exit) {
     if (frame.is_root_frame) {
-        thread.stack.memory_used = frame.previous_stack_memory_usage;
         should_exit = true;
     } else {
-        pop_frame(thread, frame);
-        frame.pc += frame.invoke_length;
+        frame = thread.stack.frames.back();
+        thread.stack.frames.pop_back();
+
+        if (thread.current_exception == JAVA_NULL) {
+            frame.pc += frame.invoke_length;
+        }
     }
 }
 
@@ -1799,6 +1742,6 @@ void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &f
         frame.locals[0] = return_value;
     }
 
-    pop_frame_after_return(thread, frame, should_exit);
+    pop_frame(thread, frame, should_exit);
 }
 

@@ -5,9 +5,11 @@
 #include <cstdio>
 #include <locale>
 #include <codecvt>
+#include <openssl/ossl_typ.h>
 
 #include "jvm.h"
 #include "classloading.hpp"
+#include "exceptions.hpp"
 #include "util.hpp"
 #include "data.hpp"
 
@@ -326,7 +328,9 @@ JVM_GetVmArguments(JNIEnv *env) {
 JNIEXPORT void JNICALL
 JVM_FillInStackTrace(JNIEnv *env, jobject throwable) {
     LOG("JVM_FillInStackTrace");
-    // TODO FillInStackTrace
+    auto thread = reinterpret_cast<Thread *>(env->functions->reserved0);
+    Reference ref{throwable};
+    fill_in_stack_trace(thread->stack, ref);
 }
 
 /*
@@ -334,7 +338,10 @@ JVM_FillInStackTrace(JNIEnv *env, jobject throwable) {
  */
 JNIEXPORT void JNICALL
 JVM_InitStackTraceElementArray(JNIEnv *env, jobjectArray elements, jobject throwable) {
-    UNIMPLEMENTED("JVM_InitStackTraceElementArray");
+    LOG("JVM_InitStackTraceElementArray");
+    Reference elements_ref{elements};
+    Reference throwable_ref{throwable};
+    init_stack_trace_element_array(elements_ref, throwable_ref);
 }
 
 JNIEXPORT void JNICALL

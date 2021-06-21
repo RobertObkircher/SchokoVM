@@ -26,6 +26,6 @@ diff --side-by-side --text "$R_STATUS" "$S_STATUS" || X=1
 echo "============================== stdout =============================="
 diff --side-by-side --text "$R_OUT" "$S_OUT"       || X=1
 echo "============================== stderr =============================="
-diff                --text "$R_ERR" "$S_ERR"       || X=1
+diff --side-by-side --text "$R_ERR" "$S_ERR"       || X=1
 echo "===================================================================="
 exit "$X"

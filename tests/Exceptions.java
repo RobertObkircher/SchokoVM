@@ -9,6 +9,7 @@ public class Exceptions {
     public static void crash() throws CustomException {
         CustomException e = new CustomException();
         e.code = 123;
+        e.printStackTrace();
         throw e;
     }
 
@@ -29,6 +30,7 @@ public class Exceptions {
             crash();
         } catch (CustomException e){
             println(e.code);
+            e.printStackTrace();
         }
     }
 
@@ -54,6 +56,7 @@ public class Exceptions {
         } catch (NullPointerException npe) {
             println("Got a npe: ");
             println(npe.toString());
+            npe.printStackTrace();
         }
     }
 }

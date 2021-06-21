@@ -261,20 +261,20 @@ jint ThrowNew
     UNIMPLEMENTED("ThrowNew");
 }
 
-jthrowable ExceptionOccurred
-        (JNIEnv *env) {
+jthrowable ExceptionOccurred(JNIEnv *env) {
     LOG("ExceptionOccurred");
-    return nullptr;
+    auto *thread = static_cast<Thread *>(env->functions->reserved0);
+    return (jthrowable) thread->current_exception.memory;
 }
 
-void ExceptionDescribe
-        (JNIEnv *env) {
+void ExceptionDescribe(JNIEnv *env) {
     UNIMPLEMENTED("ExceptionDescribe");
 }
 
-void ExceptionClear
-        (JNIEnv *env) {
-    UNIMPLEMENTED("ExceptionClear");
+void ExceptionClear(JNIEnv *env) {
+    LOG("ExceptionClear");
+    auto *thread = static_cast<Thread *>(env->functions->reserved0);
+    thread->current_exception = JAVA_NULL;
 }
 
 void FatalError
