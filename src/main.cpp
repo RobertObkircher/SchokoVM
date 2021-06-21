@@ -8,7 +8,6 @@
 #include "classloading.hpp"
 #include "jni.h"
 #include "jvm.h"
-#include "classloading.hpp"
 #include "interpreter.hpp"
 
 int main(int argc, char *argv[]) {

@@ -9,10 +9,6 @@
 void throw_new(Thread &thread, Frame &frame, const char *name) {
     thread.stack.frames.push_back(frame);
     throw_new(thread, name);
-
-    // TODO handle_throw should do this
-    frame = thread.stack.frames[thread.stack.frames.size() - 1];
-    thread.stack.frames.pop_back();
 }
 
 void throw_new(Thread &thread, const char *name) {
@@ -33,11 +29,6 @@ void throw_new(Thread &thread, const char *name) {
     }
 
     Reference ref = Heap::get().new_instance(clazz);
-
-    // TODO what if heap allocation fails?
-    // TODO call constructor
-    // TODO jni Throw, ThrowNew, NewObject
-
     jmethodID init = thread.jni_env->GetMethodID((jclass) clazz, "<init>", "()V");
     if (init == nullptr) {
         throw std::runtime_error("Couldn't find <init>");
@@ -51,11 +42,10 @@ void fill_in_stack_trace(Stack &stack, Reference throwable) {
     assert(throwable != JAVA_NULL);
     assert(throwable.object()->clazz->is_subclass_of(BootstrapClassLoader::constants().java_lang_Throwable));
 
-    // ignore the frames for fillInStackTrace and for the exception initializers
-    size_t ignored = 1;
-    for (auto i = static_cast<ssize_t>(stack.frames.size() - 2); i >= 0; --i) {
+    size_t ignored = 2; // fillInStackTrace (native method) + Throwable.fillInStackTrace (non native method)
+    for (auto i = static_cast<ssize_t>(stack.frames.size() - 1 - ignored); i >= 0; --i) {
         if (stack.frames[static_cast<size_t>(i)].method->name_index->value == "<init>") {
-            ++ignored;
+            ++ignored; // ignore Throwable/Exception initializers
         } else {
             break;
         }

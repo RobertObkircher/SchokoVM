@@ -1235,8 +1235,8 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             if (value == JAVA_NULL) {
                 return throw_new(thread, frame, Names::java_lang_NullPointerException);
             }
-            thread.current_exception = value;
-            return;
+            // TODO performance: we could call a version of handle_throw that doesn't expect "frame" to be on the stack
+            return throw_it(thread, frame, value);
         }
 
         case OpCodes::checkcast: {
@@ -1410,15 +1410,13 @@ static void goto_(Frame &frame) {
 
 static void handle_throw(Thread &thread, Frame &frame, Reference exception, bool &should_exit) {
     assert(exception != JAVA_NULL);
-
     auto obj = exception.object();
-    // TODO this is actually wrong, the stack should be generated when the Throwable is constructed
-    std::vector<Frame> stack_trace;
 
-    // TODO if a native frame is on the stack or if we reach the top we should set should_exit to true and return without printing anything.
+    // The current frame must always be on the stack after an exception is thrown
+    frame = thread.stack.frames[thread.stack.frames.size() - 1];
+    thread.stack.frames.pop_back();
 
     for (;;) {
-        stack_trace.push_back(frame);
         auto &exception_table = frame.method->code_attribute->exception_table;
 
         auto handler_iter = std::find_if(exception_table.begin(),
@@ -1706,6 +1704,9 @@ method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_inf
 }
 
 void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &frame, bool &should_exit) {
+    // during native calls we push the current frame
+    thread.stack.frames.push_back(frame);
+
     if (!method->native_function) {
         auto *function_pointer = get_native_function_pointer(clazz, method);
         if (function_pointer == nullptr) {
@@ -1742,6 +1743,8 @@ void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &f
         frame.locals[0] = return_value;
     }
 
+    frame = thread.stack.frames[thread.stack.frames.size() - 1];
+    thread.stack.frames.pop_back();
     pop_frame(thread, frame, should_exit);
 }
 
