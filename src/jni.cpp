@@ -692,7 +692,10 @@ jsize GetArrayLength
 
 jobjectArray NewObjectArray
         (JNIEnv *env, jsize len, jclass clazz, jobject init) {
-    UNIMPLEMENTED("NewObjectArray");
+    LOG("NewObjectArray");
+    return reinterpret_cast<jobjectArray>(
+            Heap::get().new_array<Reference>(reinterpret_cast<ClassFile *>(clazz), len).memory
+    );
 }
 
 jobject GetObjectArrayElement
@@ -702,7 +705,9 @@ jobject GetObjectArrayElement
 
 void SetObjectArrayElement
         (JNIEnv *env, jobjectArray array, jsize index, jobject val) {
-    UNIMPLEMENTED("SetObjectArrayElement");
+    LOG("SetObjectArrayElement");
+    auto ref = Reference{array};
+    ref.data<Reference>()[index] = Reference{val};
 }
 
 jbooleanArray NewBooleanArray
