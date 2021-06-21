@@ -56,7 +56,7 @@ Value interpret(Thread &thread, ClassFile *main, method_info *method) {
         return Value();
     }
 
-    [[maybe_unused]] auto frames = thread.stack.parent_frames.size();
+    [[maybe_unused]] auto frames = thread.stack.frames.size();
     [[maybe_unused]] auto memory_used = thread.stack.memory_used;
     Frame frame{thread.stack, main, method, thread.stack.memory_used, true};
 
@@ -81,7 +81,7 @@ Value interpret(Thread &thread, ClassFile *main, method_info *method) {
         }
     }
 
-    assert(thread.stack.parent_frames.size() == frames);
+    assert(thread.stack.frames.size() == frames);
     assert(thread.stack.memory_used == memory_used);
 
     return method->return_category == 0 ? Value() : frame.locals[0];
@@ -1448,7 +1448,7 @@ static void handle_throw(Thread &thread, Frame &frame, Reference exception, bool
 
         if (handler_iter == std::end(exception_table)) {
             // TODO the then branch should just be the same as the else branch once the jdk can print this
-            if (thread.stack.parent_frames.empty()) {
+            if (thread.stack.frames.empty()) {
                 // Bubbled to the top, no exception handler was found, so exit thread
 
                 std::string message = "Exception in thread \"main\" ";
@@ -1519,8 +1519,8 @@ static void handle_throw(Thread &thread, Frame &frame, Reference exception, bool
 
 static inline void pop_frame(Thread &thread, Frame &frame) {
     thread.stack.memory_used = frame.previous_stack_memory_usage;
-    frame = thread.stack.parent_frames.back();
-    thread.stack.parent_frames.pop_back();
+    frame = thread.stack.frames.back();
+    thread.stack.frames.pop_back();
 }
 
 static void pop_frame_after_return(Thread &thread, Frame &frame, bool &should_exit) {
