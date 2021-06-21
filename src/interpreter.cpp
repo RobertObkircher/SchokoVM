@@ -1,13 +1,12 @@
 #include "interpreter.hpp"
 
-#include <locale>
-#include <codecvt>
 #include <limits>
 #include <string>
 #include <iostream>
 #include <cmath>
 #include <cstdlib>
 
+#include "exceptions.hpp"
 #include "opcodes.hpp"
 #include "future.hpp"
 #include "math.hpp"
@@ -31,8 +30,6 @@ static void execute_instruction(Thread &thread, Frame &frame, bool &should_exit)
 static void execute_comparison(Frame &frame, bool condition);
 
 static void goto_(Frame &frame);
-
-static void throw_new(Thread &thread, Frame &frame, const char *name);
 
 static void handle_throw(Thread &thread, Frame &frame, Reference exception, bool &should_exit);
 
@@ -1412,31 +1409,6 @@ static void goto_(Frame &frame) {
     frame.pc = static_cast<size_t>(static_cast<long>(frame.pc) + offset);
 }
 
-static void throw_new(Thread &thread, Frame &frame, const char *name) {
-    ClassFile *clazz = BootstrapClassLoader::get().load(name);
-    if (clazz == nullptr) {
-        std::cerr << "Attempted to throw unknown class " << name << "\n";
-        abort();
-    }
-
-    if (resolve_class(clazz->this_class)) {
-        return;
-    }
-
-    assert(clazz->is_subclass_of(BootstrapClassLoader::constants().java_lang_Throwable));
-
-    if (initialize_class(clazz, thread, frame)) {
-        return;
-    }
-
-    Reference ref = Heap::get().new_instance(clazz);
-
-    // TODO what if heap allocation fails?
-    // TODO call constructor
-    // TODO jni Throw, ThrowNew, NewObject
-
-    thread.current_exception = ref;
-}
 
 static void handle_throw(Thread &thread, Frame &frame, Reference exception, bool &should_exit) {
     assert(exception != JAVA_NULL);
