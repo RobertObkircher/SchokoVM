@@ -44,6 +44,7 @@ struct Primitive {
 namespace Names {
     using ccc = const char *const;
     ccc java_io_Serializable = "java/io/Serializable";
+    ccc java_lang_ArithmeticException = "java/lang/ArithmeticException";
     ccc java_lang_Boolean = "java/lang/Boolean";
     ccc java_lang_Byte = "java/lang/Byte";
     ccc java_lang_Character = "java/lang/Character";

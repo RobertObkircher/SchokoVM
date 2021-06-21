@@ -476,8 +476,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             auto divisor = frame.pop<s4>();
             auto dividend = frame.pop<s4>();
             if (divisor == 0) {
-                // TODO ArithmeticException
-                throw std::runtime_error("Division by 0");
+                return throw_new_ArithmeticException_division_by_zero(thread, frame);
             }
             frame.push<s4>(div_overflow(dividend, divisor));
             break;
@@ -486,8 +485,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             auto divisor = frame.pop<s8>();
             auto dividend = frame.pop<s8>();
             if (divisor == 0) {
-                // TODO ArithmeticException
-                throw std::runtime_error("Division by 0");
+                return throw_new_ArithmeticException_division_by_zero(thread, frame);
             }
             frame.push<s8>(div_overflow(dividend, divisor));
             break;
@@ -495,20 +493,12 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         case OpCodes::fdiv: {
             auto divisor = frame.pop<float>();
             auto dividend = frame.pop<float>();
-            if (divisor == 0) {
-                // TODO ArithmeticException
-                throw std::runtime_error("Division by 0");
-            }
             frame.push<float>(dividend / divisor);
             break;
         }
         case OpCodes::ddiv: {
             auto divisor = frame.pop<double>();
             auto dividend = frame.pop<double>();
-            if (divisor == 0) {
-                // TODO ArithmeticException
-                throw std::runtime_error("Division by 0");
-            }
             frame.push<double>(dividend / divisor);
             break;
         }
@@ -517,8 +507,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             auto divisor = frame.pop<s4>();
             auto dividend = frame.pop<s4>();
             if (divisor == 0) {
-                // TODO ArithmeticException
-                throw std::runtime_error("Division by 0");
+                return throw_new_ArithmeticException_division_by_zero(thread, frame);
             }
             auto result = dividend - mul_overflow(div_overflow(dividend, divisor), divisor);
             frame.push<s4>(result);
@@ -528,8 +517,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             auto divisor = frame.pop<s8>();
             auto dividend = frame.pop<s8>();
             if (divisor == 0) {
-                // TODO ArithmeticException
-                throw std::runtime_error("Division by 0");
+                return throw_new_ArithmeticException_division_by_zero(thread, frame);
             }
             auto result = dividend - mul_overflow(div_overflow(dividend, divisor), divisor);
             frame.push<s8>(result);
@@ -538,10 +526,6 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         case OpCodes::frem: {
             auto divisor = frame.pop<float>();
             auto dividend = frame.pop<float>();
-            if (divisor == 0) {
-                // TODO ArithmeticException
-                throw std::runtime_error("Division by 0");
-            }
             auto result = std::fmod(dividend, divisor);
             frame.push<float>(result);
             break;
@@ -549,10 +533,6 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         case OpCodes::drem: {
             auto divisor = frame.pop<double>();
             auto dividend = frame.pop<double>();
-            if (divisor == 0) {
-                // TODO ArithmeticException
-                throw std::runtime_error("Division by 0");
-            }
             auto result = std::fmod(dividend, divisor);
             frame.push<double>(result);
             break;

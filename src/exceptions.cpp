@@ -6,12 +6,12 @@
 #include "classloading.hpp"
 #include "exceptions.hpp"
 
-void throw_new(Thread &thread, Frame &frame, const char *name) {
+void throw_new(Thread &thread, Frame &frame, const char *name, const char *message) {
     thread.stack.push_frame(frame);
-    throw_new(thread, name);
+    throw_new(thread, name, message);
 }
 
-void throw_new(Thread &thread, const char *name) {
+void throw_new(Thread &thread, const char *name, const char *message) {
     ClassFile *clazz = BootstrapClassLoader::get().load(name);
     if (clazz == nullptr) {
         std::cerr << "Attempted to throw unknown class " << name << "\n";
@@ -29,11 +29,17 @@ void throw_new(Thread &thread, const char *name) {
     }
 
     Reference ref = Heap::get().new_instance(clazz);
-    jmethodID init = thread.jni_env->GetMethodID((jclass) clazz, "<init>", "()V");
+    jmethodID init = thread.jni_env->GetMethodID((jclass) clazz, "<init>",
+                                                 message == nullptr ? "()V" : "(Ljava/lang/String;)V");
     if (init == nullptr) {
         throw std::runtime_error("Couldn't find <init>");
     }
-    thread.jni_env->CallNonvirtualVoidMethod((jobject) ref.memory, (jclass) clazz, init);
+    if (message == nullptr) {
+        thread.jni_env->CallNonvirtualVoidMethod((jobject) ref.memory, (jclass) clazz, init);
+    } else {
+        auto string = Heap::get().make_string(message);
+        thread.jni_env->CallNonvirtualVoidMethod((jobject) ref.memory, (jclass) clazz, init, (jstring) string.memory);
+    }
 
     thread.current_exception = ref;
 }
@@ -110,7 +116,8 @@ static Reference init_stack_trace_element(Frame const &frame, Reference element)
         for (const auto &attribute : frame.method->code_attribute->attributes) {
             auto table = std::get_if<LineNumberTable_attribute>(&attribute.variant);
             if (table != nullptr) {
-                for (auto entry = table->line_number_table.rbegin(); entry != table->line_number_table.rend(); ++entry) {
+                for (auto entry = table->line_number_table.rbegin();
+                     entry != table->line_number_table.rend(); ++entry) {
                     if (entry->start_pc <= frame.pc) {
                         lineNumber = entry->line_number;
                         break;
@@ -141,4 +148,8 @@ void init_stack_trace_element_array(Reference elements, Reference throwable) {
         auto element = elements.data<Reference>()[i];
         init_stack_trace_element(frame, element);
     }
+}
+
+void throw_new_ArithmeticException_division_by_zero(Thread &thread, Frame &frame) {
+    throw_new(thread, frame, Names::java_lang_ArithmeticException, "/ by zero");
 }

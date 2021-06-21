@@ -5,7 +5,6 @@
 #include <cstdio>
 #include <locale>
 #include <codecvt>
-#include <openssl/ossl_typ.h>
 
 #include "jvm.h"
 #include "classloading.hpp"
