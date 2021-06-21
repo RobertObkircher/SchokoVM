@@ -7,6 +7,10 @@
 
 Heap Heap::the_heap;
 
+Reference Heap::clone(Reference const &object) {
+    return allocate_array<Value>(object.object()->clazz, object.object()->length);
+}
+
 Reference Heap::new_instance(ClassFile *clazz) {
     return allocate_array<Value>(clazz, (s4) clazz->total_instance_field_count);
 }

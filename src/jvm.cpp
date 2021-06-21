@@ -101,7 +101,20 @@ JVM_MonitorNotifyAll(JNIEnv *env, jobject obj) {
 
 JNIEXPORT jobject JNICALL
 JVM_Clone(JNIEnv *env, jobject obj) {
-    UNIMPLEMENTED("JVM_Clone");
+    LOG("JVM_Clone");
+    auto original = Reference{obj};
+
+    if (!original.object()->clazz->is_subclass_of(BootstrapClassLoader::constants().java_lang_Cloneable)) {
+        // TODO CloneNotSupportedException
+        throw std::runtime_error("TODO CloneNotSupportedException");
+    }
+
+    auto copy = Heap::get().clone(original);
+    for (s4 i = original.object()->length - 1; i >= 0; i--) {
+        copy.data<Value>()[i] = original.data<Value>()[i];
+    }
+
+    return reinterpret_cast<jobject>(copy.memory);
 }
 
 /*

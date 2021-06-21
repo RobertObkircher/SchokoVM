@@ -100,6 +100,9 @@ struct Heap {
     std::vector<std::unique_ptr<ClassFile>> classes;
     std::unordered_map<std::string, Reference> interned_strings;
 
+    // Returns an object of the same class and structure (length), but doens't copy any data
+    Reference clone(Reference const &object);
+
     Reference new_instance(ClassFile *clazz);
 
     template<typename Element>
