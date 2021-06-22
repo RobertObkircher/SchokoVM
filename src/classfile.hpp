@@ -824,17 +824,21 @@ struct ClassFile {
         if (this->super_class == other) {
             return true;
         }
-        for (auto &i: interfaces) {
-            if (i->clazz == other) {
-                return true;
+        if (other->is_interface()) {
+            for (auto &i: interfaces) {
+                if (i->clazz == other) {
+                    return true;
+                }
             }
         }
         if (this->super_class != nullptr && this->super_class->is_subclass_of(other)) {
             return true;
         }
-        for (auto &i: interfaces) {
-            if (i->clazz->is_subclass_of(other)) {
-                return true;
+        if (other->is_interface()) {
+            for (auto &i: interfaces) {
+                if (i->clazz->is_subclass_of(other)) {
+                    return true;
+                }
             }
         }
         return false;

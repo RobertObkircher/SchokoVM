@@ -41,6 +41,30 @@ struct Primitive {
     ClassFile *array{};
 };
 
+namespace Names {
+    using ccc = const char *const;
+    ccc java_io_Serializable = "java/io/Serializable";
+    ccc java_lang_ArithmeticException = "java/lang/ArithmeticException";
+    ccc java_lang_Boolean = "java/lang/Boolean";
+    ccc java_lang_Byte = "java/lang/Byte";
+    ccc java_lang_Character = "java/lang/Character";
+    ccc java_lang_Class = "java/lang/Class";
+    ccc java_lang_ClassCastException = "java/lang/ClassCastException";
+    ccc java_lang_Cloneable = "java/lang/Cloneable";
+    ccc java_lang_Double = "java/lang/Double";
+    ccc java_lang_Float = "java/lang/Float";
+    ccc java_lang_Integer = "java/lang/Integer";
+    ccc java_lang_Long = "java/lang/Long";
+    ccc java_lang_NullPointerException = "java/lang/NullPointerException";
+    ccc java_lang_Object = "java/lang/Object";
+    ccc java_lang_Short = "java/lang/Short";
+    ccc java_lang_String = "java/lang/String";
+    ccc java_lang_Thread = "java/lang/Thread";
+    ccc java_lang_ThreadGroup = "java/lang/ThreadGroup";
+    ccc java_lang_Throwable = "java/lang/Throwable";
+    ccc java_lang_Void = "java/lang/Void";
+};
+
 struct Constants {
     ClassFile *java_io_Serializable{};
 
@@ -50,17 +74,18 @@ struct Constants {
     ClassFile *java_lang_String{};
     ClassFile *java_lang_ThreadGroup{};
     ClassFile *java_lang_Thread{};
+    ClassFile *java_lang_Throwable{};
 
     Primitive primitives[Primitive::TYPE_COUNT] = {
-            {Primitive::Byte,    "byte",    nullptr, "java/lang/Byte",      nullptr, 'B', "[B", nullptr},
-            {Primitive::Char,    "char",    nullptr, "java/lang/Character", nullptr, 'C', "[C", nullptr},
-            {Primitive::Double,  "double",  nullptr, "java/lang/Double",    nullptr, 'D', "[D", nullptr},
-            {Primitive::Float,   "float",   nullptr, "java/lang/Float",     nullptr, 'F', "[F", nullptr},
-            {Primitive::Int,     "int",     nullptr, "java/lang/Integer",   nullptr, 'I', "[I", nullptr},
-            {Primitive::Long,    "long",    nullptr, "java/lang/Long",      nullptr, 'J', "[J", nullptr},
-            {Primitive::Short,   "short",   nullptr, "java/lang/Short",     nullptr, 'S', "[S", nullptr},
-            {Primitive::Boolean, "boolean", nullptr, "java/lang/Boolean",   nullptr, 'Z', "[Z", nullptr},
-            {Primitive::Void,    "void",    nullptr, "java/lang/Void",      nullptr, 'V', "[V", nullptr},
+            {Primitive::Byte,    "byte",    nullptr, Names::java_lang_Byte,      nullptr, 'B', "[B", nullptr},
+            {Primitive::Char,    "char",    nullptr, Names::java_lang_Character, nullptr, 'C', "[C", nullptr},
+            {Primitive::Double,  "double",  nullptr, Names::java_lang_Double,    nullptr, 'D', "[D", nullptr},
+            {Primitive::Float,   "float",   nullptr, Names::java_lang_Float,     nullptr, 'F', "[F", nullptr},
+            {Primitive::Int,     "int",     nullptr, Names::java_lang_Integer,   nullptr, 'I', "[I", nullptr},
+            {Primitive::Long,    "long",    nullptr, Names::java_lang_Long,      nullptr, 'J', "[J", nullptr},
+            {Primitive::Short,   "short",   nullptr, Names::java_lang_Short,     nullptr, 'S', "[S", nullptr},
+            {Primitive::Boolean, "boolean", nullptr, Names::java_lang_Boolean,   nullptr, 'Z', "[Z", nullptr},
+            {Primitive::Void,    "void",    nullptr, Names::java_lang_Void,      nullptr, 'V', "[V", nullptr},
     };
 
     void resolve_and_initialize(Thread &thread);
@@ -71,7 +96,9 @@ struct BootstrapClassLoader {
 
     static Constants const &constants() { return the_bootstrap_class_loader.m_constants; }
 
-    void resolve_and_initialize_constants(Thread &thread) { the_bootstrap_class_loader.m_constants.resolve_and_initialize(thread); }
+    void resolve_and_initialize_constants(Thread &thread) {
+        the_bootstrap_class_loader.m_constants.resolve_and_initialize(thread);
+    }
 
     static Primitive const &
     primitive(Primitive::Type id) { return the_bootstrap_class_loader.m_constants.primitives[id]; }
@@ -100,12 +127,11 @@ inline Result initialize_class(ClassFile *C, Thread &thread, Frame &frame) {
     if (C->is_initialized) {
         return ResultOk;
     }
-    thread.stack.parent_frames.push_back(frame);
+    thread.stack.push_frame(frame);
 
     auto result = initialize_class(C, thread);
 
-    frame = thread.stack.parent_frames[thread.stack.parent_frames.size() - 1];
-    thread.stack.parent_frames.pop_back();
+    frame = thread.stack.pop_frame();
 
     return result;
 }

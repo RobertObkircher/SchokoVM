@@ -111,9 +111,10 @@ public class Generator {
         for (int i : numbers) {
             w.println("        a = " + i + "; //////////////////////////////");
             for (int j : numbers) {
-                // TODO emit a try catch ArithmeticException instead
-                if (!((op == "/" || op == "%") && j == 0)) {
-                    w.println("        b = " + j + ";");
+                w.println("        b = " + j + ";");
+                if ((op == "/" || op == "%") && j == 0) {
+                    w.println("        try { c = a " + op + " b; println(-99442); } catch (ArithmeticException e) { e.printStackTrace(); }");
+                } else {
                     w.println("        c = a " + op + " b;");
                     w.println("        println(c);");
                 }
@@ -146,9 +147,10 @@ public class Generator {
         for (long i : numbers) {
             w.println("        a = " + i + "L; //////////////////////////////");
             for (long j : numbers) {
-                // TODO emit a try catch ArithmeticException instead
-                if (!((op == "/" || op == "%") && j == 0)) {
-                    w.println("        b = " + j + "L;");
+                w.println("        b = " + j + "L;");
+                if ((op == "/" || op == "%") && j == 0) {
+                    w.println("        try { c = a " + op + " b; println(-99442); } catch (ArithmeticException e) { e.printStackTrace(); }");
+                } else {
                     w.println("        c = a " + op + " b;");
                     w.println("        println(c);");
                 }
@@ -175,12 +177,9 @@ public class Generator {
         for (Object i : numbers) {
             w.println("        a = " + toLiteral(type, i) + "; //////////////////////////////");
             for (Object j : numbers) {
-                // TODO emit a try catch ArithmeticException instead
-                if (!((op == "/" || op == "%") && ((Number)j).doubleValue() == 0)) {
-                    w.println("        b = " + toLiteral(type, j) + ";");
-                    w.println("        c = a " + op + " b;");
-                    w.println("        println(c);");
-                }
+                w.println("        b = " + toLiteral(type, j) + ";");
+                w.println("        c = a " + op + " b;");
+                w.println("        println(c);");
             }
         }
         w.println(END_MAIN);

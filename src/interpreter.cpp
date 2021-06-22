@@ -1,13 +1,12 @@
 #include "interpreter.hpp"
 
-#include <locale>
-#include <codecvt>
 #include <limits>
 #include <string>
 #include <iostream>
 #include <cmath>
 #include <cstdlib>
 
+#include "exceptions.hpp"
 #include "opcodes.hpp"
 #include "future.hpp"
 #include "math.hpp"
@@ -32,17 +31,15 @@ static void execute_comparison(Frame &frame, bool condition);
 
 static void goto_(Frame &frame);
 
-static void handle_throw(Thread &thread, Frame &frame, Reference exception);
+static void handle_throw(Thread &thread, Frame &frame, Reference exception, bool &should_exit);
 
-static inline void pop_frame(Thread &thread, Frame &frame);
-
-static void pop_frame_after_return(Thread &thread, Frame &frame, bool &should_exit);
+static void pop_frame(Thread &thread, Frame &frame, bool &should_exit);
 
 template<typename Element>
-void array_store(Frame &frame);
+void array_store(Thread &thread, Frame &frame);
 
 template<typename Element>
-void array_load(Frame &frame);
+void array_load(Thread &thread, Frame &frame);
 
 void fill_multi_array(Reference &reference, ClassFile *element_type, const std::span<s4> &counts);
 
@@ -57,7 +54,7 @@ Value interpret(Thread &thread, ClassFile *main, method_info *method) {
         return Value();
     }
 
-    [[maybe_unused]] auto frames = thread.stack.parent_frames.size();
+    [[maybe_unused]] auto frames = thread.stack.frames.size();
     [[maybe_unused]] auto memory_used = thread.stack.memory_used;
     Frame frame{thread.stack, main, method, thread.stack.memory_used, true};
 
@@ -73,12 +70,16 @@ Value interpret(Thread &thread, ClassFile *main, method_info *method) {
         assert(thread.current_exception == JAVA_NULL);
     }
 
-    bool shouldExit = false;
-    while (!shouldExit && thread.current_exception == JAVA_NULL) {
-        execute_instruction(thread, frame, shouldExit);
+    bool should_exit = false;
+    while (!should_exit) {
+        if (thread.current_exception != JAVA_NULL) {
+            handle_throw(thread, frame, thread.current_exception, should_exit);
+        } else {
+            execute_instruction(thread, frame, should_exit);
+        }
     }
 
-    assert(thread.stack.parent_frames.size() == frames);
+    assert(thread.stack.frames.size() == frames);
     assert(thread.stack.memory_used == memory_used);
 
     return method->return_category == 0 ? Value() : frame.locals[0];
@@ -228,28 +229,28 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             frame.push<Reference>(frame.locals[static_cast<u1>(opcode - static_cast<u1>(OpCodes::aload_0))].reference);
             break;
         case OpCodes::iaload:
-            array_load<s4>(frame);
+            array_load<s4>(thread, frame);
             break;
         case OpCodes::laload:
-            array_load<s8>(frame);
+            array_load<s8>(thread, frame);
             break;
         case OpCodes::faload:
-            array_load<float>(frame);
+            array_load<float>(thread, frame);
             break;
         case OpCodes::daload:
-            array_load<double>(frame);
+            array_load<double>(thread, frame);
             break;
         case OpCodes::aaload:
-            array_load<Reference>(frame);
+            array_load<Reference>(thread, frame);
             break;
         case OpCodes::baload:
-            array_load<s1>(frame);
+            array_load<s1>(thread, frame);
             break;
         case OpCodes::caload:
-            array_load<u2>(frame);
+            array_load<u2>(thread, frame);
             break;
         case OpCodes::saload:
-            array_load<s4>(frame);
+            array_load<s4>(thread, frame);
             break;
 
             /* ======================= Stores ======================= */
@@ -299,28 +300,28 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             frame.locals[opcode - static_cast<u1>(OpCodes::astore_0)] = Value(frame.pop<Reference>());
             break;
         case OpCodes::iastore:
-            array_store<s4>(frame);
+            array_store<s4>(thread, frame);
             break;
         case OpCodes::lastore:
-            array_store<s8>(frame);
+            array_store<s8>(thread, frame);
             break;
         case OpCodes::fastore:
-            array_store<float>(frame);
+            array_store<float>(thread, frame);
             break;
         case OpCodes::dastore:
-            array_store<double>(frame);
+            array_store<double>(thread, frame);
             break;
         case OpCodes::aastore:
-            array_store<Reference>(frame);
+            array_store<Reference>(thread, frame);
             break;
         case OpCodes::bastore:
-            array_store<s1>(frame);
+            array_store<s1>(thread, frame);
             break;
         case OpCodes::castore:
-            array_store<u2>(frame);
+            array_store<u2>(thread, frame);
             break;
         case OpCodes::sastore:
-            array_store<s4>(frame);
+            array_store<s4>(thread, frame);
             break;
 
             /* ======================= Stack =======================*/
@@ -475,8 +476,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             auto divisor = frame.pop<s4>();
             auto dividend = frame.pop<s4>();
             if (divisor == 0) {
-                // TODO ArithmeticException
-                throw std::runtime_error("Division by 0");
+                return throw_new_ArithmeticException_division_by_zero(thread, frame);
             }
             frame.push<s4>(div_overflow(dividend, divisor));
             break;
@@ -485,8 +485,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             auto divisor = frame.pop<s8>();
             auto dividend = frame.pop<s8>();
             if (divisor == 0) {
-                // TODO ArithmeticException
-                throw std::runtime_error("Division by 0");
+                return throw_new_ArithmeticException_division_by_zero(thread, frame);
             }
             frame.push<s8>(div_overflow(dividend, divisor));
             break;
@@ -494,20 +493,12 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         case OpCodes::fdiv: {
             auto divisor = frame.pop<float>();
             auto dividend = frame.pop<float>();
-            if (divisor == 0) {
-                // TODO ArithmeticException
-                throw std::runtime_error("Division by 0");
-            }
             frame.push<float>(dividend / divisor);
             break;
         }
         case OpCodes::ddiv: {
             auto divisor = frame.pop<double>();
             auto dividend = frame.pop<double>();
-            if (divisor == 0) {
-                // TODO ArithmeticException
-                throw std::runtime_error("Division by 0");
-            }
             frame.push<double>(dividend / divisor);
             break;
         }
@@ -516,8 +507,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             auto divisor = frame.pop<s4>();
             auto dividend = frame.pop<s4>();
             if (divisor == 0) {
-                // TODO ArithmeticException
-                throw std::runtime_error("Division by 0");
+                return throw_new_ArithmeticException_division_by_zero(thread, frame);
             }
             auto result = dividend - mul_overflow(div_overflow(dividend, divisor), divisor);
             frame.push<s4>(result);
@@ -527,8 +517,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             auto divisor = frame.pop<s8>();
             auto dividend = frame.pop<s8>();
             if (divisor == 0) {
-                // TODO ArithmeticException
-                throw std::runtime_error("Division by 0");
+                return throw_new_ArithmeticException_division_by_zero(thread, frame);
             }
             auto result = dividend - mul_overflow(div_overflow(dividend, divisor), divisor);
             frame.push<s8>(result);
@@ -537,10 +526,6 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         case OpCodes::frem: {
             auto divisor = frame.pop<float>();
             auto dividend = frame.pop<float>();
-            if (divisor == 0) {
-                // TODO ArithmeticException
-                throw std::runtime_error("Division by 0");
-            }
             auto result = std::fmod(dividend, divisor);
             frame.push<float>(result);
             break;
@@ -548,10 +533,6 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         case OpCodes::drem: {
             auto divisor = frame.pop<double>();
             auto dividend = frame.pop<double>();
-            if (divisor == 0) {
-                // TODO ArithmeticException
-                throw std::runtime_error("Division by 0");
-            }
             auto result = std::fmod(dividend, divisor);
             frame.push<double>(result);
             break;
@@ -862,7 +843,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             }
             // fallthrough
         case OpCodes::return_: {
-            pop_frame_after_return(thread, frame, should_exit);
+            pop_frame(thread, frame, should_exit);
             return;
         }
 
@@ -928,7 +909,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                         throw std::runtime_error("field is static");
                     auto objectref = frame.pop<Reference>();
                     if (objectref == JAVA_NULL) {
-                        throw std::runtime_error("TODO NullPointerException");
+                        return throw_new(thread, frame, Names::java_lang_NullPointerException);
                     }
                     auto value = objectref.data<Value>()[field.index];
                     if (field.category == ValueCategory::C1) {
@@ -951,7 +932,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                     }
                     auto objectref = frame.pop<Reference>();
                     if (objectref == JAVA_NULL) {
-                        throw std::runtime_error("TODO NullPointerException");
+                        return throw_new(thread, frame, Names::java_lang_NullPointerException);
                     }
                     objectref.data<Value>()[field.index] = value;
                     break;
@@ -981,8 +962,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
 
             auto object = frame.peek_at(declared_method->stack_slots_for_parameters - 1).reference;
             if (object == JAVA_NULL) {
-                // TODO NullPointerException
-                throw std::runtime_error("TODO NullPointerException");
+                return throw_new(thread, frame, Names::java_lang_NullPointerException);
             }
 
             ClassFile *clazz;
@@ -1008,14 +988,6 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 method_ref = &m->method;
             } else {
                 method_ref = &std::get_if<CONSTANT_InterfaceMethodref_info>(&ref)->method;
-            }
-
-            // TODO we can't run this until we have strings (and whatever else Exception requires)
-            if (method_ref->class_->name->value == "java/lang/Exception" &&
-                method_ref->name_and_type->name->value == "<init>") {
-                frame.pop<Reference>();
-                frame.pc += 2;
-                break;
             }
 
             method_info *method = method_ref->method;
@@ -1232,7 +1204,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         case OpCodes::arraylength: {
             auto arrayref = frame.pop<Reference>();
             if (arrayref == JAVA_NULL) {
-                throw std::runtime_error("TODO NullPointerException");
+                return throw_new(thread, frame, Names::java_lang_NullPointerException);
             }
             frame.push<s4>(arrayref.object()->length);
             break;
@@ -1241,11 +1213,10 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         case OpCodes::athrow: {
             auto value = frame.pop<Reference>();
             if (value == JAVA_NULL) {
-                // TODO If objectref is null, athrow throws a NullPointerException instead of objectref.
-                throw std::runtime_error("TODO NullPointerException");
+                return throw_new(thread, frame, Names::java_lang_NullPointerException);
             }
-            handle_throw(thread, frame, value);
-            return;
+            // TODO performance: we could call a version of handle_throw that doesn't expect "frame" to be on the stack
+            return throw_it(thread, frame, value);
         }
 
         case OpCodes::checkcast: {
@@ -1261,16 +1232,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 }
 
                 if (!objectref.object()->clazz->is_instance_of(class_info.clazz)) {
-                    // TODO factor this out into a method
-                    ClassFile *clazz = BootstrapClassLoader::get().load("java/lang/ClassCastException");
-                    if (resolve_class(clazz->this_class)) {
-                        return;
-                    }
-                    if (initialize_class(clazz, thread, frame)) {
-                        return;
-                    }
-                    Reference ref = Heap::get().new_instance(clazz);
-                    return handle_throw(thread, frame, ref);
+                    return throw_new(thread, frame, Names::java_lang_ClassCastException);
                 }
             }
             frame.pc += 2;
@@ -1299,8 +1261,10 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         case OpCodes::monitorenter:
         case OpCodes::monitorexit: {
             // TODO noop for now
-            // TODO NullPointerException
-            frame.pop<Reference>();
+            auto reference = frame.pop<Reference>();
+            if (reference == JAVA_NULL) {
+                return throw_new(thread, frame, Names::java_lang_NullPointerException);
+            }
             break;
         }
 
@@ -1423,15 +1387,15 @@ static void goto_(Frame &frame) {
     frame.pc = static_cast<size_t>(static_cast<long>(frame.pc) + offset);
 }
 
-static void handle_throw(Thread &thread, Frame &frame, Reference exception) {
-    auto obj = exception.object();
-    // TODO this is actually wrong, the stack should be generated when the Throwable is constructed
-    std::vector<Frame> stack_trace;
 
-    // TODO if a native frame is on the stack or if we reach the top we should set should_exit to true and return without printing anything.
+static void handle_throw(Thread &thread, Frame &frame, Reference exception, bool &should_exit) {
+    assert(exception != JAVA_NULL);
+    auto obj = exception.object();
+
+    // The current frame must always be on the stack after an exception is thrown
+    frame = thread.stack.pop_frame();
 
     for (;;) {
-        stack_trace.push_back(frame);
         auto &exception_table = frame.method->code_attribute->exception_table;
 
         auto handler_iter = std::find_if(exception_table.begin(),
@@ -1458,82 +1422,33 @@ static void handle_throw(Thread &thread, Frame &frame, Reference exception) {
         );
 
         if (handler_iter == std::end(exception_table)) {
-            if (thread.stack.parent_frames.empty()) {
-                // Bubbled to the top, no exception handler was found, so exit thread
-
-                std::string message = "Exception in thread \"main\" ";
-                message.append(obj->clazz->name());
-                message.append("\n");
-                for (const Frame &f : stack_trace) {
-                    message.append("\tat ");
-                    message.append(f.clazz->name());
-                    message.append(".");
-                    message.append(f.method->name_index->value);
-
-                    auto source_file = std::find_if(f.clazz->attributes.begin(), f.clazz->attributes.end(),
-                                                    [](const attribute_info &a) {
-                                                        return std::holds_alternative<SourceFile_attribute>(a.variant);
-                                                    });
-                    // TODO there can be multiple LNT attributes
-                    auto line_numbers_iter = std::find_if(f.method->code_attribute->attributes.begin(),
-                                                          f.method->code_attribute->attributes.end(),
-                                                          [](const attribute_info &a) {
-                                                              return std::holds_alternative<LineNumberTable_attribute>(
-                                                                      a.variant);
-                                                          });
-                    message.append("(");
-                    if (source_file != std::end(f.clazz->attributes) &&
-                        line_numbers_iter != std::end(f.method->code_attribute->attributes)) {
-                        auto &line_number_table = std::get<LineNumberTable_attribute>(
-                                line_numbers_iter->variant).line_number_table;
-                        message.append(std::get<SourceFile_attribute>(source_file->variant).sourcefile_index->value);
-                        message.append(":");
-                        // NOLINTNEXTLINE
-                        for (auto entry = line_number_table.rbegin(); entry != line_number_table.rend(); ++entry) {
-                            if (entry->start_pc <= f.pc) {
-                                message.append(std::to_string(entry->line_number));
-                                break;
-                            }
-                        }
-                    } else {
-                        message.append(std::to_string(f.pc));
-                    }
-                    message.append(")\n");
-                }
-                std::cerr << message;
-
-                frame.clear();
-                frame.push<s4>(1);
-                exit(EXIT_FAILURE);
+            pop_frame(thread, frame, should_exit);
+            if (should_exit) {
+                // the native caller has to deal with thread.current_exception
                 return;
-            } else {
-                pop_frame(thread, frame);
-                frame.clear();
-                continue;
             }
         } else {
             // Push exception back on stack, continue normal execution.
             frame.clear();
             frame.push<Reference>(exception);
             frame.pc = handler_iter->handler_pc;
+            thread.current_exception = JAVA_NULL;
             return;
         }
     }
 }
 
-static inline void pop_frame(Thread &thread, Frame &frame) {
+static void pop_frame(Thread &thread, Frame &frame, bool &should_exit) {
     thread.stack.memory_used = frame.previous_stack_memory_usage;
-    frame = thread.stack.parent_frames.back();
-    thread.stack.parent_frames.pop_back();
-}
 
-static void pop_frame_after_return(Thread &thread, Frame &frame, bool &should_exit) {
     if (frame.is_root_frame) {
-        thread.stack.memory_used = frame.previous_stack_memory_usage;
         should_exit = true;
     } else {
-        pop_frame(thread, frame);
-        frame.pc += frame.invoke_length;
+        frame = thread.stack.pop_frame();
+
+        if (thread.current_exception == JAVA_NULL) {
+            frame.pc += frame.invoke_length;
+        }
     }
 }
 
@@ -1576,13 +1491,13 @@ Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand
 }
 
 template<typename Element>
-void array_store(Frame &frame) {
+void array_store(Thread &thread, Frame &frame) {
     auto value = frame.pop<Element>();
     auto index = frame.pop<s4>();
 
     auto arrayref = frame.pop<Reference>();
     if (arrayref == JAVA_NULL) {
-        throw std::runtime_error("TODO NullPointerException");
+        return throw_new(thread, frame, Names::java_lang_NullPointerException);
     }
 
     if (index < 0 || index >= arrayref.object()->length) {
@@ -1593,12 +1508,12 @@ void array_store(Frame &frame) {
 }
 
 template<typename Element>
-void array_load(Frame &frame) {
+void array_load(Thread &thread, Frame &frame) {
     auto index = frame.pop<s4>();
 
     auto arrayref = frame.pop<Reference>();
     if (arrayref == JAVA_NULL) {
-        throw std::runtime_error("TODO NullPointerException");
+        return throw_new(thread, frame, Names::java_lang_NullPointerException);
     }
 
     if (index < 0 || index >= arrayref.object()->length) {
@@ -1767,6 +1682,9 @@ method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_inf
 }
 
 void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &frame, bool &should_exit) {
+    // during native calls we push the current frame
+    thread.stack.push_frame(frame);
+
     if (!method->native_function) {
         auto *function_pointer = get_native_function_pointer(clazz, method);
         if (function_pointer == nullptr) {
@@ -1803,6 +1721,7 @@ void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &f
         frame.locals[0] = return_value;
     }
 
-    pop_frame_after_return(thread, frame, should_exit);
+    frame = thread.stack.pop_frame();
+    pop_frame(thread, frame, should_exit);
 }
 

@@ -5,9 +5,9 @@
 #include <codecvt>
 
 #include "args.hpp"
+#include "classloading.hpp"
 #include "jni.h"
 #include "jvm.h"
-#include "classloading.hpp"
 #include "interpreter.hpp"
 
 int main(int argc, char *argv[]) {
@@ -76,9 +76,20 @@ int main(int argc, char *argv[]) {
     }
     penv->CallStaticVoidMethod(main_class, main_method_id, args_array);
 
+    int exit = 0;
     if (jthrowable exception = penv->ExceptionOccurred(); exception != nullptr) {
-        // TODO?
         penv->ExceptionClear();
+
+        std::cerr << "Exception in thread \"main\" ";
+
+        ClassFile *clazz = BootstrapClassLoader::constants().java_lang_Throwable;
+        jmethodID print_stack_trace = penv->GetMethodID((jclass) clazz, "printStackTrace", "()V");
+        if (print_stack_trace == nullptr) {
+            pvm->DestroyJavaVM();
+            throw std::runtime_error("Couldn't find printStackTrace method");
+        }
+        penv->CallNonvirtualVoidMethod(exception, (jclass) clazz, print_stack_trace);
+        exit = 1;
     }
 
     // TODO figure out how to free this (or maybe LeakSanitizer won't complain if we just put it in a thread local variable?)
@@ -87,5 +98,5 @@ int main(int argc, char *argv[]) {
     delete penv;
 
     pvm->DestroyJavaVM();
-    return 0;
+    return exit;
 }

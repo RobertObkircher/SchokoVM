@@ -98,7 +98,10 @@ add_library(jvm SHARED
         src/native.cpp src/native.hpp
         src/jni.cpp
         src/jvm.cpp
-        src/unsafe.cpp src/unsafe.hpp src/data.hpp)
+        src/unsafe.cpp src/unsafe.hpp
+        src/data.hpp
+        src/exceptions.cpp src/exceptions.hpp
+        )
 add_sanitizers(jvm)
 target_include_directories(jvm PRIVATE ${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/jdk/include)
 target_compile_options(jvm PRIVATE -Wno-unused-parameter)
@@ -160,7 +163,6 @@ set(JAVA_TEST_SOURCES
         tests/Collections.java
         tests/Empty.java
         tests/Exceptions.java
-        # tests/ExceptionsConstruct.java
         tests/ExceptionsExit.java
         tests/ExceptionsExitNested.java
         tests/ExceptionsInheritance.java

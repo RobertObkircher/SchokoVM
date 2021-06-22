@@ -228,19 +228,30 @@ struct Stack {
     size_t memory_used = 0;
 
     // In the interpreter we will keep the current frame in a local variable.
-    std::vector<Frame> parent_frames{};
+    std::vector<Frame> frames{};
+
+    void push_frame(Frame &frame) {
+        frames.push_back(frame);
+    }
 
     /// Pushes current_frame onto the list of parent frames and sets to current frame to run `method` in `clazz`
     void push_frame(Frame &current_frame, ClassFile *clazz, method_info *method) {
         size_t operand_stack_top = current_frame.first_operand_index + current_frame.operands_top;
         current_frame.operands_top += -method->stack_slots_for_parameters + method->return_category;
-        parent_frames.push_back(current_frame);
+        push_frame(current_frame);
 
         current_frame = {*this, clazz, method, operand_stack_top, false};
         if (memory_used > memory.size()) {
             throw std::runtime_error("stack overflow");
         }
     }
+
+    Frame pop_frame() {
+        auto result = frames.back();
+        frames.pop_back();
+        return result;
+    }
+
 };
 
 struct Thread {

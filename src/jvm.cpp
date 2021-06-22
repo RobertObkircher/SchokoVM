@@ -8,6 +8,7 @@
 
 #include "jvm.h"
 #include "classloading.hpp"
+#include "exceptions.hpp"
 #include "util.hpp"
 #include "data.hpp"
 
@@ -325,7 +326,10 @@ JVM_GetVmArguments(JNIEnv *env) {
  */
 JNIEXPORT void JNICALL
 JVM_FillInStackTrace(JNIEnv *env, jobject throwable) {
-    UNIMPLEMENTED("JVM_FillInStackTrace");
+    LOG("JVM_FillInStackTrace");
+    auto thread = reinterpret_cast<Thread *>(env->functions->reserved0);
+    Reference ref{throwable};
+    fill_in_stack_trace(thread->stack, ref);
 }
 
 /*
@@ -333,7 +337,10 @@ JVM_FillInStackTrace(JNIEnv *env, jobject throwable) {
  */
 JNIEXPORT void JNICALL
 JVM_InitStackTraceElementArray(JNIEnv *env, jobjectArray elements, jobject throwable) {
-    UNIMPLEMENTED("JVM_InitStackTraceElementArray");
+    LOG("JVM_InitStackTraceElementArray");
+    Reference elements_ref{elements};
+    Reference throwable_ref{throwable};
+    init_stack_trace_element_array(elements_ref, throwable_ref);
 }
 
 JNIEXPORT void JNICALL
@@ -1469,10 +1476,10 @@ jio_vsnprintf(char *str, size_t count, const char *fmt, va_list args) {
     // unsigned; see bug 4399518, 4417214
     if ((intptr_t) count <= 0) return -1;
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wformat-nonliteral"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
     int result = vsnprintf(str, count, fmt, args);
-#pragma clang diagnostic pop
+#pragma GCC diagnostic pop
 
     if (result > 0 && (size_t) result >= count) {
         str[count - 1] = 0;
@@ -1507,10 +1514,10 @@ jio_fprintf(FILE *f, const char *fmt, ...) {
 JNIEXPORT int
 jio_vfprintf(FILE *f, const char *fmt, va_list args) {
     LOG("jio_vfprintf");
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wformat-nonliteral"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
     return vfprintf(f, fmt, args);
-#pragma clang diagnostic pop
+#pragma GCC diagnostic pop
 }
 
 

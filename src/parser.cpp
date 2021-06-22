@@ -43,9 +43,6 @@ void Parser::parse(ClassFile &result) {
         result.super_class_ref = nullptr;
     } else {
         result.super_class_ref = &check_cp_range_and_type<CONSTANT_Class_info>(result.constant_pool, super_class);
-        // TODO remove once we have strings
-        if (result.super_class_ref->name->value == "java/lang/Exception")
-            result.super_class_ref = nullptr;
     }
     result.super_class = nullptr; // resolved later
     
