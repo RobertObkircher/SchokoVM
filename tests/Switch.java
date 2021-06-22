@@ -1,6 +1,4 @@
 public class Switch {
-    static void println(int i) { System.out.println(i); }
-
     public static void main(String[] args) {
         tableswitch(-1);
         tableswitch(4);
@@ -20,43 +18,57 @@ public class Switch {
         lookupswitch(0);
         lookupswitch(101);
         lookupswitch(202);
+
+        alignment();
     }
 
     static void tableswitch(int i) {
         switch (i) {
             case 1:
-                println(111);
+                System.out.println(111);
                 break;
             case 2:
-                println(222);
+                System.out.println(222);
                 break;
             case 3:
-                println(333);
+                System.out.println(333);
                 break;
             case 4:
-                println(444);
+                System.out.println(444);
                 break;
             default:
-                println(42);
+                System.out.println(42);
         }
     }
 
     static void lookupswitch(int i) {
         switch (i) {
             case 101:
-                println(1111);
+                System.out.println(1111);
                 break;
             case 202:
-                println(2222);
+                System.out.println(2222);
                 break;
             case 303:
-                println(3333);
+                System.out.println(3333);
                 break;
             case 404:
-                println(4444);
+                System.out.println(4444);
                 break;
             default:
-                println(4242);
+                System.out.println(4242);
+        }
+    }
+
+    static void alignment(){
+        String name = "abcabcabcabcabcabcabcabcabc";
+        switch (name) {
+            case "abcabcabcabcabcabcabcabcabc":
+                System.out.println(2);
+                break;
+            default:
+                System.out.println(3);
+                break;
         }
     }
 }
