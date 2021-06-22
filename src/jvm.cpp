@@ -106,15 +106,11 @@ JVM_Clone(JNIEnv *env, jobject obj) {
 
     if (!original.object()->clazz->is_subclass_of(BootstrapClassLoader::constants().java_lang_Cloneable)) {
         auto thread = reinterpret_cast<Thread *>(env->functions->reserved0);
-        throw_new(*thread, "java/lang/CloneNotSupportedException");
+        throw_new(*thread, "java/lang/CloneNotSupportedException", original.object()->clazz->name().c_str());
         return nullptr;
     }
 
     auto copy = Heap::get().clone(original);
-    for (s4 i = original.object()->length - 1; i >= 0; i--) {
-        copy.data<Value>()[i] = original.data<Value>()[i];
-    }
-
     return reinterpret_cast<jobject>(copy.memory);
 }
 

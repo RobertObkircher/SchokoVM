@@ -7,8 +7,35 @@
 
 Heap Heap::the_heap;
 
-Reference Heap::clone(Reference const &object) {
-    return allocate_array<Value>(object.object()->clazz, object.object()->length);
+Reference Heap::clone(Reference const &original) {
+    auto original_class = original.object()->clazz;
+    auto copy = allocate_array<Value>(original.object()->clazz, original.object()->length);
+
+    auto length = static_cast<size_t>(original.object()->length);
+    if (!original_class->is_array()) {
+        memmove(copy.data<Value>(), original.data<Value>(), sizeof(Value) * length);
+    } else {
+        auto element_class = original_class->array_element_type;
+        if (element_class->name() == "boolean" || element_class->name() == "byte") {
+            memmove(copy.data<s1>(), original.data<s1>(), sizeof(s1) * length);
+        } else if (element_class->name() == "char") {
+            memmove(copy.data<u2>(), original.data<u2>(), sizeof(u2) * length);
+        } else if (element_class->name() == "short") {
+            memmove(copy.data<s2>(), original.data<s2>(), sizeof(s2) * length);
+        } else if (element_class->name() == "int") {
+            memmove(copy.data<s4>(), original.data<s4>(), sizeof(s4) * length);
+        } else if (element_class->name() == "long") {
+            memmove(copy.data<s8>(), original.data<s8>(), sizeof(s8) * length);
+        } else if (element_class->name() == "float") {
+            memmove(copy.data<float>(), original.data<float>(), sizeof(float) * length);
+        } else if (element_class->name() == "double") {
+            memmove(copy.data<double>(), original.data<double>(), sizeof(double) * length);
+        } else {
+            abort();
+        }
+    }
+
+    return copy;
 }
 
 Reference Heap::new_instance(ClassFile *clazz) {
