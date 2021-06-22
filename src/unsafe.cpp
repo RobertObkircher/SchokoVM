@@ -10,18 +10,21 @@
 #define LOG(x)
 
 JNICALL static jobject Unsafe_GetObjectVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset) {
+    LOG("Unsafe_GetObjectVolatile");
     // TODO "get with volatile load semantics, otherwise identical to getObject()"
     auto field = reinterpret_cast<Value *>(reinterpret_cast<char *>(obj) + offset);
     return reinterpret_cast<jobject>(field->reference.memory);
 }
 
 JNICALL static jint Unsafe_GetIntVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset) {
+    LOG("Unsafe_GetIntVolatile");
     // TODO "volatile"
     auto field = reinterpret_cast<Value *>(reinterpret_cast<char *>(obj) + offset);
     return field->s4;
 }
 
 JNICALL static jlong Unsafe_ObjectFieldOffset1(JNIEnv *env, jobject unsafe, jclass cls, jstring name) {
+    LOG("Unsafe_ObjectFieldOffset1");
     auto clazz = reinterpret_cast<ClassFile *>(cls);
 
     auto data = env->GetStringUTFChars(name, nullptr);
@@ -40,7 +43,7 @@ JNICALL static jlong Unsafe_ObjectFieldOffset1(JNIEnv *env, jobject unsafe, jcla
 
 
 JNICALL static jint Unsafe_ArrayBaseOffset0(JNIEnv *env, jobject unsafe, jclass cls) {
-    LOG("JVM_GetClassModifiers");
+    LOG("Unsafe_ArrayBaseOffset0");
     auto clazz = reinterpret_cast<ClassFile *>(cls);
 
     if (!clazz->is_array()) {
@@ -102,17 +105,20 @@ static bool compare_and_set(jobject obj, jlong offset, T expected, T desired) {
 
 JNICALL static jboolean
 Unsafe_CompareAndSetObject(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jobject expected, jobject desired) {
+    LOG("Unsafe_CompareAndSetObject");
     // TODO "volatile semantics"
     return compare_and_set(obj, offset, expected, desired);
 }
 
 JNICALL static jboolean
 Unsafe_CompareAndSetInt(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jint expected, jint desired) {
+    LOG("Unsafe_CompareAndSetInt");
     return compare_and_set(obj, offset, expected, desired);
 }
 
 JNICALL static jboolean
 Unsafe_CompareAndSetLong(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong expected, jlong desired) {
+    LOG("Unsafe_CompareAndSetLong");
     return compare_and_set(obj, offset, expected, desired);
 }
 
@@ -122,14 +128,17 @@ JNICALL static jint Unsafe_AddressSize0(JNIEnv *env, jobject unsafe) {
 }
 
 JNICALL void static Unsafe_LoadFence(JNIEnv *env, jobject unsafe) {
+    LOG("Unsafe_LoadFence");
     std::atomic_thread_fence(std::memory_order_acquire);
 }
 
 JNICALL void static Unsafe_StoreFence(JNIEnv *env, jobject unsafe) {
+    LOG("Unsafe_StoreFence");
     std::atomic_thread_fence(std::memory_order_release);
 }
 
 JNICALL void static Unsafe_FullFence(JNIEnv *env, jobject unsafe) {
+    LOG("Unsafe_FullFence");
     std::atomic_thread_fence(std::memory_order_acq_rel);
 }
 
