@@ -125,7 +125,7 @@ target_link_libraries(SchokoVM jvm)
 
 
 add_library(NativeLib MODULE
-        src/native-test.cpp
+        tests/NativeLib.cpp
         )
 target_include_directories(NativeLib PRIVATE ${JNI_INCLUDE_DIRS})
 
