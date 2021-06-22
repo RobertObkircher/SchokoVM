@@ -45,7 +45,7 @@ void Parser::parse(ClassFile &result) {
         result.super_class_ref = &check_cp_range_and_type<CONSTANT_Class_info>(result.constant_pool, super_class);
     }
     result.super_class = nullptr; // resolved later
-    
+
     result.package_name = std::string_view(result.name()).substr(0, result.name().find_last_of('/'));
 
     u2 interfaces_count = eat_u2();
@@ -455,6 +455,26 @@ std::vector<attribute_info> Parser::parse_attributes(ConstantPool &constant_pool
                 attribute.classes.push_back(&check_cp_range_and_type<CONSTANT_Class_info>(constant_pool, eat_u2()));
             }
             info.variant = attribute;
+        } else if (s == "InnerClasses") {
+            u2 number_of_classes = eat_u2();
+            for (size_t i = 0; i < number_of_classes; ++i) {
+                auto inner_clazz = &check_cp_range_and_type<CONSTANT_Class_info>(constant_pool, eat_u2());
+                auto outer_clazz_index = eat_u2();
+                auto inner_name_index = eat_u2();
+                auto inner_class_access_flags = eat_u2();
+
+                // TODO store in ClassFile instead?
+                if (inner_name_index != 0) {
+                    if (outer_clazz_index != 0) {
+                        inner_clazz->outer_class = &check_cp_range_and_type<CONSTANT_Class_info>(constant_pool,
+                                                                                                 outer_clazz_index);
+                    }
+                    inner_clazz->inner_name = &check_cp_range_and_type<CONSTANT_Utf8_info>(constant_pool,
+                                                                                           inner_name_index);
+                }
+                inner_clazz->inner_class_access_flags = inner_class_access_flags;
+            }
+            continue;
         } else {
             for (size_t i = 0; i < info.attribute_length; ++i) {
                 eat_u1();

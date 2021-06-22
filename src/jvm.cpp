@@ -827,7 +827,12 @@ JVM_IsPrimitiveClass(JNIEnv *env, jclass cls) {
 
 JNIEXPORT jint JNICALL
 JVM_GetClassModifiers(JNIEnv *env, jclass cls) {
-    UNIMPLEMENTED("JVM_GetClassModifiers");
+    LOG("JVM_GetClassModifiers");
+    auto clazz = reinterpret_cast<ClassFile *>(cls);
+    auto own = clazz->access_flags;
+    auto inner = clazz->this_class->inner_class_access_flags;
+    auto flags = inner != 0 ? inner : own & ~static_cast<u2>(ClassFileAccessFlags::ACC_SUPER);
+    return flags;
 }
 
 JNIEXPORT jobjectArray JNICALL

@@ -136,20 +136,40 @@ ClassFile *BootstrapClassLoader::make_builtin_class(std::string name, ClassFile 
                 index,
                 &clazz->constant_pool.get<CONSTANT_Utf8_info>(index),
                 c,
+                0,
+                nullptr,
+                nullptr
         };
         auto result = &clazz->constant_pool.get<CONSTANT_Class_info>(index + 1);
         index += 2;
         return result;
     };
 
+    clazz->access_flags =
+            static_cast<u2>(ClassFileAccessFlags::ACC_FINAL) | static_cast<u2>(ClassFileAccessFlags::ACC_ABSTRACT);
     if (array_element_type != nullptr) {
+        // array
         clazz->constant_pool.table.resize(4 * 2);
         clazz->super_class_ref = add_name_and_class(clazz->super_class = constants().java_lang_Object);
         clazz->interfaces.push_back(add_name_and_class(constants().java_lang_Cloneable));
         clazz->interfaces.push_back(add_name_and_class(constants().java_io_Serializable));
         clazz->field_component_type = Value{Reference{array_element_type}};
+
+        const auto element_flags = array_element_type->this_class->inner_class_access_flags != 0
+                                   ? array_element_type->this_class->inner_class_access_flags
+                                   : array_element_type->access_flags;
+        auto &access_flags = clazz->access_flags;
+        access_flags = (access_flags & ~static_cast<u2>(ClassFileAccessFlags::ACC_PUBLIC)) |
+                       (element_flags & static_cast<u2>(ClassFileAccessFlags::ACC_PUBLIC));
+        access_flags = (access_flags & ~static_cast<u2>(ClassFileAccessFlags::ACC_PRIVATE)) |
+                       (element_flags & static_cast<u2>(ClassFileAccessFlags::ACC_PRIVATE));
+        access_flags = (access_flags & ~static_cast<u2>(ClassFileAccessFlags::ACC_PROTECTED)) |
+                       (element_flags & static_cast<u2>(ClassFileAccessFlags::ACC_PROTECTED));
     } else {
+        // primitive type
         clazz->constant_pool.table.resize(1 * 2);
+        clazz->is_primitive = true;
+        clazz->access_flags |= static_cast<u2>(ClassFileAccessFlags::ACC_PUBLIC);
     }
     clazz->this_class = add_name_and_class(clazz);
     clazz->array_element_type = array_element_type;
