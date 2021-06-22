@@ -5,6 +5,7 @@
 #include "classfile.hpp"
 #include "memory.hpp"
 #include "classloading.hpp"
+#include "exceptions.hpp"
 
 #define UNIMPLEMENTED(x) std::cerr << x; exit(42);
 #define LOG(x)
@@ -47,25 +48,11 @@ JNICALL static jint Unsafe_ArrayBaseOffset0(JNIEnv *env, jobject unsafe, jclass 
     auto clazz = reinterpret_cast<ClassFile *>(cls);
 
     if (!clazz->is_array()) {
-        // TODO java_lang_InvalidClassException
-        throw std::runtime_error("TODO: java_lang_InvalidClassException");
-    } else if (clazz->array_element_type->name() == "boolean" || clazz->array_element_type->name() == "byte") {
-        return offset_of_array_after_header<Object, s1>();
-    } else if (clazz->array_element_type->name() == "char") {
-        return offset_of_array_after_header<Object, u2>();
-    } else if (clazz->array_element_type->name() == "short") {
-        return offset_of_array_after_header<Object, s2>();
-    } else if (clazz->array_element_type->name() == "int") {
-        return offset_of_array_after_header<Object, s4>();
-    } else if (clazz->array_element_type->name() == "long") {
-        return offset_of_array_after_header<Object, s8>();
-    } else if (clazz->array_element_type->name() == "float") {
-        return offset_of_array_after_header<Object, float>();
-    } else if (clazz->array_element_type->name() == "double") {
-        return offset_of_array_after_header<Object, double>();
+        auto *thread = static_cast<Thread *>(env->functions->reserved0);
+        throw_new(*thread, "java/lang/InvalidClassException");
+        return 0;
     } else {
-        // object
-        return offset_of_array_after_header<Object, Reference>();
+        return static_cast<jint>(clazz->offset_of_array_after_header);
     }
 }
 
@@ -76,24 +63,8 @@ JNICALL static jint Unsafe_ArrayIndexScale0(JNIEnv *env, jobject unsafe, jclass 
     if (!clazz->is_array()) {
         // TODO java_lang_InvalidClassException
         throw std::runtime_error("TODO: java_lang_InvalidClassException");
-    } else if (clazz->array_element_type->name() == "boolean" || clazz->array_element_type->name() == "byte") {
-        // TODO ???
-        return sizeof(s1);
-    } else if (clazz->array_element_type->name() == "char") {
-        return sizeof(u2);
-    } else if (clazz->array_element_type->name() == "short") {
-        return sizeof(s2);
-    } else if (clazz->array_element_type->name() == "int") {
-        return sizeof(s4);
-    } else if (clazz->array_element_type->name() == "long") {
-        return sizeof(s8);
-    } else if (clazz->array_element_type->name() == "float") {
-        return sizeof(float);
-    } else if (clazz->array_element_type->name() == "double") {
-        return sizeof(double);
     } else {
-        // object
-        return sizeof(Reference);
+        return static_cast<jint>(clazz->element_size);
     }
 }
 

@@ -817,6 +817,11 @@ struct ClassFile {
     bool is_erroneous_state = false;
 
     std::string_view package_name;
+    // For primitive classes: the size of the primitive value
+    // For non-primitive classes: the size of each field
+    // For arrays: the element size
+    size_t element_size;
+    size_t offset_of_array_after_header;
 
     // Computes whether `this` is a subclass of `other` (regarding both `extends` and `implements`).
     // Note that `x.is_subclass_of(x) == false`

@@ -24,6 +24,7 @@ public class Clone {
         x.z = "ABC";
 
         X y = x.clone();
+        System.out.println(x != y);
         System.out.println(y.x);
         System.out.println(y.y);
         System.out.println(y.z);
@@ -38,8 +39,7 @@ public class Clone {
 
         int[] arr = new int[]{1,2,3,4,5,10000};
         int[] arr2 = arr.clone();
-        System.out.println(arr.length);
-        System.out.println(arr2.length);
+        System.out.println(arr != arr2);
         for(int i : arr2) {
             System.out.println(i);
         }
