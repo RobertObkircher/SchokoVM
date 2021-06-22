@@ -1,25 +1,26 @@
 public class Clazz {
-    static void println(String i) { System.out.println(i); }
-    static void println(boolean i) { System.out.println(i); }
-
 	public static void main(String[] args) {
-        println(Object.class.getName());
-        println(Integer.class.getName());
-        println(int.class.getName());
-        println(int[][].class.getName());
-        println(int[][].class.getComponentType().getName());
+        System.out.println(Object.class.getName());
+        System.out.println(Integer.class.getName());
+        System.out.println(int.class.getName());
+        System.out.println(int[][].class.getName());
+        System.out.println(int[][].class.getComponentType().getName());
 
         String s = "xyz";
         Class<?> stringClass = s.getClass();
-        println(stringClass.getName());
-        println(stringClass == String.class);
-        println(stringClass == Class.class);
-        println(stringClass instanceof Class);
+        System.out.println(stringClass.getName());
+        System.out.println(stringClass == String.class);
+        System.out.println(stringClass == Class.class);
+        System.out.println(stringClass instanceof Class);
 
         int[][] i = new int[1][2];
         Class<?> iiArrayClass = i.getClass();
-        println(iiArrayClass.getName());
-        println(iiArrayClass == int[][].class);
-        println(iiArrayClass instanceof Class);
+        System.out.println(iiArrayClass.getName());
+        System.out.println(iiArrayClass == int[][].class);
+        System.out.println(iiArrayClass instanceof Class);
+
+        System.out.println(int.class.getModule().getName());
+        System.out.println(String.class.getModule().getName());
+        System.out.println(String[].class.getModule().getName());
 	}
 }

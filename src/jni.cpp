@@ -630,7 +630,11 @@ jstring NewString
 
 jsize GetStringLength
         (JNIEnv *env, jstring str) {
-    UNIMPLEMENTED("GetStringLength");
+    LOG("GetStringLength");
+    auto ref = Reference{str};
+    auto charArray = ref.data<Value>()[0].reference;
+    auto utf16_length_bytes = static_cast<size_t>(charArray.object()->length);
+    return static_cast<jsize>(utf16_length_bytes);
 }
 
 const jchar *GetStringChars
@@ -652,7 +656,16 @@ jstring NewStringUTF
 
 jsize GetStringUTFLength
         (JNIEnv *env, jstring str) {
-    UNIMPLEMENTED("GetStringUTFLength");
+    LOG("GetStringUTFLength");
+    // TODO this should really be using modified utf8 and not real utf8
+    auto ref = Reference{str};
+    auto charArray = ref.data<Value>()[0].reference;
+    auto utf16_length_bytes = static_cast<size_t>(charArray.object()->length);
+    auto *utf16_data = charArray.data<u1>();
+
+    std::string utf8_string = std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t>{}.to_bytes(
+            (char16_t *) utf16_data, (char16_t *) (utf16_data + utf16_length_bytes));
+    return static_cast<jsize>(utf8_string.size());
 }
 
 const char *GetStringUTFChars
@@ -938,12 +951,12 @@ jint RegisterNatives
         if (method_iter == java_class->methods.end()) {
             // TODO error
             std::cerr << "not found" << "\n";
-            return -1;
+            return JNI_ERR;
         }
 
         method_iter->native_function = NativeFunction{&*method_iter, ptr};
     }
-    return 1;
+    return JNI_OK;
 }
 
 jint UnregisterNatives
@@ -973,7 +986,21 @@ void GetStringRegion
 
 void GetStringUTFRegion
         (JNIEnv *env, jstring str, jsize start, jsize len, char *buf) {
-    UNIMPLEMENTED("GetStringUTFRegion");
+    LOG("GetStringUTFRegion");
+    // TODO this should really be using modified utf8 and not real utf8
+    auto ref = Reference{str};
+    auto charArray = ref.data<Value>()[0].reference;
+    auto utf16_length_bytes = static_cast<size_t>(charArray.object()->length);
+    auto *utf16_data = charArray.data<u1>();
+
+    if (static_cast<size_t>(static_cast<unsigned int>(start + len)) > utf16_length_bytes) {
+        // TODO StringIndexOutOfBoundsException
+        throw std::runtime_error("TODO StringIndexOutOfBoundsException");
+    }
+
+    std::string utf8_string = std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t>{}.to_bytes(
+            (char16_t *) utf16_data + start, (char16_t *) (utf16_data + start + len));
+    std::strcpy(buf, utf8_string.c_str());
 }
 
 void *GetPrimitiveArrayCritical

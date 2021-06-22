@@ -1,4 +1,5 @@
 import java.lang.reflect.Array;
+import java.lang.reflect.Modifier;
 
 public class ReflectionTest {
     public static void println(int i) { System.out.println(i); }
@@ -24,5 +25,23 @@ public class ReflectionTest {
         for(int i = 0; i < 2; i++) {
            println(arrString[i]);
         }
+
+        println(A.class.getModifiers());
+        println(B.class.getModifiers());
+        println(C.class.getModifiers());
+        println(D.class.getModifiers());
+        println(E.class.getModifiers());
+        println(F.class.getModifiers());
+        println(B[].class.getModifiers());
+        println(int.class.getModifiers());
+        println(int[].class.getModifiers());
+        println(ReflectionTest.class.getModifiers());
     }
+
+    private static class A {}
+    protected static class B {}
+    public abstract static class C {}
+    static class D {}
+    static enum E {}
+    static interface F {}
 }

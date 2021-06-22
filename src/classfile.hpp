@@ -93,6 +93,9 @@ struct CONSTANT_Class_info {
     CONSTANT_Utf8_info *name;
 
     ClassFile *clazz;
+    u2 inner_class_access_flags;
+    CONSTANT_Utf8_info *inner_name;
+    CONSTANT_Class_info *outer_class;
 };
 
 struct CONSTANT_Fieldref_info {
@@ -769,6 +772,9 @@ struct ConstantPool {
 
 enum class ClassFileAccessFlags : u2 {
     ACC_PUBLIC = 0x0001,
+    ACC_PRIVATE = 0x0002,
+    ACC_PROTECTED = 0x0004,
+    ACC_STATIC = 0x0008,
     ACC_FINAL = 0x0010,
     ACC_SUPER = 0x0020,
     ACC_INTERFACE = 0x0200,
@@ -781,9 +787,11 @@ enum class ClassFileAccessFlags : u2 {
 
 struct ClassFile {
     Object header;
-    Value padding_for_java_instance_fields_a[6]; // TODO
+    Value padding_for_java_instance_fields_a[3]; // TODO
+    Value field_module;
+    Value padding_for_java_instance_fields_b[2]; // TODO
     Value field_component_type;
-    Value padding_for_java_instance_fields_b[13]; // TODO
+    Value padding_for_java_instance_fields_c[13]; // TODO
 
     u4 magic;
     u2 minor_version;
@@ -817,6 +825,8 @@ struct ClassFile {
     bool is_erroneous_state = false;
 
     std::string_view package_name;
+
+    bool is_primitive = false;
 
     // Computes whether `this` is a subclass of `other` (regarding both `extends` and `implements`).
     // Note that `x.is_subclass_of(x) == false`

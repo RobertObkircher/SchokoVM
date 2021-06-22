@@ -33,10 +33,40 @@ static ffi_type *ffi_type_from_char(char c) {
     }
 }
 
-// TODO where to put this?
-static void *dlsym_handle = nullptr;
+std::string get_jni_method_name(ClassFile *clazz, method_info *method, bool signature) {
+    std::string result{"Java_"};
+    result.reserve(5 + clazz->name().length() + 1 + method->name_index->value.length());
+    for (char const c: clazz->name()) {
+        if (c == '/') result += '_';
+        else if (c == '_') result += "_1";
+        else result += c;
+    }
+    result += "_";
+    for (char const c: method->name_index->value) {
+        if (c == '_') result += "_1";
+        else result += c;
+    }
+    if (signature) {
+        result += "__";
+        MethodDescriptorParts parts{method->descriptor_index->value.c_str()};                                              \
+        for (; !parts->is_return; ++parts) {
+            for (char const c: parts->type_name) {
+                if (c == '_') result += "_1";
+                else if (c == ';') result += "_2";
+                else if (c == '[') result += "_3";
+                else if (c == '/') result += "_";
+                else result += c;
+            }
+        }
+    }
+    return result;
+}
+
 
 void *get_native_function_pointer(ClassFile *clazz, method_info *method) {
+    // TODO load this via loadLibrary
+    static void *dlsym_handle = nullptr;
+
     if (dlsym_handle == nullptr) {
         // TODO we might need different flags
 #ifdef __APPLE__
@@ -51,23 +81,26 @@ void *get_native_function_pointer(ClassFile *clazz, method_info *method) {
         }
     }
 
-    // TODO there are actually multiple names that we should try and some characters need to be escaped
-    auto name = std::string("Java_");
-    for (char const c : clazz->this_class->name->value) {
-        name += c == '/' ? '_' : c;
+    // TODO arbitrary unicode unicode characters aren't escaped
+    //  https://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/design.html
+    auto name_short = get_jni_method_name(clazz, method, false);
+    auto result_short = dlsym(dlsym_handle, name_short.c_str());
+    if (result_short != nullptr) {
+        return result_short;
     }
-    name += '_';
-    name += method->name_index->value;
 
-    auto result = dlsym(dlsym_handle, name.c_str());
+    auto name_full = get_jni_method_name(clazz, method, true);
+    auto result_full = dlsym(dlsym_handle, name_full.c_str());
     if (auto message = dlerror(); message != nullptr) {
-        std::cerr << "Could not find native function " << name << ": " << message << "\n";
+        std::cerr << "Could not find native function " << name_full << ": " << message << "\n";
         return nullptr;
     }
-    return result;
+    return result_full;
 }
 
-NativeFunction::NativeFunction(method_info *method, void *function_pointer) : m_function_pointer(function_pointer), m_cif(), m_argument_types(), m_argument_offsets() {
+NativeFunction::NativeFunction(method_info *method, void *function_pointer) : m_function_pointer(function_pointer),
+                                                                              m_cif(), m_argument_types(),
+                                                                              m_argument_offsets() {
     assert(method->is_native());
 
     m_argument_types.push_back(&ffi_type_pointer); // JNIEnv *env

@@ -58,6 +58,12 @@ JVM_GetNestMembers(JNIEnv *env, jclass current) {
     UNIMPLEMENTED("JVM_Clone");
 }
 
+// This is apparently handled in the interpreter loop in hotspot and is not part of the native lib
+JNIEXPORT jclass JNICALL
+Java_jdk_internal_reflect_Reflection_getCallerClass(JNIEnv *env, jclass unused) {
+    return JVM_GetCallerClass(env);
+}
+
 }
 
 JNIEXPORT jint JNICALL
@@ -101,7 +107,20 @@ JVM_MonitorNotifyAll(JNIEnv *env, jobject obj) {
 
 JNIEXPORT jobject JNICALL
 JVM_Clone(JNIEnv *env, jobject obj) {
-    UNIMPLEMENTED("JVM_Clone");
+    LOG("JVM_Clone");
+    auto original = Reference{obj};
+
+    if (!original.object()->clazz->is_subclass_of(BootstrapClassLoader::constants().java_lang_Cloneable)) {
+        // TODO CloneNotSupportedException
+        throw std::runtime_error("TODO CloneNotSupportedException");
+    }
+
+    auto copy = Heap::get().clone(original);
+    for (s4 i = original.object()->length - 1; i >= 0; i--) {
+        copy.data<Value>()[i] = original.data<Value>()[i];
+    }
+
+    return reinterpret_cast<jobject>(copy.memory);
 }
 
 /*
@@ -371,7 +390,8 @@ JVM_MoreStackWalk(JNIEnv *env, jobject stackStream, jlong mode, jlong anchor,
  */
 JNIEXPORT void JNICALL
 JVM_StartThread(JNIEnv *env, jobject thread) {
-    UNIMPLEMENTED("JVM_StartThread");
+    LOG("JVM_StartThread");
+    // TODO stub
 }
 
 JNIEXPORT void JNICALL
@@ -381,7 +401,9 @@ JVM_StopThread(JNIEnv *env, jobject thread, jobject exception) {
 
 JNIEXPORT jboolean JNICALL
 JVM_IsThreadAlive(JNIEnv *env, jobject thread) {
-    UNIMPLEMENTED("JVM_IsThreadAlive");
+    LOG("JVM_IsThreadAlive");
+    // TODO stub
+    return false;
 }
 
 JNIEXPORT void JNICALL
@@ -579,9 +601,14 @@ JVM_NewMultiArray(JNIEnv *env, jclass eltClass, jintArray dim) {
  */
 JNIEXPORT jclass JNICALL
 JVM_GetCallerClass(JNIEnv *env) {
-    UNIMPLEMENTED("JVM_GetCallerClass");
+    LOG("JVM_GetCallerClass");
+    auto thread = reinterpret_cast<Thread *>(env->functions->reserved0);
+    const auto &frames = thread->stack.frames;
+    // NOT YET: frames[size()-1] == Reflection.getCallerClass(), @CallerSensitive
+    // frames[size()-2] == callee of Reflection.getCallerClass(), @CallerSensitive
+    // frames[size()-3] == what we want
+    return reinterpret_cast<jclass>(frames[frames.size() - 3].clazz);
 }
-
 
 /*
  * Find primitive classes
@@ -626,7 +653,20 @@ JVM_FindClassFromBootLoader(JNIEnv *env, const char *name) {
 JNIEXPORT jclass JNICALL
 JVM_FindClassFromCaller(JNIEnv *env, const char *name, jboolean init,
                         jobject loader, jclass caller) {
-    UNIMPLEMENTED("JVM_FindClassFromCaller");
+    LOG("JVM_FindClassFromCaller");
+    auto *thread = static_cast<Thread *>(env->functions->reserved0);
+    // TODO actual classloading
+    auto clazz = BootstrapClassLoader::get().load(name);
+    if (init) {
+        if (resolve_class(clazz) == Exception) {
+            return nullptr;
+        }
+
+        if (initialize_class(clazz, *thread) == Exception) {
+            return nullptr;
+        }
+    }
+    return reinterpret_cast<jclass>(clazz);
 }
 
 /*
@@ -745,7 +785,9 @@ JVM_GetClassInterfaces(JNIEnv *env, jclass cls) {
 
 JNIEXPORT jboolean JNICALL
 JVM_IsInterface(JNIEnv *env, jclass cls) {
-    UNIMPLEMENTED("JVM_IsInterface");
+    LOG("JVM_IsInterface");
+    auto *clazz = reinterpret_cast<ClassFile *>(cls);
+    return clazz->is_interface();
 }
 
 JNIEXPORT jobjectArray JNICALL
@@ -772,12 +814,25 @@ JVM_IsArrayClass(JNIEnv *env, jclass cls) {
 
 JNIEXPORT jboolean JNICALL
 JVM_IsPrimitiveClass(JNIEnv *env, jclass cls) {
-    UNIMPLEMENTED("JVM_IsPrimitiveClass");
+    LOG("JVM_IsPrimitiveClass");
+    auto *clazz = reinterpret_cast<ClassFile *>(cls);
+    const auto primitives = BootstrapClassLoader::constants().primitives;
+    for (size_t i = 0; i < Primitive::TYPE_COUNT; i++) {
+        if (primitives[i].primitive == clazz) {
+            return true;
+        }
+    }
+    return false;
 }
 
 JNIEXPORT jint JNICALL
 JVM_GetClassModifiers(JNIEnv *env, jclass cls) {
-    UNIMPLEMENTED("JVM_GetClassModifiers");
+    LOG("JVM_GetClassModifiers");
+    auto clazz = reinterpret_cast<ClassFile *>(cls);
+    auto own = clazz->access_flags;
+    auto inner = clazz->this_class->inner_class_access_flags;
+    auto flags = inner != 0 ? inner : own & ~static_cast<u2>(ClassFileAccessFlags::ACC_SUPER);
+    return flags;
 }
 
 JNIEXPORT jobjectArray JNICALL
@@ -851,7 +906,9 @@ JVM_GetClassDeclaredConstructors(JNIEnv *env, jclass ofClass, jboolean publicOnl
    valid. */
 JNIEXPORT jint JNICALL
 JVM_GetClassAccessFlags(JNIEnv *env, jclass cls) {
-    UNIMPLEMENTED("JVM_GetClassAccessFlags");
+    LOG("JVM_GetClassAccessFlags");
+    auto *clazz = reinterpret_cast<ClassFile *>(cls);
+    return clazz->access_flags;
 }
 
 /* The following two reflection routines are still needed due to startup time issues */
@@ -986,7 +1043,26 @@ JVM_GetMethodParameters(JNIEnv *env, jobject method) {
 JNIEXPORT jobject JNICALL
 JVM_DoPrivileged(JNIEnv *env, jclass cls,
                  jobject action, jobject context, jboolean wrapException) {
-    UNIMPLEMENTED("JVM_DoPrivileged");
+    LOG("JVM_DoPrivileged");
+    // TODO "privileged"??
+
+    // TODO action == null -> NPE
+
+    auto action_ref = Reference{action};
+
+    auto method = env->GetMethodID(reinterpret_cast<jclass>(action_ref.object()->clazz), "run", "()Ljava/lang/Object;");
+    auto method_inf = reinterpret_cast<method_info *>(method);
+
+    if (method_inf == nullptr || !method_inf->is_public() || method_inf->is_static() || method_inf->is_abstract()) {
+        // TODO java_lang_InternalError
+        throw std::runtime_error("TODO java_lang_InternalError");
+    }
+
+    auto result = env->CallObjectMethod(action, method);
+    if (env->ExceptionCheck()) {
+        return nullptr;
+    }
+    return result;
 }
 
 JNIEXPORT jobject JNICALL
