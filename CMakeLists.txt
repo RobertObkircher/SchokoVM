@@ -163,7 +163,6 @@ set(JAVA_TEST_SOURCES
         tests/Collections.java
         tests/Empty.java
         tests/Exceptions.java
-        # tests/ExceptionsConstruct.java
         tests/ExceptionsExit.java
         tests/ExceptionsExitNested.java
         tests/ExceptionsInheritance.java

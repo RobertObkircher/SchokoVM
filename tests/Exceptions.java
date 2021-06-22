@@ -34,6 +34,28 @@ public class Exceptions {
         }
     }
 
+    static class IncludeInitializerOfNonException {
+    	IncludeInitializerOfNonException() {
+    		throw new RuntimeException();
+    	}
+    }
+
+    static class IncludeInitializerOfException extends Exception {
+    	IncludeInitializerOfException() throws Exception {
+    		throw new Exception();
+    	}
+    }
+
+    public static CustomException createWithooutThrowing() {
+        CustomException e = new CustomException();
+        e.code = 9843;
+        return e;
+    }
+
+    public static void throwWithStacktraceFromCreation(CustomException e) throws CustomException {
+        throw e;
+    }
+
     public static void main(String[] args) throws CustomException {
         try {
             println(1);
@@ -57,6 +79,35 @@ public class Exceptions {
             println("Got a npe: ");
             println(npe.toString());
             npe.printStackTrace();
+        }
+
+        try {
+            new IncludeInitializerOfNonException();
+        } catch (RuntimeException ex) {
+            ex.printStackTrace();
+        }
+
+        try {
+            new IncludeInitializerOfException();
+        } catch (IncludeInitializerOfException ex) {
+            ex.printStackTrace();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        try {
+            throw new IncludeInitializerOfException();
+        } catch (IncludeInitializerOfException ex) {
+            ex.printStackTrace();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        CustomException custom = createWithooutThrowing();
+        try {
+            throwWithStacktraceFromCreation(custom);
+        } catch(CustomException e) {
+            e.printStackTrace();
         }
     }
 }

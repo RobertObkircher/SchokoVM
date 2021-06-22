@@ -50,9 +50,13 @@ void fill_in_stack_trace(Stack &stack, Reference throwable) {
 
     size_t ignored = 2; // fillInStackTrace (native method) + Throwable.fillInStackTrace (non native method)
     for (auto i = static_cast<ssize_t>(stack.frames.size() - 1 - ignored); i >= 0; --i) {
-        if (stack.frames[static_cast<size_t>(i)].method->name_index->value == "<init>") {
-            ++ignored; // ignore Throwable/Exception initializers
-        } else {
+        auto const &frame = stack.frames[static_cast<size_t>(i)];
+        if (frame.method->name_index->value != "<init>") {
+            throw std::runtime_error("Fill in stack trace is expected to be called in an initializer");
+        }
+        ++ignored; // ignore Throwable/Exception initializers
+
+        if (frame.clazz == throwable.object()->clazz) {
             break;
         }
     }
