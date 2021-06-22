@@ -1,25 +1,4 @@
-
-
-#include "types.hpp"
-
-typedef void JNIEnv;
-
-#define JNIEXPORT __attribute__((visibility("default")))
-
-#define JNICALL
-
-typedef s4 jint;
-typedef s8 jlong;
-typedef s1 jbyte;
-typedef u1 jboolean;
-typedef u2 jchar;
-typedef s2 jshort;
-typedef float jfloat;
-typedef double jdouble;
-typedef jint jsize;
-
-typedef void *jclass;
-typedef void *jobject;
+#include "jni.h"
 
 extern "C" {
 
