@@ -105,8 +105,9 @@ JVM_Clone(JNIEnv *env, jobject obj) {
     auto original = Reference{obj};
 
     if (!original.object()->clazz->is_subclass_of(BootstrapClassLoader::constants().java_lang_Cloneable)) {
-        // TODO CloneNotSupportedException
-        throw std::runtime_error("TODO CloneNotSupportedException");
+        auto thread = reinterpret_cast<Thread *>(env->functions->reserved0);
+        throw_new(*thread, "java/lang/CloneNotSupportedException");
+        return nullptr;
     }
 
     auto copy = Heap::get().clone(original);
