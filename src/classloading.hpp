@@ -55,6 +55,7 @@ namespace Names {
     ccc java_lang_Float = "java/lang/Float";
     ccc java_lang_Integer = "java/lang/Integer";
     ccc java_lang_Long = "java/lang/Long";
+    ccc java_lang_Module = "java/lang/Module";
     ccc java_lang_NullPointerException = "java/lang/NullPointerException";
     ccc java_lang_Object = "java/lang/Object";
     ccc java_lang_Short = "java/lang/Short";
@@ -71,6 +72,7 @@ struct Constants {
     ClassFile *java_lang_Class{};
     ClassFile *java_lang_Cloneable{};
     ClassFile *java_lang_Object{};
+    ClassFile *java_lang_Module{};
     ClassFile *java_lang_String{};
     ClassFile *java_lang_ThreadGroup{};
     ClassFile *java_lang_Thread{};
@@ -87,6 +89,8 @@ struct Constants {
             {Primitive::Boolean, "boolean", nullptr, Names::java_lang_Boolean,   nullptr, 'Z', "[Z", nullptr},
             {Primitive::Void,    "void",    nullptr, Names::java_lang_Void,      nullptr, 'V', "[V", nullptr},
     };
+
+    Reference module_java_base;
 
     void resolve_and_initialize(Thread &thread);
 };

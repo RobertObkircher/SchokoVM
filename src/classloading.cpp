@@ -27,6 +27,7 @@ void BootstrapClassLoader::initialize_with_boot_classpath(std::string const &boo
 
     m_constants.java_io_Serializable = load_or_throw(Names::java_io_Serializable);
     m_constants.java_lang_Cloneable = load_or_throw(Names::java_lang_Cloneable);
+    m_constants.java_lang_Module = load_or_throw(Names::java_lang_Module);
     m_constants.java_lang_Object = load_or_throw(Names::java_lang_Object);
     m_constants.java_lang_String = load_or_throw(Names::java_lang_String);
     m_constants.java_lang_Thread = load_or_throw(Names::java_lang_Thread);
@@ -173,6 +174,8 @@ ClassFile *BootstrapClassLoader::make_builtin_class(std::string name, ClassFile 
     }
     clazz->this_class = add_name_and_class(clazz);
     clazz->array_element_type = array_element_type;
+
+    clazz->field_module = Value{constants().module_java_base};
 
     // TODO add array clone method here?
 
@@ -400,6 +403,7 @@ Result resolve_class(ClassFile *clazz) {
 
     clazz->resolved = true;
     clazz->this_class->clazz = clazz;
+    clazz->field_module = Value{BootstrapClassLoader::constants().module_java_base};
     return ResultOk;
 }
 
@@ -507,10 +511,28 @@ void Constants::resolve_and_initialize(Thread &thread) {
     };
 
     resolve_and_initialize(java_lang_Object);
+    resolve_and_initialize(java_lang_Module);
+    module_java_base = Heap::get().new_instance(java_lang_Module);
+    java_lang_Object->field_module = Value{module_java_base};
+    java_lang_Module->field_module = Value{module_java_base};
+
     resolve_and_initialize(java_lang_Class);
     resolve_and_initialize(java_lang_String);
     resolve_and_initialize(java_io_Serializable);
     resolve_and_initialize(java_lang_Cloneable);
     resolve_and_initialize(java_lang_Thread);
     resolve_and_initialize(java_lang_ThreadGroup);
+
+    module_java_base.data<Value>()[1] = Value{Heap::get().make_string("java.base")};
+    for (auto &primitive : primitives) {
+        if (primitive.primitive != nullptr) {
+            primitive.primitive->field_module = Value{module_java_base};
+        }
+        if (primitive.array != nullptr) {
+            primitive.primitive->field_module = Value{module_java_base};
+        }
+        if (primitive.boxed != nullptr) {
+            primitive.primitive->field_module = Value{module_java_base};
+        }
+    }
 }
