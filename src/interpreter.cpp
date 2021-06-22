@@ -793,8 +793,8 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             auto pc = frame.pc;
             size_t opcode_address = pc;
 
-            // skip 0-3 bytes of padding
-            pc = (pc + 3) & -4ul;
+            // skip opcode + 0-3 bytes of padding
+            pc = (pc + 4) & -4ul;
 
             s4 default_ = static_cast<s4>((code[pc] << 24) | (code[pc + 1] << 16) | (code[pc + 2] << 8) | code[pc + 3]);
             pc += 4;
@@ -822,8 +822,8 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             auto pc = frame.pc;
             size_t opcode_address = pc;
 
-            // skip 0-3 bytes of padding
-            pc = (pc + 3) & -4ul;
+            // skip opcode + 0-3 bytes of padding
+            pc = (pc + 4) & -4ul;
 
             s4 default_ = static_cast<s4>((code[pc] << 24) | (code[pc + 1] << 16) | (code[pc + 2] << 8) | code[pc + 3]);
             pc += 4;
