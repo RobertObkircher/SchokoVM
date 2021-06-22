@@ -106,6 +106,7 @@ add_sanitizers(jvm)
 target_include_directories(jvm PRIVATE ${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/jdk/include)
 target_compile_options(jvm PRIVATE -Wno-unused-parameter)
 target_compile_definitions(jvm PRIVATE LIB_EXTENSION="${CMAKE_SHARED_LIBRARY_SUFFIX}")
+target_link_libraries(jvm dl ffi)
 if (libzip_FOUND)
     target_link_libraries(jvm libzip::zip)
 else ()
@@ -124,9 +125,9 @@ target_link_libraries(SchokoVM jvm)
 
 
 add_library(NativeLib MODULE
-        src/native-test.cpp
+        tests/NativeLib.cpp
         )
-target_link_libraries(jvm dl ffi)
+target_include_directories(NativeLib PRIVATE ${JNI_INCLUDE_DIRS})
 
 
 #

@@ -8,7 +8,10 @@
 
 void throw_new(Thread &thread, Frame &frame, const char *name, const char *message) {
     thread.stack.push_frame(frame);
+    throw_new(thread, name, message);
+}
 
+void throw_new(Thread &thread, const char *name, const char *message) {
     ClassFile *clazz = BootstrapClassLoader::get().load(name);
     if (clazz == nullptr) {
         std::cerr << "Attempted to throw unknown class " << name << "\n";

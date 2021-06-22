@@ -20,6 +20,8 @@ inline void throw_it(Thread &thread, Frame &frame, Reference it) {
 
 void throw_new(Thread &thread, Frame &frame, const char *name, const char *message = nullptr);
 
+void throw_new(Thread &thread, const char *name, const char *message = nullptr);
+
 void throw_new(Thread &thread, ClassFile *clazz, const char *message = nullptr);
 
 void fill_in_stack_trace(Stack &stack, Reference throwable);
