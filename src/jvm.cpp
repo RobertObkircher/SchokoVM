@@ -263,7 +263,11 @@ JVM_Halt(jint code) {
 
 JNIEXPORT void JNICALL
 JVM_GC(void) {
-    UNIMPLEMENTED("JVM_GC");
+    LOG("JVM_GC");
+    std::vector<Thread *> threads{&this_thread};
+    size_t deleted = Heap::get().garbage_collection(threads);
+//    std::cerr << "GC delteted " << deleted << " objects\n";
+    assert(Heap::get().garbage_collection(threads) == 0);
 }
 
 /* Returns the number of real-time milliseconds that have elapsed since the

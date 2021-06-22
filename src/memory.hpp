@@ -81,8 +81,24 @@ union Value {
 // NOTE: If this struct contains padding at the end we will *not* use it for fields/elemetns.
 struct Object {
     ClassFile *clazz;
-    s4 flags;
+    u4 flags;
     s4 length;
+
+    enum Flags : u4 {
+        GC_BIT = 1,
+    };
+
+    [[nodiscard]] bool gc_bit() const {
+        return (flags & GC_BIT) != 0;
+    }
+
+    void gc_bit(bool value) {
+        if (value) {
+            flags |= GC_BIT;
+        } else {
+            flags &= ~GC_BIT;
+        }
+    }
 };
 
 struct CONSTANT_Utf8_info;
@@ -127,8 +143,18 @@ struct Heap {
 
     ClassFile *allocate_class();
 
+    size_t garbage_collection(std::vector<struct Thread *> &threads);
+
 private:
     static Heap the_heap;
+
+    bool gc_bit_unmarked = false;
+
+    bool all_objects_are_unmarked();
+
+    void mark(std::vector<struct Thread *> &threads, bool gc_bit_marked);
+
+    size_t sweep(bool unmarked);
 };
 
 #endif //SCHOKOVM_MEMORY_HPP
