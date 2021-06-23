@@ -1215,8 +1215,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             if (value == JAVA_NULL) {
                 return throw_new(thread, frame, Names::java_lang_NullPointerException);
             }
-            // TODO performance: we could call a version of handle_throw that doesn't expect "frame" to be on the stack
-            return throw_it(thread, frame, value);
+            return throw_it(thread, value);
         }
 
         case OpCodes::checkcast: {
@@ -1391,9 +1390,6 @@ static void goto_(Frame &frame) {
 static void handle_throw(Thread &thread, Frame &frame, Reference exception, bool &should_exit) {
     assert(exception != JAVA_NULL);
     auto obj = exception.object();
-
-    // The current frame must always be on the stack after an exception is thrown
-    frame = thread.stack.pop_frame();
 
     for (;;) {
         auto &exception_table = frame.method->code_attribute->exception_table;
@@ -1721,7 +1717,10 @@ void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &f
         frame.locals[0] = return_value;
     }
 
+    // restore the native frame
     frame = thread.stack.pop_frame();
+
+    // remove the native frame
     pop_frame(thread, frame, should_exit);
 }
 
