@@ -240,6 +240,7 @@ add_custom_command(
 # https://cmake.org/cmake/help/latest/module/UseJava.html
 add_jar(tests
         ${JAVA_TEST_SOURCES}
+        tests/AWTTest.java
         tests/HelloWorld.java
         ${JAVA_TEST_GENERATED_SOURCES})
 add_dependencies(jvm tests)

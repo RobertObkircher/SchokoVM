@@ -13,6 +13,9 @@
 #include "classloading.hpp"
 #include "native.hpp"
 
+#define TRACE(str)
+//#define TRACE(str) std::cout << str << "\n";
+
 // Table 6.5.newarray-A. Array type codes
 enum class ArrayPrimitiveTypes {
     T_BOOLEAN = 4,
@@ -86,6 +89,7 @@ Value interpret(Thread &thread, ClassFile *main, method_info *method) {
 }
 
 static inline void execute_instruction(Thread &thread, Frame &frame, bool &should_exit) {
+    TRACE(frame.clazz->name() + "@" + frame.method->name_index->value + ": " + std::to_string(frame.pc));
     std::vector<u1> &code = *frame.code;
     auto opcode = code[frame.pc];
     // TODO implement remaining opcodes. The ones that are currently commented/missing out have no test coverage whatsoever
