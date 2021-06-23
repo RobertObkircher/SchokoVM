@@ -258,10 +258,16 @@ struct Thread {
     Stack stack{};
     // TODO should be of type jthrowable
     Reference current_exception = JAVA_NULL;
-    JNIEnv *jni_env{};
+
+    // TODO expose a getter
+    JNIEnv *jni_env;
+    JNIEnv jni_env_value;
+    JNINativeInterface_ jni_native_interface;
 
     Reference thread_object = JAVA_NULL;
 };
+
+inline thread_local Thread this_thread;
 
 struct BootstrapClassLoader;
 

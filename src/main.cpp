@@ -92,11 +92,6 @@ int main(int argc, char *argv[]) {
         exit = 1;
     }
 
-    // TODO figure out how to free this (or maybe LeakSanitizer won't complain if we just put it in a thread local variable?)
-    delete (Thread *) penv->functions->reserved0;
-    delete penv->functions;
-    delete penv;
-
     pvm->DestroyJavaVM();
     return exit;
 }
