@@ -9,6 +9,7 @@
 void throw_new(Thread &thread, Frame &frame, const char *name, const char *message) {
     thread.stack.push_frame(frame);
     throw_new(thread, name, message);
+    frame = thread.stack.pop_frame();
 }
 
 void throw_new(Thread &thread, const char *name, const char *message) {
@@ -46,7 +47,7 @@ void throw_new(Thread &thread, ClassFile *clazz, const char *message) {
         thread.jni_env->CallNonvirtualVoidMethod((jobject) ref.memory, (jclass) clazz, init, (jstring) string.memory);
     }
 
-    thread.current_exception = ref;
+    throw_it(thread, ref);
 }
 
 void fill_in_stack_trace(Stack &stack, Reference throwable) {

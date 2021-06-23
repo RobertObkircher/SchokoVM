@@ -13,11 +13,6 @@ inline void throw_it(Thread &thread, Reference it) {
     thread.current_exception = it;
 }
 
-inline void throw_it(Thread &thread, Frame &frame, Reference it) {
-    thread.stack.push_frame(frame);
-    throw_it(thread, it);
-}
-
 void throw_new(Thread &thread, Frame &frame, const char *name, const char *message = nullptr);
 
 void throw_new(Thread &thread, const char *name, const char *message = nullptr);
