@@ -76,5 +76,22 @@ Java_Native_summm(JNIEnv *, jclass,
     return a1 + +a2 + +a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14 + a15 + a16 + a17 + a18 + a19;
 }
 
+// NOLINTNEXTLINE
+JNIEXPORT jint JNICALL Java_Native_overloaded__I(JNIEnv *, jclass, jint a) {
+    return a;
+}
+// NOLINTNEXTLINE
+JNIEXPORT jint JNICALL Java_Native_overloaded__J(JNIEnv *, jclass, jlong b) {
+    return static_cast<jint>(b);
+}
+// NOLINTNEXTLINE
+JNIEXPORT jstring JNICALL Java_Native_overloaded__Ljava_lang_String_2(JNIEnv *env, jclass, jstring) {
+    return env->NewStringUTF("abc");
+}
+// NOLINTNEXTLINE
+JNIEXPORT jint JNICALL Java_Native_overloaded___3I(JNIEnv *env, jclass, jintArray arr) {
+    return env->GetArrayLength(arr);
+}
+
 }
 

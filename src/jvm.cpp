@@ -101,7 +101,17 @@ JVM_MonitorNotifyAll(JNIEnv *env, jobject obj) {
 
 JNIEXPORT jobject JNICALL
 JVM_Clone(JNIEnv *env, jobject obj) {
-    UNIMPLEMENTED("JVM_Clone");
+    LOG("JVM_Clone");
+    auto original = Reference{obj};
+
+    if (!original.object()->clazz->is_subclass_of(BootstrapClassLoader::constants().java_lang_Cloneable)) {
+        auto thread = reinterpret_cast<Thread *>(env->functions->reserved0);
+        throw_new(*thread, "java/lang/CloneNotSupportedException", original.object()->clazz->name().c_str());
+        return nullptr;
+    }
+
+    auto copy = Heap::get().clone(original);
+    return reinterpret_cast<jobject>(copy.memory);
 }
 
 /*

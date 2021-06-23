@@ -161,6 +161,7 @@ set(JAVA_TEST_SOURCES
         tests/Bitwise.java
         tests/Boxing.java
         tests/Clazz.java
+        tests/Clone.java
         tests/Collections.java
         tests/Empty.java
         tests/Exceptions.java

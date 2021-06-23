@@ -9,7 +9,7 @@ public class Fields {
     public static void println(boolean z) { System.out.println(z); }
     public static void println(String s) { System.out.println(s); }
 
-    static class MyObject implements MyInterface {
+    static class MyObject implements MyInterface, Cloneable {
         boolean bool;
         byte b;
         short s;
@@ -19,6 +19,11 @@ public class Fields {
         long l;
         double d;
         MyObject next;
+
+        @Override
+        public MyObject clone() throws CloneNotSupportedException {
+            return (MyObject) super.clone();
+        }
     }
 
     public interface SuperInterface {
@@ -87,7 +92,7 @@ public class Fields {
         }
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws CloneNotSupportedException {
         MyObject object1 = new MyObject();
 
         // initial values
@@ -103,6 +108,7 @@ public class Fields {
 
         // changed values
         printMyObject(object1);
+        printMyObject((MyObject) (object1.clone()));
 
         MyObject object2 = new MyObject();
 

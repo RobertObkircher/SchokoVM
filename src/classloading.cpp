@@ -35,6 +35,8 @@ void BootstrapClassLoader::initialize_with_boot_classpath(std::string const &boo
 
     for (auto &primitive : m_constants.primitives) {
         primitive.primitive = make_builtin_class(primitive.primitive_name, nullptr);
+        primitive.primitive->element_size = primitive.size;
+        primitive.primitive->offset_of_array_after_header = primitive.offset_of_array_after_header;
         if (primitive.id != Primitive::Void) {
             primitive.array = make_builtin_class(primitive.array_name, primitive.primitive);
         } else {
@@ -117,6 +119,8 @@ ClassFile *BootstrapClassLoader::load(std::string const &name) {
         if (name != result->name()) {
             throw ParseError("unexpected name");
         }
+        result->element_size = sizeof(Value);
+        result->offset_of_array_after_header = offset_of_array_after_header<Object, Value>();
     }
 
     m_classes.insert({name, result});
@@ -148,8 +152,11 @@ ClassFile *BootstrapClassLoader::make_builtin_class(std::string name, ClassFile 
         clazz->interfaces.push_back(add_name_and_class(constants().java_lang_Cloneable));
         clazz->interfaces.push_back(add_name_and_class(constants().java_io_Serializable));
         clazz->field_component_type = Value{Reference{array_element_type}};
+        clazz->element_size = array_element_type->element_size;
+        clazz->offset_of_array_after_header = array_element_type->offset_of_array_after_header;
     } else {
         clazz->constant_pool.table.resize(1 * 2);
+        // `element_size` and `offset_of_array_after_header` will be set in `initialize_with_boot_classpath`
     }
     clazz->this_class = add_name_and_class(clazz);
     clazz->array_element_type = array_element_type;

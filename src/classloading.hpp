@@ -39,6 +39,9 @@ struct Primitive {
     char const descriptor_char{};
     char const *const array_name{};
     ClassFile *array{};
+
+    const size_t size;
+    const size_t offset_of_array_after_header;
 };
 
 namespace Names {
@@ -77,15 +80,15 @@ struct Constants {
     ClassFile *java_lang_Throwable{};
 
     Primitive primitives[Primitive::TYPE_COUNT] = {
-            {Primitive::Byte,    "byte",    nullptr, Names::java_lang_Byte,      nullptr, 'B', "[B", nullptr},
-            {Primitive::Char,    "char",    nullptr, Names::java_lang_Character, nullptr, 'C', "[C", nullptr},
-            {Primitive::Double,  "double",  nullptr, Names::java_lang_Double,    nullptr, 'D', "[D", nullptr},
-            {Primitive::Float,   "float",   nullptr, Names::java_lang_Float,     nullptr, 'F', "[F", nullptr},
-            {Primitive::Int,     "int",     nullptr, Names::java_lang_Integer,   nullptr, 'I', "[I", nullptr},
-            {Primitive::Long,    "long",    nullptr, Names::java_lang_Long,      nullptr, 'J', "[J", nullptr},
-            {Primitive::Short,   "short",   nullptr, Names::java_lang_Short,     nullptr, 'S', "[S", nullptr},
-            {Primitive::Boolean, "boolean", nullptr, Names::java_lang_Boolean,   nullptr, 'Z', "[Z", nullptr},
-            {Primitive::Void,    "void",    nullptr, Names::java_lang_Void,      nullptr, 'V', "[V", nullptr},
+            {Primitive::Byte,    "byte",    nullptr, Names::java_lang_Byte,      nullptr, 'B', "[B", nullptr, sizeof(s1),     offset_of_array_after_header<Object, s1>()},
+            {Primitive::Char,    "char",    nullptr, Names::java_lang_Character, nullptr, 'C', "[C", nullptr, sizeof(u2),     offset_of_array_after_header<Object, u2>()},
+            {Primitive::Double,  "double",  nullptr, Names::java_lang_Double,    nullptr, 'D', "[D", nullptr, sizeof(double), offset_of_array_after_header<Object, double>()},
+            {Primitive::Float,   "float",   nullptr, Names::java_lang_Float,     nullptr, 'F', "[F", nullptr, sizeof(float),  offset_of_array_after_header<Object, float>()},
+            {Primitive::Int,     "int",     nullptr, Names::java_lang_Integer,   nullptr, 'I', "[I", nullptr, sizeof(s4),     offset_of_array_after_header<Object, s4>()},
+            {Primitive::Long,    "long",    nullptr, Names::java_lang_Long,      nullptr, 'J', "[J", nullptr, sizeof(s8),     offset_of_array_after_header<Object, s8>()},
+            {Primitive::Short,   "short",   nullptr, Names::java_lang_Short,     nullptr, 'S', "[S", nullptr, sizeof(s4),     offset_of_array_after_header<Object, s4>()},
+            {Primitive::Boolean, "boolean", nullptr, Names::java_lang_Boolean,   nullptr, 'Z', "[Z", nullptr, sizeof(s1),     offset_of_array_after_header<Object, s1>()},
+            {Primitive::Void,    "void",    nullptr, Names::java_lang_Void,      nullptr, 'V', "[V", nullptr, 0,              0},
     };
 
     void resolve_and_initialize(Thread &thread);
