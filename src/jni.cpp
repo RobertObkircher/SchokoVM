@@ -711,9 +711,12 @@ jsize GetArrayLength
 jobjectArray NewObjectArray
         (JNIEnv *env, jsize len, jclass clazz, jobject init) {
     LOG("NewObjectArray");
-    return reinterpret_cast<jobjectArray>(
-            Heap::get().new_array<Reference>(reinterpret_cast<ClassFile *>(clazz), len).memory
-    );
+    ClassFile *array_class = BootstrapClassLoader::get().load(((ClassFile *) clazz)->as_array_element());
+    auto array = Heap::get().new_array<Reference>(array_class, len);
+    for (s4 i = 0; i < len; ++i) {
+        array.data<Reference>()[i] = Reference{init};
+    }
+    return reinterpret_cast<jobjectArray>(array.memory);
 }
 
 jobject GetObjectArrayElement
