@@ -9,9 +9,12 @@ Heap Heap::the_heap;
 
 Reference Heap::clone(Reference const &original) {
     auto clazz = original.object()->clazz;
-    auto copy = allocate_array<Value>(original.object()->clazz, original.object()->length);
+    auto copy = allocate_array(original.object()->clazz,
+                               clazz->offset_of_array_after_header +
+                               clazz->element_size * static_cast<size_t>(original.object()->length),
+                               original.object()->length);
 
-    memmove(reinterpret_cast<char *>(copy.memory) + clazz->offset_of_array_after_header,
+    memcpy(reinterpret_cast<char *>(copy.memory) + clazz->offset_of_array_after_header,
             reinterpret_cast<char *>(original.memory) + clazz->offset_of_array_after_header,
             clazz->element_size * static_cast<size_t>(original.object()->length));
     return copy;
@@ -20,6 +23,25 @@ Reference Heap::clone(Reference const &original) {
 Reference Heap::new_instance(ClassFile *clazz) {
     return allocate_array<Value>(clazz, (s4) clazz->total_instance_field_count);
 }
+
+Reference Heap::allocate_array(ClassFile *clazz, size_t total_size, s4 length) {
+    assert(length >= 0);
+    std::unique_ptr<void, OperatorDeleter> pointer(operator new(total_size));
+
+    // TODO is this good enough to initialize all primitive java fields?
+    // from cppreference calloc: Initialization to all bits zero does not guarantee that a floating-point or a pointer would be initialized to 0.0 and the null pointer value, respectively (although that is true on all common platforms)
+    memset(pointer.get(), 0, total_size);
+
+    Reference reference{pointer.get()};
+    auto *object = reference.object();
+    object->clazz = clazz;
+    object->length = length;
+
+    allocations.push_back(std::move(pointer));
+
+    return reference;
+}
+
 
 Reference Heap::make_string(std::u16string_view const &string_utf16) {
     size_t string_utf16_length = string_utf16.size() * sizeof(char16_t);

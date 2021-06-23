@@ -40,8 +40,8 @@ struct Primitive {
     char const *const array_name{};
     ClassFile *array{};
 
-    size_t size;
-    size_t offset_of_array_after_header;
+    const size_t size;
+    const size_t offset_of_array_after_header;
 };
 
 namespace Names {

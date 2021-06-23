@@ -110,29 +110,19 @@ struct Heap {
         return allocate_array<Element>(clazz, length);
     }
 
+    Reference allocate_array(ClassFile *clazz, size_t total_size, s4 length);
+
     template<class Element>
     Reference allocate_array(ClassFile *clazz, s4 length) {
         assert(length >= 0);
-
         size_t size = offset_of_array_after_header<Object, Element>() + static_cast<size_t>(length) * sizeof(Element);
-        std::unique_ptr<void, OperatorDeleter> pointer(operator new(size));
-
-        // TODO is this good enough to initialize all primitive java fields?
-        // from cppreference calloc: Initialization to all bits zero does not guarantee that a floating-point or a pointer would be initialized to 0.0 and the null pointer value, respectively (although that is true on all common platforms)
-        memset(pointer.get(), 0, size);
-
-        Reference reference{pointer.get()};
-        auto *object = reference.object();
-        object->clazz = clazz;
-        object->length = length;
-
-        allocations.push_back(std::move(pointer));
-
-        return reference;
+        return allocate_array(clazz, size, length);
     }
 
     Reference make_string(std::string const &modified_utf8);
+
     Reference make_string(std::u16string_view const &data);
+
     Reference load_string(CONSTANT_Utf8_info *data);
 
     ClassFile *allocate_class();
