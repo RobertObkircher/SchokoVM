@@ -595,7 +595,14 @@ JVM_NewMultiArray(JNIEnv *env, jclass eltClass, jintArray dim) {
  */
 JNIEXPORT jclass JNICALL
 JVM_GetCallerClass(JNIEnv *env) {
-    UNIMPLEMENTED("JVM_GetCallerClass");
+    LOG("JVM_GetCallerClass");
+    auto thread = reinterpret_cast<Thread *>(env->functions->reserved0);
+    const auto &frames = thread->stack.frames;
+    // TODO ignore frames associated with java.lang.reflect.Method.invoke()
+    // frames[size()-1] == Reflection.getCallerClass(), @CallerSensitive
+    // frames[size()-2] == callee of Reflection.getCallerClass(), @CallerSensitive
+    // frames[size()-3] == what we want
+    return reinterpret_cast<jclass>(frames[frames.size() - 3].method->clazz);
 }
 
 

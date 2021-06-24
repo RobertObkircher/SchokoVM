@@ -308,7 +308,7 @@ Result initialize_class(ClassFile *C, Thread &thread) {
     if (C->clinit_index >= 0) {
         method_info *clinit = &C->methods[static_cast<unsigned long>(C->clinit_index)];
 
-        interpret(thread, C, clinit);
+        interpret(thread, clinit);
 
         if (thread.current_exception != JAVA_NULL) {
             no_exception = false;
