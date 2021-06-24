@@ -4,14 +4,12 @@
 
 #define _JNI_IMPLEMENTATION_
 
-#include <locale>
-#include <codecvt>
-
 #include "jni.h"
 #include "classloading.hpp"
 #include "exceptions.hpp"
 #include "memory.hpp"
 #include "parser.hpp"
+#include "string.hpp"
 
 #define UNIMPLEMENTED(x) std::cerr << x; exit(42);
 #define LOG(x)
@@ -626,65 +624,61 @@ jmethodID GetStaticMethodID(JNIEnv *env, jclass clazz, const char *name, const c
     return (jmethodID) m;
 }
 
-jstring NewString
-        (JNIEnv *env, const jchar *utf16_data, jsize len) {
+jstring NewString(JNIEnv *env, const jchar *utf16_data, jsize len) {
     LOG("NewString");
     std::u16string_view str{reinterpret_cast<const char16_t *>(utf16_data), static_cast<size_t>(len)};
     auto ref = Heap::get().make_string(str);
     return reinterpret_cast<jstring>(ref.memory);
 }
 
-jsize GetStringLength
-        (JNIEnv *env, jstring str) {
-    UNIMPLEMENTED("GetStringLength");
+jsize GetStringLength(JNIEnv *env, jstring str) {
+    LOG("GetStringLength");
+    return JavaString(Reference{str}).length();
 }
 
-const jchar *GetStringChars
-        (JNIEnv *env, jstring str, jboolean *isCopy) {
-    UNIMPLEMENTED("GetStringChars");
+const jchar *GetStringChars(JNIEnv *env, jstring str, jboolean *isCopy) {
+    LOG("GetStringChars");
+    JavaString string{Reference{str}};
+
+    if (isCopy != nullptr) {
+        *isCopy = true;
+    }
+
+    auto buffer = new jchar[string.copy_to_buffer(0, string.length())];
+    string.copy_to_buffer(0, string.length(), buffer);
+    return buffer;
 }
 
-void ReleaseStringChars
-        (JNIEnv *env, jstring str, const jchar *chars) {
-    UNIMPLEMENTED("ReleaseStringChars");
+void ReleaseStringChars(JNIEnv *env, jstring str, const jchar *chars) {
+    LOG("ReleaseStringChars");
+    delete[] chars;
 }
 
-jstring NewStringUTF
-        (JNIEnv *env, const char *utf8_mod) {
+jstring NewStringUTF(JNIEnv *env, const char *utf8_mod) {
     LOG("NewStringUTF");
     auto str = Heap::get().make_string(utf8_mod);
     return reinterpret_cast<jstring>(str.memory);
 }
 
-jsize GetStringUTFLength
-        (JNIEnv *env, jstring str) {
-    UNIMPLEMENTED("GetStringUTFLength");
+jsize GetStringUTFLength(JNIEnv *env, jstring str) {
+    LOG("GetStringUTFLength");
+    return static_cast<jsize>(JavaString{Reference{str}}.count_utf8());
 }
 
-const char *GetStringUTFChars
-        (JNIEnv *env, jstring str, jboolean *isCopy) {
+const char *GetStringUTFChars(JNIEnv *env, jstring str, jboolean *isCopy) {
     LOG("GetStringUTFChars");
-    // TODO this should really be using modified utf8 and not real utf8
-    auto ref = Reference{str};
-    auto charArray = ref.data<Value>()[0].reference;
-    auto utf16_length_bytes = static_cast<size_t>(charArray.object()->length);
-    auto *utf16_data = charArray.data<u1>();
-
-    std::string utf8_string = std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t>{}.to_bytes(
-            (char16_t *) utf16_data, (char16_t *) (utf16_data + utf16_length_bytes));
-    auto utf8_length = utf8_string.size();
-
-    char *result = new char[utf8_length + 1];
-    std::strcpy(result, utf8_string.c_str());
+    JavaString string{Reference{str}};
 
     if (isCopy != nullptr) {
         *isCopy = JNI_TRUE;
     }
-    return result;
+
+    auto buffer = new char[string.copy_to_modified_utf8_buffer(0, string.length())];
+    string.copy_to_modified_utf8_buffer(0, string.length(), (u1 *) buffer);
+    return buffer;
 }
 
-void ReleaseStringUTFChars
-        (JNIEnv *env, jstring str, const char *chars) {
+void ReleaseStringUTFChars(JNIEnv *env, jstring str, const char *chars) {
     LOG("ReleaseStringUTFChars");
     delete[] chars;
 }
@@ -972,14 +966,16 @@ jint GetJavaVM
     UNIMPLEMENTED("GetJavaVM");
 }
 
-void GetStringRegion
-        (JNIEnv *env, jstring str, jsize start, jsize len, jchar *buf) {
-    UNIMPLEMENTED("GetStringRegion");
+void GetStringRegion(JNIEnv *env, jstring str, jsize start, jsize len, jchar *buf) {
+    LOG("GetStringRegion");
+    JavaString string{Reference{str}};
+    string.copy_to_buffer(start, len, buf);
 }
 
-void GetStringUTFRegion
-        (JNIEnv *env, jstring str, jsize start, jsize len, char *buf) {
-    UNIMPLEMENTED("GetStringUTFRegion");
+void GetStringUTFRegion(JNIEnv *env, jstring str, jsize start, jsize len, char *buf) {
+    LOG("GetStringUTFRegion");
+    JavaString string{Reference{str}};
+    string.copy_to_modified_utf8_buffer(start, len, (u1 *) buf);
 }
 
 void *GetPrimitiveArrayCritical

@@ -101,6 +101,7 @@ add_library(jvm SHARED
         src/unsafe.cpp src/unsafe.hpp
         src/data.hpp
         src/exceptions.cpp src/exceptions.hpp
+        src/string.cpp src/string.hpp
         )
 add_sanitizers(jvm)
 target_include_directories(jvm PRIVATE ${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/jdk/include)

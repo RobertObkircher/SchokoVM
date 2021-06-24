@@ -4,6 +4,7 @@
 #include <codecvt>
 #include "classfile.hpp"
 #include "classloading.hpp"
+#include "string.hpp"
 
 Heap Heap::the_heap;
 
@@ -15,8 +16,8 @@ Reference Heap::clone(Reference const &original) {
                                original.object()->length);
 
     memcpy(reinterpret_cast<char *>(copy.memory) + clazz->offset_of_array_after_header,
-            reinterpret_cast<char *>(original.memory) + clazz->offset_of_array_after_header,
-            clazz->element_size * static_cast<size_t>(original.object()->length));
+           reinterpret_cast<char *>(original.memory) + clazz->offset_of_array_after_header,
+           clazz->element_size * static_cast<size_t>(original.object()->length));
     return copy;
 }
 
@@ -58,8 +59,7 @@ Reference Heap::make_string(std::u16string_view const &string_utf16) {
 
     auto reference = new_instance(string_clazz);
     reference.data<Value>()[0] = Value{charArray};
-    // as declared in String.java: LATIN1 = 0, UTF16 = 1
-    reference.data<Value>()[1] = Value{(s1) 1};
+    JavaString{reference}.coder() = JavaString::Utf16;
 
     return reference;
 }
