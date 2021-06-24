@@ -146,6 +146,12 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
     if (thread->jni_env->ExceptionCheck()) {
         abort();
     }
+    method = thread->jni_env->GetStaticMethodID((jclass) system, "initPhase2", "(ZZ)I");
+    assert(method);
+    thread->jni_env->CallStaticIntMethod((jclass) system, method, true, true);
+    if (thread->jni_env->ExceptionCheck()) {
+        abort();
+    }
 
     return 0;
 }
@@ -669,6 +675,10 @@ jsize GetStringUTFLength
     auto utf16_length_bytes = static_cast<size_t>(charArray.object()->length);
     auto *utf16_data = charArray.data<u1>();
 
+    if (ref.data<Value>()[1].s4 == 0) {
+        return utf16_length_bytes;
+    }
+
     std::string utf8_string = std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t>{}.to_bytes(
             (char16_t *) utf16_data, (char16_t *) (utf16_data + utf16_length_bytes));
     return static_cast<jsize>(utf8_string.size());
@@ -682,6 +692,15 @@ const char *GetStringUTFChars
     auto charArray = ref.data<Value>()[0].reference;
     auto utf16_length_bytes = static_cast<size_t>(charArray.object()->length);
     auto *utf16_data = charArray.data<u1>();
+
+    if (ref.data<Value>()[1].s4 == 0) {
+        char *result = new char[utf16_length_bytes + 1];
+        std::strcpy(result, (const char *) utf16_data);
+        if (isCopy != nullptr) {
+            *isCopy = JNI_TRUE;
+        }
+        return result;
+    }
 
     std::string utf8_string = std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t>{}.to_bytes(
             (char16_t *) utf16_data, (char16_t *) (utf16_data + utf16_length_bytes));
@@ -1002,6 +1021,12 @@ void GetStringUTFRegion
     if (static_cast<size_t>(static_cast<unsigned int>(start + len)) > utf16_length_bytes) {
         // TODO StringIndexOutOfBoundsException
         throw std::runtime_error("TODO StringIndexOutOfBoundsException");
+    }
+
+    if (ref.data<Value>()[1].s4 == 0) {
+        std::strncpy(buf, (const char *) utf16_data + start, len);
+        buf[len] = 0;
+        return;
     }
 
     std::string utf8_string = std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t>{}.to_bytes(
