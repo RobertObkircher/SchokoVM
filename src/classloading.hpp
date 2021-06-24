@@ -112,11 +112,14 @@ struct BootstrapClassLoader {
 
     ClassFile *load_or_throw(std::string const &name);
 
+    void unnamed_module(Reference unnamed_module) { m_unnamed_module = unnamed_module; }
+
 private:
     std::vector<ClassPathEntry> m_class_path_entries;
     std::vector<char> m_buffer;
     std::unordered_map<std::string, ClassFile *> m_classes;
     Constants m_constants;
+    Reference m_unnamed_module;
 
     static BootstrapClassLoader the_bootstrap_class_loader;
 

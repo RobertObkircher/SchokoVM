@@ -127,12 +127,18 @@ JVM_InternString(JNIEnv *env, jstring str) {
  */
 JNIEXPORT jlong JNICALL
 JVM_CurrentTimeMillis(JNIEnv *env, jclass ignored) {
-    UNIMPLEMENTED("JVM_CurrentTimeMillis");
+    LOG("JVM_CurrentTimeMillis");
+    std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
+    auto duration = now.time_since_epoch();
+    return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
 }
 
 JNIEXPORT jlong JNICALL
 JVM_NanoTime(JNIEnv *env, jclass ignored) {
-    UNIMPLEMENTED("JVM_NanoTime");
+    LOG("JVM_NanoTime");
+    std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
+    auto duration = now.time_since_epoch();
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
 }
 
 JNIEXPORT jlong JNICALL
@@ -695,7 +701,8 @@ JVM_DefineModule(JNIEnv *env, jobject module, jboolean is_open, jstring version,
  */
 JNIEXPORT void JNICALL
 JVM_SetBootLoaderUnnamedModule(JNIEnv *env, jobject module) {
-    UNIMPLEMENTED("JVM_SetBootLoaderUnnamedModule");
+    LOG("JVM_SetBootLoaderUnnamedModule");
+    BootstrapClassLoader::get().unnamed_module(Reference {module});
 }
 
 /*
