@@ -20,7 +20,8 @@ Parser::Parser(std::istream &in) : in(in) {
     in.exceptions(std::ios::failbit | std::ios::badbit | std::ios::eofbit);
 }
 
-void Parser::parse(ClassFile &result) {
+void Parser::parse(ClassFile *memory) {
+    ClassFile &result = *memory;
     result.magic = eat_u4();
     if (result.magic != 0xCAFEBABE)
         throw ParseError("expected 0xCAFEBABE, not " + std::to_string(result.magic));
@@ -55,7 +56,7 @@ void Parser::parse(ClassFile &result) {
     u2 fields_count = eat_u2();
     for (int i = 0; i < fields_count; ++i) {
         field_info field_info;
-        field_info.clazz = result.this_class;
+        field_info.clazz = memory;
         field_info.access_flags = eat_u2();
         field_info.name_index = &check_cp_range_and_type<CONSTANT_Utf8_info>(result.constant_pool, eat_u2());
         field_info.descriptor_index = &check_cp_range_and_type<CONSTANT_Utf8_info>(result.constant_pool, eat_u2());
@@ -66,6 +67,7 @@ void Parser::parse(ClassFile &result) {
     u2 methods_count = eat_u2();
     for (int i = 0; i < methods_count; ++i) {
         method_info method_info{};
+        method_info.clazz = memory;
         method_info.access_flags = eat_u2();
         method_info.name_index = &check_cp_range_and_type<CONSTANT_Utf8_info>(result.constant_pool, eat_u2());
         method_info.descriptor_index = &check_cp_range_and_type<CONSTANT_Utf8_info>(result.constant_pool, eat_u2());

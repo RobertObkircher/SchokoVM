@@ -242,7 +242,7 @@ struct field_info {
     CONSTANT_Utf8_info *descriptor_index;
     std::vector<attribute_info> attributes;
 
-    CONSTANT_Class_info* clazz;
+    ClassFile *clazz;
     size_t index;
     ValueCategory category;
 
@@ -280,6 +280,7 @@ struct method_info {
 
     u1 return_category; // 0, 1, 2
 
+    ClassFile *clazz;
     std::optional<NativeFunction> native_function;
 
     [[nodiscard]] inline bool is_static() const {
