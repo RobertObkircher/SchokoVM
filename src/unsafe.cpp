@@ -42,6 +42,18 @@ JNICALL static jlong Unsafe_ObjectFieldOffset1(JNIEnv *env, jobject unsafe, jcla
     throw std::runtime_error("TODO: not found?");
 }
 
+JNICALL static void Unsafe_EnsureClassInitialized0(JNIEnv *env, jobject unsafe, jclass cls) {
+    LOG("Unsafe_EnsureClassInitialized0");
+    auto clazz = reinterpret_cast<ClassFile *>(cls);
+    auto *thread = static_cast<Thread *>(env->functions->reserved0);
+
+    if (resolve_class(clazz) == Exception) {
+        return;
+    }
+    if (initialize_class(clazz, *thread) == Exception) {
+        return;
+    }
+}
 
 JNICALL static jint Unsafe_ArrayBaseOffset0(JNIEnv *env, jobject unsafe, jclass cls) {
     LOG("Unsafe_ArrayBaseOffset0");
@@ -145,9 +157,9 @@ JNICALL static jboolean Unsafe_unalignedAccess0(JNIEnv *env, jobject unsafe) {
 static JNINativeMethod methods[] = {
 //        {CC("getObject"), CC("(" OBJ "J)" OBJ ""), Unsafe_GetObject},
 //        {CC("putObject"), CC("(" OBJ "J" OBJ ")V"), Unsafe_PutObject},
-        {CC("getObjectVolatile"),   CC("(" OBJ "J)" OBJ ""),          reinterpret_cast<void *>(Unsafe_GetObjectVolatile)},
+        {CC("getObjectVolatile"),       CC("(" OBJ "J)" OBJ ""),          reinterpret_cast<void *>(Unsafe_GetObjectVolatile)},
 //        {CC("putObjectVolatile"), CC("(" OBJ "J" OBJ ")V"), Unsafe_PutObjectVolatile},
-        {CC("getIntVolatile"),      CC("(" OBJ "J)I"),                reinterpret_cast<void *>(Unsafe_GetIntVolatile)},
+        {CC("getIntVolatile"),          CC("(" OBJ "J)I"),                reinterpret_cast<void *>(Unsafe_GetIntVolatile)},
 
 //        {CC("getUncompressedObject"), CC("(" ADR ")" OBJ), Unsafe_GetUncompressedObject},
 //
@@ -165,21 +177,21 @@ static JNINativeMethod methods[] = {
 //        {CC("freeMemory0"), CC ("(" ADR ")V"), Unsafe_FreeMemory0},
 //
 //        {CC("objectFieldOffset0"), CC ("(" FLD ")J"), Unsafe_ObjectFieldOffset0},
-        {CC("objectFieldOffset1"),  CC ("(" CLS LANG "String;)J"),    reinterpret_cast<void *>(Unsafe_ObjectFieldOffset1)},
+        {CC("objectFieldOffset1"),      CC ("(" CLS LANG "String;)J"),    reinterpret_cast<void *>(Unsafe_ObjectFieldOffset1)},
 //        {CC("staticFieldOffset0"), CC ("(" FLD ")J"), Unsafe_StaticFieldOffset0},
 //        {CC("staticFieldBase0"), CC ("(" FLD ")" OBJ), Unsafe_StaticFieldBase0},
-//        {CC("ensureClassInitialized0"), CC ("(" CLS ")V"), Unsafe_EnsureClassInitialized0},
-        {CC("arrayBaseOffset0"),    CC ("(" CLS ")I"),                reinterpret_cast<void *>(Unsafe_ArrayBaseOffset0)},
-        {CC("arrayIndexScale0"),    CC ("(" CLS ")I"),                reinterpret_cast<void *>(Unsafe_ArrayIndexScale0)},
-        {CC("addressSize0"),        CC ("()I"),                       reinterpret_cast<void *>(Unsafe_AddressSize0)},
+        {CC("ensureClassInitialized0"), CC ("(" CLS ")V"),                reinterpret_cast<void *>(Unsafe_EnsureClassInitialized0)},
+        {CC("arrayBaseOffset0"),        CC ("(" CLS ")I"),                reinterpret_cast<void *>(Unsafe_ArrayBaseOffset0)},
+        {CC("arrayIndexScale0"),        CC ("(" CLS ")I"),                reinterpret_cast<void *>(Unsafe_ArrayIndexScale0)},
+        {CC("addressSize0"),            CC ("()I"),                       reinterpret_cast<void *>(Unsafe_AddressSize0)},
 //        {CC("pageSize"), CC ("()I"), Unsafe_PageSize},
 //
 //        {CC("defineClass0"), CC ("(" DC_Args ")" CLS), Unsafe_DefineClass0},
 //        {CC("allocateInstance"), CC ("(" CLS ")" OBJ), Unsafe_AllocateInstance},
 //        {CC("throwException"), CC ("(" THR ")V"), Unsafe_ThrowException},
-        {CC("compareAndSetObject"), CC ("(" OBJ "J" OBJ "" OBJ ")Z"), reinterpret_cast<void *>(Unsafe_CompareAndSetObject)},
-        {CC("compareAndSetInt"),    CC ("(" OBJ "J""I""I"")Z"),       reinterpret_cast<void *>(Unsafe_CompareAndSetInt)},
-        {CC("compareAndSetLong"),   CC ("(" OBJ "J""J""J"")Z"),       reinterpret_cast<void *>(Unsafe_CompareAndSetLong)},
+        {CC("compareAndSetObject"),     CC ("(" OBJ "J" OBJ "" OBJ ")Z"), reinterpret_cast<void *>(Unsafe_CompareAndSetObject)},
+        {CC("compareAndSetInt"),        CC ("(" OBJ "J""I""I"")Z"),       reinterpret_cast<void *>(Unsafe_CompareAndSetInt)},
+        {CC("compareAndSetLong"),       CC ("(" OBJ "J""J""J"")Z"),       reinterpret_cast<void *>(Unsafe_CompareAndSetLong)},
 //        {CC("compareAndExchangeObject"), CC ("(" OBJ "J" OBJ "" OBJ ")" OBJ), Unsafe_CompareAndExchangeObject},
 //        {CC("compareAndExchangeInt"), CC ("(" OBJ "J""I""I"")I"), Unsafe_CompareAndExchangeInt},
 //        {CC("compareAndExchangeLong"), CC ("(" OBJ "J""J""J"")J"), Unsafe_CompareAndExchangeLong},
@@ -197,12 +209,12 @@ static JNINativeMethod methods[] = {
 //
 //        {CC("shouldBeInitialized0"), CC("(" CLS ")Z"), Unsafe_ShouldBeInitialized0},
 //
-        {CC("loadFence"),           CC("()V"),                        reinterpret_cast<void *>(Unsafe_LoadFence)},
-        {CC("storeFence"),          CC("()V"),                        reinterpret_cast<void *>(Unsafe_StoreFence)},
-        {CC("fullFence"),           CC("()V"),                        reinterpret_cast<void *>(Unsafe_FullFence)},
+        {CC("loadFence"),               CC("()V"),                        reinterpret_cast<void *>(Unsafe_LoadFence)},
+        {CC("storeFence"),              CC("()V"),                        reinterpret_cast<void *>(Unsafe_StoreFence)},
+        {CC("fullFence"),               CC("()V"),                        reinterpret_cast<void *>(Unsafe_FullFence)},
 
-        {CC("isBigEndian0"),        CC("()Z"),                        reinterpret_cast<void *>(Unsafe_isBigEndian0)},
-        {CC("unalignedAccess0"),    CC("()Z"),                        reinterpret_cast<void *>(Unsafe_unalignedAccess0)}
+        {CC("isBigEndian0"),            CC("()Z"),                        reinterpret_cast<void *>(Unsafe_isBigEndian0)},
+        {CC("unalignedAccess0"),        CC("()Z"),                        reinterpret_cast<void *>(Unsafe_unalignedAccess0)}
 };
 
 #undef OBJ
