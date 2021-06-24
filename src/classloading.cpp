@@ -95,7 +95,7 @@ ClassFile *BootstrapClassLoader::load(std::string const &name) {
             if (in) {
                 Parser parser{in};
                 result = Heap::get().allocate_class();
-                parser.parse(*result);
+                parser.parse(result);
                 break;
             }
         } else if (!cp_entry.zip.path.empty()) {
@@ -109,7 +109,7 @@ ClassFile *BootstrapClassLoader::load(std::string const &name) {
 
                 Parser parser{in};
                 result = Heap::get().allocate_class();
-                parser.parse(*result);
+                parser.parse(result);
                 break;
             }
         }
@@ -427,7 +427,7 @@ Result resolve_field(ClassFile *clazz, CONSTANT_Fieldref_info *fieldref_info, Re
     fieldref_info->resolved = true;
     fieldref_info->is_boolean = info->descriptor_index->value == "Z";
     fieldref_info->is_static = info->is_static();
-    fieldref_info->value_clazz = info->clazz->clazz;
+    fieldref_info->value_clazz = info->clazz;
     fieldref_info->index = info->index;
     fieldref_info->category = info->category;
 

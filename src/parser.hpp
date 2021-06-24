@@ -73,7 +73,7 @@ class Parser {
 public:
     explicit Parser(std::istream &in);
 
-    void parse(ClassFile &result);
+    void parse(ClassFile *memory);
 
     ConstantPool parse_constant_pool(u2 major_version);
 
