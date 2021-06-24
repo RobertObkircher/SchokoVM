@@ -45,9 +45,9 @@ void fill_multi_array(Reference &reference, ClassFile *element_type, const std::
 
 [[nodiscard]] static bool method_resolution(ClassInterface_Methodref &method);
 
-static void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &frame, bool &should_exit);
+static void native_call(method_info *method, Thread &thread, Frame &frame, bool &should_exit);
 
-Value interpret(Thread &thread, ClassFile *main, method_info *method) {
+Value interpret(Thread &thread, method_info *method) {
     if (thread.current_exception != JAVA_NULL) {
         // TODO is it possible to call a function while an exception is being thrown?
         assert(false);
@@ -56,14 +56,14 @@ Value interpret(Thread &thread, ClassFile *main, method_info *method) {
 
     [[maybe_unused]] auto frames = thread.stack.frames.size();
     [[maybe_unused]] auto memory_used = thread.stack.memory_used;
-    Frame frame{thread.stack, main, method, thread.stack.memory_used, true};
+    Frame frame{thread.stack, method, thread.stack.memory_used, true};
 
-    if (!main->is_initialized) {
-        if (resolve_class(main->this_class)) {
+    if (!method->clazz->is_initialized) {
+        if (resolve_class(method->clazz->this_class)) {
             assert(thread.current_exception != JAVA_NULL);
             return Value();
         }
-        if (initialize_class(main, thread, frame)) {
+        if (initialize_class(method->clazz, thread, frame)) {
             assert(thread.current_exception != JAVA_NULL);
             return Value();
         }
@@ -130,7 +130,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         }
         case OpCodes::ldc: {
             auto index = frame.consume_u1();
-            auto &entry = frame.clazz->constant_pool.table[index];
+            auto &entry = frame.constant_pool->table[index];
             if (auto i = std::get_if<CONSTANT_Integer_info>(&entry.variant)) {
                 frame.push<s4>(i->value);
             } else if (auto f = std::get_if<CONSTANT_Float_info>(&entry.variant)) {
@@ -150,7 +150,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         }
         case OpCodes::ldc_w: {
             size_t index = frame.consume_u2();
-            auto &entry = frame.clazz->constant_pool.table[index];
+            auto &entry = frame.constant_pool->table[index];
             // TODO common function to turn constan pool reference into value
             if (auto i = std::get_if<CONSTANT_Integer_info>(&entry.variant)) {
                 frame.push<s4>(i->value);
@@ -170,7 +170,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         }
         case OpCodes::ldc2_w: {
             size_t index = frame.consume_u2();
-            auto &entry = frame.clazz->constant_pool.table[index];
+            auto &entry = frame.constant_pool->table[index];
             if (auto l = std::get_if<CONSTANT_Long_info>(&entry.variant)) {
                 frame.push<s8>(l->value);
             } else if (auto d = std::get_if<CONSTANT_Double_info>(&entry.variant)) {
@@ -854,7 +854,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         case OpCodes::getfield:
         case OpCodes::putfield: {
             u2 index = frame.read_u2();
-            auto field = frame.clazz->constant_pool.get<CONSTANT_Fieldref_info>(index);
+            auto field = frame.constant_pool->get<CONSTANT_Fieldref_info>(index);
 
             if (!field.resolved) {
                 if (resolve_class(field.class_)) {
@@ -945,7 +945,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         }
         case OpCodes::invokevirtual: {
             u2 method_index = frame.read_u2();
-            auto &declared_method_ref = frame.clazz->constant_pool.get<CONSTANT_Methodref_info>(method_index).method;
+            auto &declared_method_ref = frame.constant_pool->get<CONSTANT_Methodref_info>(method_index).method;
 
             method_info *declared_method = declared_method_ref.method;
 
@@ -965,24 +965,22 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
                 return throw_new(thread, frame, Names::java_lang_NullPointerException);
             }
 
-            ClassFile *clazz;
             method_info *method;
-            if (method_selection(object.object()->clazz, declared_method_ref.class_->clazz, declared_method,
-                                 clazz, method)) {
+            if (method_selection(object.object()->clazz, declared_method, method)) {
                 return;
             }
 
             frame.invoke_length = 3;
-            thread.stack.push_frame(frame, clazz, method);
+            thread.stack.push_frame(frame, method);
 
             if (method->is_native()) {
-                native_call(clazz, method, thread, frame, should_exit);
+                native_call(method, thread, frame, should_exit);
             }
             return;
         }
         case OpCodes::invokespecial: {
             u2 method_index = frame.read_u2();
-            auto &ref = frame.clazz->constant_pool.table[method_index].variant;
+            auto &ref = frame.constant_pool->table[method_index].variant;
             ClassInterface_Methodref *method_ref;
             if (auto m = std::get_if<CONSTANT_Methodref_info>(&ref)) {
                 method_ref = &m->method;
@@ -991,14 +989,10 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             }
 
             method_info *method = method_ref->method;
-            ClassFile *clazz = method_ref->class_->clazz;
-
             if (method == nullptr) {
                 if (resolve_class(method_ref->class_)) {
                     return;
                 }
-
-                clazz = method_ref->class_->clazz;
 
                 if (method_resolution(*method_ref)) {
                     return;
@@ -1007,16 +1001,16 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             }
 
             frame.invoke_length = 3;
-            thread.stack.push_frame(frame, clazz, method);
+            thread.stack.push_frame(frame, method);
 
             if (method->is_native()) {
-                native_call(clazz, method, thread, frame, should_exit);
+                native_call(method, thread, frame, should_exit);
             }
             return;
         }
         case OpCodes::invokestatic: {
             u2 method_index = frame.read_u2();
-            auto &ref = frame.clazz->constant_pool.table[method_index].variant;
+            auto &ref = frame.constant_pool->table[method_index].variant;
             ClassInterface_Methodref *method_ref;
             if (auto m = std::get_if<CONSTANT_Methodref_info>(&ref)) {
                 method_ref = &m->method;
@@ -1058,16 +1052,16 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
             }
 
             frame.invoke_length = 3;
-            thread.stack.push_frame(frame, clazz, method);
+            thread.stack.push_frame(frame, method);
 
             if (method->is_native()) {
-                native_call(clazz, method, thread, frame, should_exit);
+                native_call(method, thread, frame, should_exit);
             }
             return;
         }
         case OpCodes::invokeinterface: {
             u2 method_index = frame.read_u2();
-            auto &declared_method_ref = frame.clazz->constant_pool.get<CONSTANT_InterfaceMethodref_info>(
+            auto &declared_method_ref = frame.constant_pool->get<CONSTANT_InterfaceMethodref_info>(
                     method_index).method;
 
             method_info *declared_method = declared_method_ref.method;
@@ -1086,25 +1080,23 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
 
             auto object = frame.peek_at(declared_method->stack_slots_for_parameters - 1).reference;
 
-            ClassFile *clazz;
             method_info *method;
-            if (method_selection(object.object()->clazz, declared_method_ref.class_->clazz, declared_method,
-                                 clazz, method)) {
+            if (method_selection(object.object()->clazz, declared_method, method)) {
                 return;
             }
 
             // The two bytes after the method index in the bytecode are irrelevant and unused
             frame.invoke_length = 5;
-            thread.stack.push_frame(frame, clazz, method);
+            thread.stack.push_frame(frame, method);
 
             if (method->is_native()) {
-                native_call(clazz, method, thread, frame, should_exit);
+                native_call(method, thread, frame, should_exit);
             }
             return;
         }
         case OpCodes::new_: {
             u2 index = frame.read_u2();
-            auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
+            auto &class_info = frame.constant_pool->get<CONSTANT_Class_info>(index);
 
             if (resolve_class(&class_info)) {
                 return;
@@ -1183,7 +1175,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         }
         case OpCodes::anewarray: {
             u2 index = frame.read_u2();
-            auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
+            auto &class_info = frame.constant_pool->get<CONSTANT_Class_info>(index);
             if (resolve_class(&class_info)) {
                 return;
             }
@@ -1221,7 +1213,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
 
         case OpCodes::checkcast: {
             u2 index = frame.read_u2();
-            auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
+            auto &class_info = frame.constant_pool->get<CONSTANT_Class_info>(index);
 
             auto objectref = frame.pop<Reference>();
             frame.push<Reference>(objectref);
@@ -1241,7 +1233,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
 
         case OpCodes::instanceof: {
             u2 index = frame.read_u2();
-            auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
+            auto &class_info = frame.constant_pool->get<CONSTANT_Class_info>(index);
 
             auto objectref = frame.pop<Reference>();
             if (objectref == JAVA_NULL) {
@@ -1322,7 +1314,7 @@ static inline void execute_instruction(Thread &thread, Frame &frame, bool &shoul
         }
         case OpCodes::multianewarray: {
             u2 index = frame.read_u2();
-            auto &class_info = frame.clazz->constant_pool.get<CONSTANT_Class_info>(index);
+            auto &class_info = frame.constant_pool->get<CONSTANT_Class_info>(index);
             if (resolve_class(&class_info)) {
                 return;
             }
@@ -1408,7 +1400,7 @@ static void handle_throw(Thread &thread, Frame &frame, Reference exception, bool
                                                  } else {
                                                      // TODO Don't compare by name but resolve the class instead,
                                                      // but without running the class initializer.
-                                                     auto &clazz_name = frame.clazz->constant_pool.get<CONSTANT_Class_info>(
+                                                     auto &clazz_name = frame.constant_pool->get<CONSTANT_Class_info>(
                                                              e.catch_type).name->value;
                                                      for (ClassFile *c = obj->clazz;; c = c->super_class) {
                                                          if (c->name() == clazz_name) { return true; }
@@ -1453,10 +1445,10 @@ static void pop_frame(Thread &thread, Frame &frame, bool &should_exit) {
 }
 
 
-Frame::Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top, bool is_root_frame)
-        : clazz(clazz),
-          method(method),
+Frame::Frame(Stack &stack, method_info *method, size_t operand_stack_top, bool is_root_frame)
+        : method(method),
           code(nullptr),
+          constant_pool(method != nullptr ? &method->clazz->constant_pool : nullptr),
           operands_top(0),
           previous_stack_memory_usage(stack.memory_used),
           pc(0),
@@ -1539,8 +1531,7 @@ void fill_multi_array(Reference &reference, ClassFile *element_type, const std::
 
 static void
 resolve_method_interfaces(ClassFile *clazz, const std::string &name, const std::string &descriptor,
-                          ClassFile *&out_clazz_max_specific, method_info *&out_method_max_specific,
-                          ClassFile *&out_clazz_fallback, method_info *&out_method_fallback) {
+                          method_info *&out_method_max_specific, method_info *&out_method_fallback) {
     if (clazz->is_interface()) {
         for (auto &m : clazz->methods) {
             if (m.name_index->value == name &&
@@ -1548,17 +1539,14 @@ resolve_method_interfaces(ClassFile *clazz, const std::string &name, const std::
                 !m.is_private() && !m.is_static()) {
                 // arbitrarily use the last matching method as a fallback
                 out_method_fallback = &m;
-                out_clazz_fallback = clazz;
 
                 if (!m.is_abstract()) {
                     if (out_method_max_specific == nullptr) {
                         out_method_max_specific = &m;
-                        out_clazz_max_specific = clazz;
                     } else {
-                        if (clazz->is_subclass_of(out_clazz_max_specific)) {
+                        if (clazz->is_subclass_of(out_method_max_specific->clazz)) {
                             // more specific class found
                             out_method_max_specific = &m;
-                            out_clazz_max_specific = clazz;
                         }
                     }
                 }
@@ -1567,14 +1555,10 @@ resolve_method_interfaces(ClassFile *clazz, const std::string &name, const std::
     }
 
     for (auto &interface : clazz->interfaces) {
-        resolve_method_interfaces(interface->clazz, name, descriptor,
-                                  out_clazz_max_specific, out_method_max_specific,
-                                  out_clazz_fallback, out_method_fallback);
+        resolve_method_interfaces(interface->clazz, name, descriptor, out_method_max_specific, out_method_fallback);
     }
     if (clazz->super_class) {
-        resolve_method_interfaces(clazz->super_class, name, descriptor,
-                                  out_clazz_max_specific, out_method_max_specific,
-                                  out_clazz_fallback, out_method_fallback);
+        resolve_method_interfaces(clazz->super_class, name, descriptor, out_method_max_specific, out_method_fallback);
     }
 }
 
@@ -1592,13 +1576,9 @@ method_info *method_resolution(ClassFile *clazz, std::string const &name, std::s
     }
 
     // 3.
-    ClassFile *out_clazz_max_specific = nullptr;
     method_info *out_method_max_specific = nullptr;
-    ClassFile *out_clazz_fallback = nullptr;
     method_info *out_method_fallback = nullptr;
-    resolve_method_interfaces(clazz, name, descriptor,
-                              out_clazz_max_specific, out_method_max_specific,
-                              out_clazz_fallback, out_method_fallback);
+    resolve_method_interfaces(clazz, name, descriptor, out_method_max_specific, out_method_fallback);
 
     if (out_method_max_specific != nullptr) {
         return out_method_max_specific;
@@ -1625,13 +1605,11 @@ method_info *method_resolution(ClassFile *clazz, std::string const &name, std::s
 }
 
 [[nodiscard]] bool
-method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
-                 ClassFile *&out_class, method_info *&out_method) {
+method_selection(ClassFile *dynamic_class, method_info *declared_method, method_info *&out_method) {
     // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-5.html#jvms-5.4.6
     // 1.
     if (declared_method->is_private()) {
         out_method = declared_method;
-        out_class = declared_class;
         return false;
     }
 
@@ -1640,10 +1618,15 @@ method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_inf
     // 2. (1 + 2)
     for (ClassFile *clazz = dynamic_class; clazz != nullptr; clazz = clazz->super_class) {
         for (auto &m : clazz->methods) {
+            // TODO this is not mentionend in the spec
+            if (&m == declared_method) {
+                out_method = &m;
+                return false;
+            }
             // "can override" according to §5.4.5
             if (m.name_index->value == name &&
                 m.descriptor_index->value == descriptor &&
-                !m.is_private() &&
+                !m.is_private() && !m.is_static() &&
                 (
                         m.is_protected() || m.is_public()
                         ||
@@ -1652,41 +1635,35 @@ method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_inf
                 )
                     ) {
                 out_method = &m;
-                out_class = clazz;
                 return false;
             }
         }
     }
 
     // 2. (3)
-    ClassFile *out_clazz_max_specific;
     method_info *out_method_max_specific = nullptr;
-    ClassFile *out_clazz_fallback = nullptr;
     method_info *out_method_fallback = nullptr;
-    resolve_method_interfaces(dynamic_class, name, descriptor,
-                              out_clazz_max_specific, out_method_max_specific,
-                              out_clazz_fallback, out_method_fallback);
+    resolve_method_interfaces(dynamic_class, name, descriptor, out_method_max_specific, out_method_fallback);
 
     if (out_method_max_specific != nullptr && !out_method_max_specific->is_abstract()) {
-        out_class = out_clazz_max_specific;
         out_method = out_method_max_specific;
         return false;
     } else if (out_method_fallback != nullptr) {
-        out_class = out_clazz_fallback;
         out_method = out_method_fallback;
         return false;
     }
 
     // TODO throw the appropriate JVM exception instead
+    // TODO shouldn't this be impossible as long as declared isn't abstract?
     throw std::runtime_error("Couldn't find method (virtual): " + name + descriptor);
 }
 
-void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &frame, bool &should_exit) {
+void native_call(method_info *method, Thread &thread, Frame &frame, bool &should_exit) {
     // during native calls we push the current frame
     thread.stack.push_frame(frame);
 
     if (!method->native_function) {
-        auto *function_pointer = get_native_function_pointer(clazz, method);
+        auto *function_pointer = get_native_function_pointer(method);
         if (function_pointer == nullptr) {
             // TODO throw an exception and return
             abort();
@@ -1696,7 +1673,7 @@ void native_call(ClassFile *clazz, method_info *method, Thread &thread, Frame &f
     NativeFunction &native = *method->native_function;
 
     void *jni_env_argument = thread.jni_env;
-    ClassFile *class_argument = clazz;
+    ClassFile *class_argument = method->clazz;
     bool use_class_argument = method->is_static();
 
     Value return_value;

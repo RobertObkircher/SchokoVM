@@ -417,12 +417,12 @@ static jint Name(JNIEnv *env, jclass java_class, bool is_virtual,               
     }                                                                                                                  \
                                                                                                                        \
     if (is_virtual) {                                                                                                  \
-        auto *declared_clazz = clazz;                                                                                  \
         auto *declared_method = method;                                                                                \
-                                                                                                                       \
-        if (method_selection(object->clazz, declared_clazz, declared_method, clazz, method)) {                         \
+        if (method_selection(object->clazz, declared_method, method)) {                                                \
             return JNI_ERR;                                                                                            \
         }                                                                                                              \
+    } else {                                                                                                           \
+        assert(clazz == method->clazz);                                                                                \
     }                                                                                                                  \
                                                                                                                        \
     size_t offset = saved_operand_stack_top;                                                                           \
@@ -438,7 +438,7 @@ static jint Name(JNIEnv *env, jclass java_class, bool is_virtual,               
         offset += parts->category;                                                                                     \
     }                                                                                                                  \
                                                                                                                        \
-    result = interpret(*thread, clazz, method);                                                                        \
+    result = interpret(*thread, method);                                                                               \
     thread->stack.memory_used = saved_operand_stack_top;                                                               \
     return JNI_OK;                                                                                                     \
 }                                                                                                                      \

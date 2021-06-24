@@ -58,7 +58,7 @@ void fill_in_stack_trace(Stack &stack, Reference throwable) {
         }
         ++ignored; // ignore Throwable/Exception initializers
 
-        if (frame.clazz == throwable.object()->clazz) {
+        if (frame.method->clazz == throwable.object()->clazz) {
             break;
         }
     }
@@ -98,19 +98,20 @@ static Reference init_stack_trace_element(Frame const &frame, Reference element)
     Reference &fileName = element.data<Value>()[6].reference; // String
     s4 &lineNumber = element.data<Value>()[7].s4; // int
 
-    declaringClassObject = Reference{frame.clazz};
+    ClassFile *clazz = frame.method->clazz;
+    declaringClassObject = Reference{clazz};
     classLoaderName = JAVA_NULL;
     moduleName = JAVA_NULL;
     moduleVersion = JAVA_NULL;
 
-    declaringClass = Heap::get().make_string(frame.clazz->name());
+    declaringClass = Heap::get().make_string(clazz->name());
     methodName = Heap::get().make_string(frame.method->name_index->value);
 
-    auto source_file = std::find_if(frame.clazz->attributes.begin(), frame.clazz->attributes.end(),
+    auto source_file = std::find_if(clazz->attributes.begin(), clazz->attributes.end(),
                                     [](const attribute_info &a) {
                                         return std::holds_alternative<SourceFile_attribute>(a.variant);
                                     });
-    if (source_file != std::end(frame.clazz->attributes)) {
+    if (source_file != std::end(clazz->attributes)) {
         auto value = std::get<SourceFile_attribute>(source_file->variant).sourcefile_index->value;
         fileName = Heap::get().make_string(value);
     }

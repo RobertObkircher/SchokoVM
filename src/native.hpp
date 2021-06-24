@@ -16,7 +16,7 @@ union Value;
 struct ClassFile;
 struct method_info;
 
-void *get_native_function_pointer(ClassFile *clazz, method_info *method);
+void *get_native_function_pointer(method_info *method);
 
 struct NativeFunction {
     NativeFunction(method_info *method, void *function_pointer);

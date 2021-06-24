@@ -24,9 +24,9 @@ enum [[nodiscard]] Result {
 
 /** https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-2.html#jvms-2.6 */
 struct Frame {
-    ClassFile *clazz;
     method_info *method;
     std::vector<u1> *code;
+    ConstantPool *constant_pool; // method->clazz->constant_pool
 
     // stack_memory indices (we cannot store pointers because the memory could move)
     std::span<Value> locals;
@@ -44,7 +44,7 @@ struct Frame {
 
     bool is_root_frame;
 
-    Frame(Stack &stack, ClassFile *clazz, method_info *method, size_t operand_stack_top, bool is_root_frame);
+    Frame(Stack &stack, method_info *method, size_t operand_stack_top, bool is_root_frame);
 
     inline u1 read_u1() {
         return (*code)[pc + 1];
@@ -235,12 +235,12 @@ struct Stack {
     }
 
     /// Pushes current_frame onto the list of parent frames and sets to current frame to run `method` in `clazz`
-    void push_frame(Frame &current_frame, ClassFile *clazz, method_info *method) {
+    void push_frame(Frame &current_frame, method_info *method) {
         size_t operand_stack_top = current_frame.first_operand_index + current_frame.operands_top;
         current_frame.operands_top += -method->stack_slots_for_parameters + method->return_category;
         push_frame(current_frame);
 
-        current_frame = {*this, clazz, method, operand_stack_top, false};
+        current_frame = {*this, method, operand_stack_top, false};
         if (memory_used > memory.size()) {
             throw std::runtime_error("stack overflow");
         }
@@ -268,10 +268,9 @@ struct BootstrapClassLoader;
 method_info *method_resolution(ClassFile *clazz, std::string const &name, std::string const &descriptor);
 
 [[nodiscard]] bool
-method_selection(ClassFile *dynamic_class, ClassFile *declared_class, method_info *declared_method,
-                 ClassFile *&out_class, method_info *&out_method);
+method_selection(ClassFile *dynamic_class, method_info *declared_method, method_info *&out_method);
 
 
-Value interpret(Thread &thread, ClassFile *main, method_info *method);
+Value interpret(Thread &thread, method_info *method);
 
 #endif //SCHOKOVM_INTERPRETER_HPP

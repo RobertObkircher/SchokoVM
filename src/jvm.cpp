@@ -613,7 +613,7 @@ JVM_GetCallerClass(JNIEnv *env) {
     // NOT YET: frames[size()-1] == Reflection.getCallerClass(), @CallerSensitive
     // frames[size()-2] == callee of Reflection.getCallerClass(), @CallerSensitive
     // frames[size()-3] == what we want
-    return reinterpret_cast<jclass>(frames[frames.size() - 3].clazz);
+    return reinterpret_cast<jclass>(frames[frames.size() - 3].method->clazz);
 }
 
 /*
