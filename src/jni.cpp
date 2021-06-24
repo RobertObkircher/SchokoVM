@@ -9,6 +9,7 @@
 
 #include "jni.h"
 #include "classloading.hpp"
+#include "exceptions.hpp"
 #include "memory.hpp"
 #include "parser.hpp"
 
@@ -236,14 +237,16 @@ jobject ToReflectedMethod
     UNIMPLEMENTED("ToReflectedMethod");
 }
 
-jclass GetSuperclass
-        (JNIEnv *env, jclass sub) {
-    UNIMPLEMENTED("GetSuperclass");
+jclass GetSuperclass(JNIEnv *env, jclass sub) {
+    LOG("GetSuperclass");
+    return reinterpret_cast<jclass>(reinterpret_cast<ClassFile *>(sub)->super_class);
 }
 
-jboolean IsAssignableFrom
-        (JNIEnv *env, jclass sub, jclass sup) {
-    UNIMPLEMENTED("IsAssignableFrom");
+jboolean IsAssignableFrom(JNIEnv *env, jclass sub, jclass sup) {
+    LOG("IsAssignableFrom");
+    auto *subclass = reinterpret_cast<ClassFile *>(sub);
+    auto *superclass = reinterpret_cast<ClassFile *>(sup);
+    return subclass->is_instance_of(superclass);
 }
 
 jobject ToReflectedField
@@ -258,7 +261,10 @@ jint Throw
 
 jint ThrowNew
         (JNIEnv *env, jclass clazz, const char *msg) {
-    UNIMPLEMENTED("ThrowNew");
+    LOG("ThrowNew");
+    auto *thread = static_cast<Thread *>(env->functions->reserved0);
+    throw_new(*thread, (ClassFile *) clazz, msg);
+    return JNI_OK; // TODO can this ever fail?
 }
 
 jthrowable ExceptionOccurred(JNIEnv *env) {
