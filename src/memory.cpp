@@ -65,60 +65,30 @@ Reference Heap::make_string(std::u16string_view const &string_utf16) {
 }
 
 Reference Heap::make_string(std::string const &modified_utf8) {
-    // java uses modified utf8, but the conversion below doesn't like that
-    std::string string_utf8;
+    std::u16string string_utf16;
+    string_utf16.reserve(modified_utf8.size());
     {
-        string_utf8.reserve(modified_utf8.length());
         for (size_t i = 0; i < modified_utf8.length(); ++i) {
-            u1 c = static_cast<u1>(modified_utf8[i]);
+            u1 x = static_cast<u1>(modified_utf8[i]);
 
-            if (c == 0b11101101) {
-                u1 v = static_cast<u1>(modified_utf8[i + 1]);
-                u1 w = static_cast<u1>(modified_utf8[i + 2]);
-                u1 x = static_cast<u1>(modified_utf8[i + 3]);
-                u1 y = static_cast<u1>(modified_utf8[i + 4]);
-                u1 z = static_cast<u1>(modified_utf8[i + 5]);
-
-                if (((v & 0xf0) == 0b10100000) && ((w & 0b11000000) == 0b10000000)
-                    && (x == 0b11101101) && ((y & 0xf0) == 0b10110000) &&
-                    ((z & 11000000) == 0b10000000)) {
-                    int codepoint =
-                            0x10000 + ((v & 0x0f) << 16) + ((w & 0x3f) << 10) + ((y & 0x0f) << 6) +
-                            (z & 0x3f);
-                    // convert into the 4-byte utf8 variant
-                    string_utf8.push_back(static_cast<char>(0b11110000 | ((codepoint >> 18) & 0b1111)));
-                    string_utf8.push_back(
-                            static_cast<char>(0b10000000 | ((codepoint >> 12) & 0b111111)));
-                    string_utf8.push_back(
-                            static_cast<char>(0b10000000 | ((codepoint >> 6) & 0b111111)));
-                    string_utf8.push_back(static_cast<char>(0b10000000 | ((codepoint) & 0b111111)));
-                    i += 5;
-                    continue;
-                }
-            }
-
-            if ((c & 0b10000000) == 0) { // copy 1 byte over
-                string_utf8.push_back(static_cast<char>(c));
-            } else if ((c & 0b11100000) == 0b11000000) { // copy 2 byte over
-                string_utf8.push_back(static_cast<char>(c));
-                string_utf8.push_back(modified_utf8[++i]);
-            } else if ((c & 0b11110000) == 0b11100000) { // copy 3 byte over
-                string_utf8.push_back(static_cast<char>(c));
-                string_utf8.push_back(modified_utf8[++i]);
-                string_utf8.push_back(modified_utf8[++i]);
+            if ((x & 0b10000000) == 0) { // copy 1 byte over
+                assert(x != 0);
+                string_utf16.push_back(x);
+            } else if ((x & 0b11100000) == 0b11000000) { // copy 2 byte over
+                u1 y = static_cast<u1>(modified_utf8[++i]);
+                string_utf16.push_back(static_cast<u2>(((x & 0x1f) << 6) + (y & 0x3f)));
+            } else if ((x & 0b11110000) == 0b11100000) { // copy 3 byte over
+                u1 y = static_cast<u1>(modified_utf8[++i]);
+                u1 z = static_cast<u1>(modified_utf8[++i]);
+                string_utf16.push_back(static_cast<u2>(((x & 0xf) << 12) + ((y & 0x3f) << 6) + (z & 0x3f)));
             } else {
-                throw std::runtime_error(
-                        "Invalid byte in modified utf8 string: " + std::to_string((int) c));
+                throw std::runtime_error("Invalid byte in modified utf8 string: " + std::to_string((int) x));
             }
         }
     }
 
-    std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
-    std::u16string string_utf16 = converter.from_bytes(string_utf8.data());
-
     auto reference = make_string(string_utf16);
     interned_strings[modified_utf8] = reference;
-
     return reference;
 }
 
