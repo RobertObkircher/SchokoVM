@@ -5,6 +5,7 @@
 #include <codecvt>
 #include <bitset>
 
+#include "classloading.hpp"
 #include "memory.hpp"
 
 struct ModifiedUtf8 {
@@ -17,7 +18,9 @@ struct ModifiedUtf8 {
 struct JavaString {
     explicit JavaString(const Reference &instance) : instance(instance) {
         assert(instance != JAVA_NULL);
+        assert(instance.object()->clazz == BootstrapClassLoader::constants().java_lang_String);
         assert(value() != JAVA_NULL);
+        assert(value().object()->clazz == BootstrapClassLoader::primitive(Primitive::Byte).array);
     }
 
     [[nodiscard]] Reference reference() const { return instance; }
@@ -36,6 +39,7 @@ struct JavaString {
     // utiltiy functions:
 
     s4 array_length() {
+        assert(value().object()->length >= 0);
         if (coder() == Utf16) {
             assert(value().object()->length % 2 == 0);
         }
