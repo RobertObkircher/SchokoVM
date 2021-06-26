@@ -31,7 +31,7 @@ struct JavaString {
         Utf16 = 1,
     };
 
-    Kind &coder() { return reinterpret_cast<Kind &>(instance.data<Value>()[1].s4); }
+    s4 &coder() { return instance.data<Value>()[1].s4; }
 
     // utiltiy functions:
 
@@ -68,12 +68,11 @@ private:
     Reference const instance;
 
     std::basic_string_view<u1> view8() {
-        return {value().data<u1>(), value().data<u1>() + array_length()};
+        return {value().data<u1>(), static_cast<size_t>(array_length())};
     };
 
     std::basic_string_view<u2> view16() {
-        return {reinterpret_cast<u2 *>(value().data<u1>()),
-                reinterpret_cast<u2 *>(value().data<u1>() + array_length())};
+        return {reinterpret_cast<u2 *>(value().data<u1>()), static_cast<size_t>(array_length() / 2)};
     }
 };
 

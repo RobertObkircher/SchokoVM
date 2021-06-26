@@ -54,8 +54,8 @@ void fill_in_stack_trace(Stack &stack, Reference throwable) {
     assert(throwable != JAVA_NULL);
     assert(throwable.object()->clazz->is_subclass_of(BootstrapClassLoader::constants().java_lang_Throwable));
 
-    size_t ignored = 2; // fillInStackTrace (native method) + Throwable.fillInStackTrace (non native method)
-    for (auto i = static_cast<ssize_t>(stack.frames.size() - 1 - ignored); i >= 0; --i) {
+    ssize_t ignored = 2; // fillInStackTrace (native method) + Throwable.fillInStackTrace (non native method)
+    for (auto i = static_cast<ssize_t>(stack.frames.size()) - 1 - ignored; i >= 0; --i) {
         auto const &frame = stack.frames[static_cast<size_t>(i)];
         if (frame.method->name_index->value != "<init>") {
             throw std::runtime_error("Fill in stack trace is expected to be called in an initializer");
@@ -80,7 +80,7 @@ void fill_in_stack_trace(Stack &stack, Reference throwable) {
     auto array = Heap::get().new_array<Frame>(array_class, static_cast<s4>(count));
 
     for (size_t i = 0; i < count; ++i) {
-        auto const &frame = stack.frames[stack.frames.size() - ignored - count + i];
+        auto const &frame = stack.frames[stack.frames.size() - static_cast<size_t>(ignored) - count + i];
         assert((i == 0) == frame.is_root_frame);
         array.data<Frame>()[count - 1 - i] = frame;
     }

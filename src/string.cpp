@@ -4,12 +4,11 @@ ModifiedUtf8::ModifiedUtf8(char16_t code_point) : chars() {
     u2 c = code_point;
 
     auto get_byte = [c](u1 prefix, int high, int low) {
-        u2 result = c >> low;
+        u2 result = static_cast<u2>(c >> low);
         int bit_count = high - low + 1;
         u2 mask = 0xFF >> (8 - bit_count);
         result &= mask;
-        result |= prefix;
-        return static_cast<u1>(result);
+        return static_cast<u1>(result | prefix);
     };
 
     // https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-4.html#jvms-4.4.7
@@ -20,7 +19,7 @@ ModifiedUtf8::ModifiedUtf8(char16_t code_point) : chars() {
         chars[0] = get_byte(0b11000000, 10, 6);
         chars[1] = get_byte(0b10000000, 5, 0);
         count = 2;
-    } else if (0x0800 <= c && c <= 0xFFFF) {
+    } else if (0x0800 <= c /*&& c <= 0xFFFF*/) {
         chars[0] = get_byte(0b11100000, 15, 12);
         chars[1] = get_byte(0b10000000, 11, 6);
         chars[2] = get_byte(0b10000000, 5, 0);

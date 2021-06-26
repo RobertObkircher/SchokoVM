@@ -423,7 +423,7 @@ static jint Name(JNIEnv *env, jclass java_class, bool is_virtual,               
                  jobject java_object, jmethodID methodID, ArgType args, Value &result) {                               \
     auto *thread = static_cast<Thread *>(env->functions->reserved0);                                                   \
     auto *object = (Object *) java_object;                                                                             \
-    auto *clazz = (ClassFile *) java_class;                                                                            \
+    [[maybe_unused]] auto *clazz = (ClassFile *) java_class;                                                                            \
     auto *method = (method_info *) methodID;                                                                           \
                                                                                                                        \
     size_t saved_operand_stack_top = thread->stack.memory_used;                                                        \
