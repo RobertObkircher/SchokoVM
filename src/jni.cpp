@@ -138,11 +138,29 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
 
     auto *system = BootstrapClassLoader::get().load_or_throw("java/lang/System");
     assert(system);
-    jmethodID method = thread->jni_env->GetStaticMethodID((jclass) system, "initPhase1", "()V");
-    assert(method);
-    thread->jni_env->CallStaticVoidMethod((jclass) system, method);
-    if (thread->jni_env->ExceptionCheck()) {
-        abort();
+    {
+        jmethodID method = thread->jni_env->GetStaticMethodID((jclass) system, "initPhase1", "()V");
+        assert(method);
+        thread->jni_env->CallStaticVoidMethod((jclass) system, method);
+        if (thread->jni_env->ExceptionCheck()) {
+            abort();
+        }
+    }
+    {
+//        jmethodID method = thread->jni_env->GetStaticMethodID((jclass) system, "initPhase2", "(ZZ)I");
+//        assert(method);
+//        thread->jni_env->CallStaticIntMethod((jclass) system, method, true, true);
+//        if (thread->jni_env->ExceptionCheck()) {
+//            abort();
+//        }
+    }
+    {
+//        jmethodID method = thread->jni_env->GetStaticMethodID((jclass) system, "initPhase3", "()V");
+//        assert(method);
+//        thread->jni_env->CallStaticVoidMethod((jclass) system, method);
+//        if (thread->jni_env->ExceptionCheck()) {
+//            abort();
+//        }
     }
 
     return 0;
