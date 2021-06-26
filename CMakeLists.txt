@@ -30,6 +30,7 @@ if (MSVC)
 else ()
     add_compile_options(
             -Wall -Wextra -pedantic
+            -Werror
             #            -Wold-style-cast
 
             -Wdouble-promotion -Wconversion
