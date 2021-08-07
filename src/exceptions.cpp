@@ -54,15 +54,15 @@ void fill_in_stack_trace(Stack &stack, Reference throwable) {
     assert(throwable != JAVA_NULL);
     assert(throwable.object()->clazz->is_subclass_of(BootstrapClassLoader::constants().java_lang_Throwable));
 
-    size_t ignored = 2; // fillInStackTrace (native method) + Throwable.fillInStackTrace (non native method)
-    for (auto i = static_cast<ssize_t>(stack.frames.size() - 1 - ignored); i >= 0; --i) {
+    ssize_t ignored = 2; // fillInStackTrace (native method) + Throwable.fillInStackTrace (non native method)
+    for (auto i = static_cast<ssize_t>(stack.frames.size()) - 1 - ignored; i >= 0; --i) {
         auto const &frame = stack.frames[static_cast<size_t>(i)];
         if (frame.method->name_index->value != "<init>") {
             throw std::runtime_error("Fill in stack trace is expected to be called in an initializer");
         }
         ++ignored; // ignore Throwable/Exception initializers
 
-        if (frame.clazz == throwable.object()->clazz) {
+        if (frame.method->clazz == throwable.object()->clazz) {
             break;
         }
     }
@@ -80,7 +80,7 @@ void fill_in_stack_trace(Stack &stack, Reference throwable) {
     auto array = Heap::get().new_array<Frame>(array_class, static_cast<s4>(count));
 
     for (size_t i = 0; i < count; ++i) {
-        auto const &frame = stack.frames[stack.frames.size() - ignored - count + i];
+        auto const &frame = stack.frames[stack.frames.size() - static_cast<size_t>(ignored) - count + i];
         assert((i == 0) == frame.is_root_frame);
         array.data<Frame>()[count - 1 - i] = frame;
     }
@@ -102,19 +102,20 @@ static Reference init_stack_trace_element(Frame const &frame, Reference element)
     Reference &fileName = element.data<Value>()[6].reference; // String
     s4 &lineNumber = element.data<Value>()[7].s4; // int
 
-    declaringClassObject = Reference{frame.clazz};
+    ClassFile *clazz = frame.method->clazz;
+    declaringClassObject = Reference{clazz};
     classLoaderName = JAVA_NULL;
     moduleName = JAVA_NULL;
     moduleVersion = JAVA_NULL;
 
-    declaringClass = Heap::get().make_string(frame.clazz->name());
+    declaringClass = Heap::get().make_string(clazz->name());
     methodName = Heap::get().make_string(frame.method->name_index->value);
 
-    auto source_file = std::find_if(frame.clazz->attributes.begin(), frame.clazz->attributes.end(),
+    auto source_file = std::find_if(clazz->attributes.begin(), clazz->attributes.end(),
                                     [](const attribute_info &a) {
                                         return std::holds_alternative<SourceFile_attribute>(a.variant);
                                     });
-    if (source_file != std::end(frame.clazz->attributes)) {
+    if (source_file != std::end(clazz->attributes)) {
         auto value = std::get<SourceFile_attribute>(source_file->variant).sourcefile_index->value;
         fileName = Heap::get().make_string(value);
     }

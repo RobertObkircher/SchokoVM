@@ -33,10 +33,10 @@ static ffi_type *ffi_type_from_char(char c) {
     }
 }
 
-std::string get_jni_method_name(ClassFile *clazz, method_info *method, bool signature) {
+std::string get_jni_method_name(method_info *method, bool signature) {
     std::string result{"Java_"};
-    result.reserve(5 + clazz->name().length() + 1 + method->name_index->value.length());
-    for (char const c: clazz->name()) {
+    result.reserve(5 + method->clazz->name().length() + 1 + method->name_index->value.length());
+    for (char const c: method->clazz->name()) {
         if (c == '/') result += '_';
         else if (c == '_') result += "_1";
         else result += c;
@@ -63,16 +63,16 @@ std::string get_jni_method_name(ClassFile *clazz, method_info *method, bool sign
 }
 
 
-void *get_native_function_pointer(ClassFile *clazz, method_info *method) {
+void *get_native_function_pointer(method_info *method) {
     // TODO load this via loadLibrary
     static void *dlsym_handle = nullptr;
 
     if (dlsym_handle == nullptr) {
         // TODO we might need different flags
 #ifdef __APPLE__
-        dlsym_handle = dlopen("./libNativeLib.dylib", RTLD_LAZY | RTLD_GLOBAL);
+        dlsym_handle = dlopen("./libNativeLibSanitizers.dylib", RTLD_LAZY | RTLD_GLOBAL);
 #else
-        dlsym_handle = dlopen("./libNativeLib.so", RTLD_LAZY | RTLD_GLOBAL);
+        dlsym_handle = dlopen("./libNativeLibSanitizers.so", RTLD_LAZY | RTLD_GLOBAL);
 #endif
         dlsym_handle = dlopen(nullptr, RTLD_LAZY);
         if (auto message = dlerror(); message != nullptr) {
@@ -83,13 +83,13 @@ void *get_native_function_pointer(ClassFile *clazz, method_info *method) {
 
     // TODO arbitrary unicode unicode characters aren't escaped
     //  https://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/design.html
-    auto name_short = get_jni_method_name(clazz, method, false);
+    auto name_short = get_jni_method_name(method, false);
     auto result_short = dlsym(dlsym_handle, name_short.c_str());
     if (result_short != nullptr) {
         return result_short;
     }
 
-    auto name_full = get_jni_method_name(clazz, method, true);
+    auto name_full = get_jni_method_name(method, true);
     auto result_full = dlsym(dlsym_handle, name_full.c_str());
     if (auto message = dlerror(); message != nullptr) {
         std::cerr << "Could not find native function " << name_full << ": " << message << "\n";

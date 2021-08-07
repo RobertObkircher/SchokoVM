@@ -127,12 +127,18 @@ JVM_InternString(JNIEnv *env, jstring str) {
  */
 JNIEXPORT jlong JNICALL
 JVM_CurrentTimeMillis(JNIEnv *env, jclass ignored) {
-    UNIMPLEMENTED("JVM_CurrentTimeMillis");
+    LOG("JVM_CurrentTimeMillis");
+    std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
+    auto duration = now.time_since_epoch();
+    return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
 }
 
 JNIEXPORT jlong JNICALL
 JVM_NanoTime(JNIEnv *env, jclass ignored) {
-    UNIMPLEMENTED("JVM_NanoTime");
+    LOG("JVM_NanoTime");
+    std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
+    auto duration = now.time_since_epoch();
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
 }
 
 JNIEXPORT jlong JNICALL
@@ -589,7 +595,14 @@ JVM_NewMultiArray(JNIEnv *env, jclass eltClass, jintArray dim) {
  */
 JNIEXPORT jclass JNICALL
 JVM_GetCallerClass(JNIEnv *env) {
-    UNIMPLEMENTED("JVM_GetCallerClass");
+    LOG("JVM_GetCallerClass");
+    auto thread = reinterpret_cast<Thread *>(env->functions->reserved0);
+    const auto &frames = thread->stack.frames;
+    // TODO ignore frames associated with java.lang.reflect.Method.invoke()
+    // frames[size()-1] == Reflection.getCallerClass(), @CallerSensitive
+    // frames[size()-2] == callee of Reflection.getCallerClass(), @CallerSensitive
+    // frames[size()-3] == what we want
+    return reinterpret_cast<jclass>(frames[frames.size() - 3].method->clazz);
 }
 
 
@@ -695,7 +708,8 @@ JVM_DefineModule(JNIEnv *env, jobject module, jboolean is_open, jstring version,
  */
 JNIEXPORT void JNICALL
 JVM_SetBootLoaderUnnamedModule(JNIEnv *env, jobject module) {
-    UNIMPLEMENTED("JVM_SetBootLoaderUnnamedModule");
+    LOG("JVM_SetBootLoaderUnnamedModule");
+    BootstrapClassLoader::get().unnamed_module(Reference {module});
 }
 
 /*

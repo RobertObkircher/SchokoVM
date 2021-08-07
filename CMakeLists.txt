@@ -30,6 +30,7 @@ if (MSVC)
 else ()
     add_compile_options(
             -Wall -Wextra -pedantic
+            -Werror
             #            -Wold-style-cast
 
             -Wdouble-promotion -Wconversion
@@ -101,6 +102,7 @@ add_library(jvm SHARED
         src/unsafe.cpp src/unsafe.hpp
         src/data.hpp
         src/exceptions.cpp src/exceptions.hpp
+        src/string.cpp src/string.hpp
         )
 add_sanitizers(jvm)
 target_include_directories(jvm PRIVATE ${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/jdk/include)
@@ -123,12 +125,16 @@ add_sanitizers(SchokoVM)
 target_include_directories(SchokoVM PRIVATE ${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/jdk/include)
 target_link_libraries(SchokoVM jvm)
 
-
 add_library(NativeLib MODULE
         tests/NativeLib.cpp
         )
 target_include_directories(NativeLib PRIVATE ${JNI_INCLUDE_DIRS})
 
+add_library(NativeLibSanitizers MODULE
+        tests/NativeLib.cpp
+        )
+target_include_directories(NativeLibSanitizers PRIVATE ${JNI_INCLUDE_DIRS})
+add_sanitizers(NativeLibSanitizers)
 
 #
 # OpenJDK
@@ -242,6 +248,7 @@ add_jar(tests
         ${JAVA_TEST_SOURCES}
         tests/HelloWorld.java
         ${JAVA_TEST_GENERATED_SOURCES})
+add_dependencies(tests NativeLib NativeLibSanitizers)
 add_dependencies(jvm tests)
 
 enable_testing()
