@@ -559,7 +559,9 @@ JVM_NewArray(JNIEnv *env, jclass eltClass, jint length) {
     LOG("JVM_NewArray");
     auto element_class = reinterpret_cast<ClassFile *>(eltClass);
     ClassFile *array_class;
-    if (element_class->name() == "boolean" || element_class->name() == "byte") {
+    if (element_class->name() == "boolean") {
+        array_class = BootstrapClassLoader::primitive(Primitive::Type::Boolean).array;
+    } else if (element_class->name() == "byte") {
         array_class = BootstrapClassLoader::primitive(Primitive::Type::Byte).array;
     } else if (element_class->name() == "char") {
         array_class = BootstrapClassLoader::primitive(Primitive::Type::Char).array;
