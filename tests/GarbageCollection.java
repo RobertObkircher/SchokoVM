@@ -7,5 +7,13 @@ public class GarbageCollection {
 	    new Object();
 	    System.gc();
 	    System.gc();
+
+        System.out.println(1);
+        System.gc();
+        System.out.println("foo");
+        System.gc();
+        System.out.println(2);
+        System.gc();
+        System.gc();
 	}
 }

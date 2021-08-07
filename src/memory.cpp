@@ -280,6 +280,7 @@ size_t Heap::sweep(bool unmarked) {
     return erased;
 }
 
+// TODO We need to call this before we run out of memory.
 size_t Heap::garbage_collection(std::vector<Thread *> &threads) {
     assert(all_objects_are_unmarked());
 
