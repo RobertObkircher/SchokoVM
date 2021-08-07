@@ -185,11 +185,13 @@ void mark_recursively(std::queue<Object *> &queue, bool gc_bit_marked, Reference
         if (clazz->name() == Names::java_lang_Class) {
             [[maybe_unused]] auto *class_instance = reinterpret_cast<ClassFile *> (object);
             // TODO Mark all referenced objects/classes (e.g. super class, interfaces, constant pool entries, ect.)
+            // Currently this is not really necessary, because we mark all classes anyway
         }
     }
 };
 }
 
+// TODO we do not handle references (pointers) in native code!
 void Heap::mark(std::vector<Thread *> &threads, bool gc_bit_marked) {
     auto is_potential_pointer = [](void *pointer) {
         auto value = reinterpret_cast<std::uintptr_t>(pointer);
@@ -218,6 +220,9 @@ void Heap::mark(std::vector<Thread *> &threads, bool gc_bit_marked) {
     }
 
     for (const auto &thread : threads) {
+        mark_recursively(queue, gc_bit_marked, thread->current_exception, all_object_pointers);
+        mark_recursively(queue, gc_bit_marked, thread->thread_object, all_object_pointers);
+
         for (const auto &frame : thread->stack.frames) {
             for (const auto &value : frame.locals) {
                 if (is_potential_pointer(value.reference.memory) &&
