@@ -173,8 +173,7 @@ void mark_recursively(std::queue<Object *> &queue, bool gc_bit_marked, Reference
                 }
             }
         } else {
-            auto const &element = clazz->array_element_type->name();
-            if (element.starts_with("L") || element.starts_with("[")) {
+            if (!clazz->array_element_type->is_primitive()) {
                 Reference reference{object};
                 for (s4 i = 0; i < object->length; ++i) {
                     mark(reference.data<Reference>()[i]);

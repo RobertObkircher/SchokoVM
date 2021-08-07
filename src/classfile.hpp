@@ -870,6 +870,23 @@ struct ClassFile {
         return !name().empty() && name()[0] == '[';
     }
 
+    // TODO flags for is_array and is_primitive
+    [[nodiscard]] bool is_primitive() const {
+        auto const &n = name();
+
+        if (n == "byte") return true;
+        if (n == "char") return true;
+        if (n == "double") return true;
+        if (n == "float") return true;
+        if (n == "int") return true;
+        if (n == "long") return true;
+        if (n == "short") return true;
+        if (n == "boolean") return true;
+        if (n == "void") return true;
+
+        return false;
+    }
+
     [[nodiscard]] std::string as_array_element() const {
         std::string const &n = name();
         if (!n.empty() && n[0] == '[') {
