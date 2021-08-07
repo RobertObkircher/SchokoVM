@@ -165,7 +165,7 @@ void mark_recursively(std::queue<Object *> &queue, bool gc_bit_marked, Reference
                 auto const &descriptor = field.descriptor_index->value;
                 if (descriptor.starts_with("L") || descriptor.starts_with("[")) {
                     if (field.is_static()) {
-                        mark(clazz->static_field_values[field.index].reference);
+                        // static fields are handled when the class itself is marked
                     } else {
                         Reference reference{object};
                         mark(reference.data<Value>()[field.index].reference);
@@ -182,9 +182,29 @@ void mark_recursively(std::queue<Object *> &queue, bool gc_bit_marked, Reference
         }
 
         if (clazz->name() == Names::java_lang_Class) {
-            [[maybe_unused]] auto *class_instance = reinterpret_cast<ClassFile *> (object);
-            // TODO Mark all referenced objects/classes (e.g. super class, interfaces, constant pool entries, ect.)
-            // Currently this is not really necessary, because we mark all classes anyway
+            auto class_instance = reinterpret_cast<ClassFile *> (object);
+
+            // TODO check if ClassFile references other objects (e.g. inside constant pool entries)
+
+            // TODO this would not be necessary if classloaders keep a list of loaded clases
+            mark(Reference{class_instance->super_class});
+            for (const auto &item : class_instance->interfaces) {
+                mark(Reference{item->clazz});
+            }
+
+            if (class_instance->resolved) {
+                for (const auto &field : class_instance->fields) {
+                    auto const &descriptor = field.descriptor_index->value;
+                    if (descriptor.starts_with("L") || descriptor.starts_with("[")) {
+                        if (field.is_static()) {
+                            mark(class_instance->static_field_values[field.index].reference);
+                        } else {
+                            // These would be the fields of an instance of class_instance.
+                            // The real fields (from java/lang/Class) have been marked in the loop above.
+                        }
+                    }
+                }
+            }
         }
     }
 };
