@@ -161,14 +161,16 @@ void mark_recursively(std::queue<Object *> &queue, bool gc_bit_marked, Reference
             // TODO we might have to initializes more classes
             assert(clazz->resolved);
 
-            for (const auto &field : clazz->fields) {
-                auto const &descriptor = field.descriptor_index->value;
-                if (descriptor.starts_with("L") || descriptor.starts_with("[")) {
-                    if (field.is_static()) {
-                        // static fields are handled when the class itself is marked
-                    } else {
-                        Reference reference{object};
-                        mark(reference.data<Value>()[field.index].reference);
+            for (ClassFile *current = clazz; current != nullptr; current = current->super_class) {
+                for (const auto &field : current->fields) {
+                    auto const &descriptor = field.descriptor_index->value;
+                    if (descriptor.starts_with("L") || descriptor.starts_with("[")) {
+                        if (field.is_static()) {
+                            // static fields are handled when the class itself is marked
+                        } else {
+                            Reference reference{object};
+                            mark(reference.data<Value>()[field.index].reference);
+                        }
                     }
                 }
             }
