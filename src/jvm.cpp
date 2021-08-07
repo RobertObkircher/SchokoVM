@@ -265,7 +265,7 @@ JNIEXPORT void JNICALL
 JVM_GC(void) {
     LOG("JVM_GC");
     std::vector<Thread *> threads{&this_thread};
-    size_t deleted = Heap::get().garbage_collection(threads);
+    [[maybe_unused]] size_t deleted = Heap::get().garbage_collection(threads);
 //    std::cerr << "GC delteted " << deleted << " objects\n";
     assert(Heap::get().garbage_collection(threads) == 0);
 }

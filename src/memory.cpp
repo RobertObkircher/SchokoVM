@@ -138,6 +138,7 @@ void mark_recursively(std::queue<Object *> &queue, bool gc_bit_marked, Reference
     auto mark = [&queue, gc_bit_marked, &all_object_pointers](Reference reference) {
         if (reference != JAVA_NULL) {
             Object *object = reference.object();
+            (void) all_object_pointers;
             assert(all_object_pointers.contains(object));
             // ensure that every object is added at most once
             if (object->gc_bit() != gc_bit_marked) {
