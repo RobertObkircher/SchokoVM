@@ -135,7 +135,7 @@ bool Heap::all_objects_are_unmarked() {
 namespace {
 void mark_recursively(std::queue<Object *> &queue, bool gc_bit_marked, Reference to_mark,
                       std::unordered_set<Object *> const &all_object_pointers) {
-    auto mark = [&queue, gc_bit_marked, &all_object_pointers](Reference reference) {
+    auto enqueue = [&queue, gc_bit_marked, &all_object_pointers](Reference reference) {
         if (reference != JAVA_NULL) {
             Object *object = reference.object();
             (void) all_object_pointers;
@@ -148,65 +148,56 @@ void mark_recursively(std::queue<Object *> &queue, bool gc_bit_marked, Reference
         }
     };
 
-    mark(to_mark);
+    enqueue(to_mark);
 
     while (!queue.empty()) {
         Object *object = queue.front();
         queue.pop();
 
         ClassFile *clazz = object->clazz;
-        mark(Reference{clazz});
+        enqueue(Reference{clazz});
 
+        // Mark fields of instances and array elements.
+        // Keep in mind that classes are also instances that have fields.
         if (!clazz->is_array()) {
             // TODO we might have to initializes more classes
             assert(clazz->resolved);
 
+            // we only need to check superclasses because interfaces don't have instance fields
             for (ClassFile *current = clazz; current != nullptr; current = current->super_class) {
                 for (const auto &field : current->fields) {
-                    auto const &descriptor = field.descriptor_index->value;
-                    if (descriptor.starts_with("L") || descriptor.starts_with("[")) {
-                        if (field.is_static()) {
-                            // static fields are handled when the class itself is marked
-                        } else {
-                            Reference reference{object};
-                            mark(reference.data<Value>()[field.index].reference);
-                        }
+                    if (!field.is_static() && field.is_reference_type()) {
+                        enqueue(Reference{object}.data<Value>()[field.index].reference);
                     }
                 }
             }
-        } else {
-            if (!clazz->array_element_type->is_primitive()) {
-                Reference reference{object};
-                for (s4 i = 0; i < object->length; ++i) {
-                    mark(reference.data<Reference>()[i]);
-                }
+        } else if (!clazz->array_element_type->is_primitive()) {
+            for (s4 i = 0; i < object->length; ++i) {
+                enqueue(Reference{object}.data<Reference>()[i]);
             }
         }
 
+        // Classes are also objects. When they are marked we also need to
+        // enqueue references that are stored in their C++ representation:
         if (clazz->name() == Names::java_lang_Class) {
             auto class_instance = reinterpret_cast<ClassFile *> (object);
 
-            // TODO check if ClassFile references other objects (e.g. inside constant pool entries)
-
             // TODO this would not be necessary if classloaders keep a list of loaded clases
-            mark(Reference{class_instance->super_class});
+            enqueue(Reference{class_instance->super_class});
             for (const auto &item : class_instance->interfaces) {
-                mark(Reference{item->clazz});
+                enqueue(Reference{item->clazz});
             }
 
+            // resolved classes can have static variables:
             if (class_instance->resolved) {
                 for (const auto &field : class_instance->fields) {
-                    auto const &descriptor = field.descriptor_index->value;
-                    if (descriptor.starts_with("L") || descriptor.starts_with("[")) {
-                        if (field.is_static()) {
-                            mark(class_instance->static_field_values[field.index].reference);
-                        } else {
-                            // These would be the fields of an instance of class_instance.
-                            // The real fields (from java/lang/Class) have been marked in the loop above.
-                        }
+                    if (field.is_static() && field.is_reference_type()) {
+                        enqueue(class_instance->static_field_values[field.index].reference);
                     }
                 }
             }
+
+            // TODO check if ClassFile references any other objects (e.g. inside constant pool entries)
         }
     }
 };
@@ -219,6 +210,9 @@ void Heap::mark(std::vector<Thread *> &threads, bool gc_bit_marked) {
         return value != 0 && (value % alignof(std::max_align_t)) == 0;
     };
 
+    // Build a hashmap of all known allocations to determine out which
+    // values on the operand stack and in local variables are pointers.
+    // TODO statically determine the types instead (see StackMapTable Attribute)
     std::unordered_set<Object *> all_object_pointers;
     for (const auto &clazz : classes) {
         auto *object = reinterpret_cast<Object *>(clazz.get());

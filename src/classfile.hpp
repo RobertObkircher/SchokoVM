@@ -246,6 +246,11 @@ struct field_info {
     [[nodiscard]] inline bool is_static() const {
         return (access_flags & static_cast<u2>(FieldInfoAccessFlags::ACC_STATIC)) != 0;
     }
+
+    [[nodiscard]] inline bool is_reference_type() const {
+        auto const &descriptor = descriptor_index->value;
+        return descriptor.starts_with("L") || descriptor.starts_with("[");
+    }
 };
 
 enum class MethodInfoAccessFlags : u2 {
