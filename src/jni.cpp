@@ -79,15 +79,19 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
     // TODO remove classpath
     BootstrapClassLoader::get().initialize_with_boot_classpath(bootclasspath + ":" + classpath);
 
-    auto *thread = new Thread();
+    this_thread = Thread();
+    auto *thread = &this_thread;
     thread->stack.memory.resize(1024 * 1024 / sizeof(Value)); // 1mb for now
 
     // TODO should be something like thread.get_jni()
-    auto *native = new JNINativeInterface_{jni_native_interface};
-    native->reserved0 = thread;
+
+    thread->jni_native_interface = JNINativeInterface_{jni_native_interface};
+    thread->jni_native_interface.reserved0 = thread;
+    thread->jni_env_value = JNIEnv{&thread->jni_native_interface};
+    thread->jni_env = &thread->jni_env_value;
 
     *pvm = new JavaVM{&jni_invoke_interface};
-    *penv = thread->jni_env = new JNIEnv{native}; // TODO store JNIEnv as member of thread instead of allocating?
+    *penv = thread->jni_env;
 
     BootstrapClassLoader::get().resolve_and_initialize_constants(*thread);
 
@@ -711,9 +715,12 @@ jsize GetArrayLength
 jobjectArray NewObjectArray
         (JNIEnv *env, jsize len, jclass clazz, jobject init) {
     LOG("NewObjectArray");
-    return reinterpret_cast<jobjectArray>(
-            Heap::get().new_array<Reference>(reinterpret_cast<ClassFile *>(clazz), len).memory
-    );
+    ClassFile *array_class = BootstrapClassLoader::get().load(((ClassFile *) clazz)->as_array_element());
+    auto array = Heap::get().new_array<Reference>(array_class, len);
+    for (s4 i = 0; i < len; ++i) {
+        array.data<Reference>()[i] = Reference{init};
+    }
+    return reinterpret_cast<jobjectArray>(array.memory);
 }
 
 jobject GetObjectArrayElement

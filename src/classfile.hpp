@@ -246,6 +246,11 @@ struct field_info {
     [[nodiscard]] inline bool is_static() const {
         return (access_flags & static_cast<u2>(FieldInfoAccessFlags::ACC_STATIC)) != 0;
     }
+
+    [[nodiscard]] inline bool is_reference_type() const {
+        auto const &descriptor = descriptor_index->value;
+        return descriptor.starts_with("L") || descriptor.starts_with("[");
+    }
 };
 
 enum class MethodInfoAccessFlags : u2 {
@@ -868,6 +873,23 @@ struct ClassFile {
 
     [[nodiscard]] bool is_array() const {
         return !name().empty() && name()[0] == '[';
+    }
+
+    // TODO flags for is_array and is_primitive
+    [[nodiscard]] bool is_primitive() const {
+        auto const &n = name();
+
+        if (n == "byte") return true;
+        if (n == "char") return true;
+        if (n == "double") return true;
+        if (n == "float") return true;
+        if (n == "int") return true;
+        if (n == "long") return true;
+        if (n == "short") return true;
+        if (n == "boolean") return true;
+        if (n == "void") return true;
+
+        return false;
     }
 
     [[nodiscard]] std::string as_array_element() const {

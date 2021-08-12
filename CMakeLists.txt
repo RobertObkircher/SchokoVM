@@ -175,6 +175,7 @@ set(JAVA_TEST_SOURCES
         tests/ExceptionsExitNested.java
         tests/ExceptionsInheritance.java
         tests/Fields.java
+        tests/GarbageCollection.java
         tests/Initialization.java
         tests/InvokeStatic.java
         tests/Instanceof.java

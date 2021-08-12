@@ -1,10 +1,15 @@
 #include "memory.hpp"
 
-#include <locale>
 #include <codecvt>
+#include <iostream>
+#include <locale>
+#include <queue>
+#include <unordered_set>
+
 #include "classfile.hpp"
 #include "classloading.hpp"
 #include "string.hpp"
+#include "interpreter.hpp"
 
 Heap Heap::the_heap;
 
@@ -110,4 +115,176 @@ ClassFile *Heap::allocate_class() {
     // NOTE: Classes that are loaded before the constant is initalized need to be patched later
     result->header.clazz = BootstrapClassLoader::constants().java_lang_Class;
     return result;
+}
+
+bool Heap::all_objects_are_unmarked() {
+    for (const auto &item : allocations) {
+        Reference reference{item.get()};
+        if (reference.object()->gc_bit() != gc_bit_unmarked) {
+            return false;
+        }
+    }
+    for (const auto &item : classes) {
+        if (item->header.gc_bit() != gc_bit_unmarked) {
+            return false;
+        }
+    }
+    return true;
+}
+
+namespace {
+void mark_recursively(std::queue<Object *> &queue, bool gc_bit_marked, Reference to_mark,
+                      std::unordered_set<Object *> const &all_object_pointers) {
+    auto enqueue = [&queue, gc_bit_marked, &all_object_pointers](Reference reference) {
+        if (reference != JAVA_NULL) {
+            Object *object = reference.object();
+            (void) all_object_pointers;
+            assert(all_object_pointers.contains(object));
+            // ensure that every object is added at most once
+            if (object->gc_bit() != gc_bit_marked) {
+                object->gc_bit(gc_bit_marked);
+                queue.push(object);
+            }
+        }
+    };
+
+    enqueue(to_mark);
+
+    while (!queue.empty()) {
+        Object *object = queue.front();
+        queue.pop();
+
+        ClassFile *clazz = object->clazz;
+        enqueue(Reference{clazz});
+
+        // Mark fields of instances and array elements.
+        // Keep in mind that classes are also instances that have fields.
+        if (!clazz->is_array()) {
+            // TODO we might have to initializes more classes
+            assert(clazz->resolved);
+
+            // we only need to check superclasses because interfaces don't have instance fields
+            for (ClassFile *current = clazz; current != nullptr; current = current->super_class) {
+                for (const auto &field : current->fields) {
+                    if (!field.is_static() && field.is_reference_type()) {
+                        enqueue(Reference{object}.data<Value>()[field.index].reference);
+                    }
+                }
+            }
+        } else if (!clazz->array_element_type->is_primitive()) {
+            for (s4 i = 0; i < object->length; ++i) {
+                enqueue(Reference{object}.data<Reference>()[i]);
+            }
+        }
+
+        // Classes are also objects. When they are marked we also need to
+        // enqueue references that are stored in their C++ representation:
+        if (clazz->name() == Names::java_lang_Class) {
+            auto class_instance = reinterpret_cast<ClassFile *> (object);
+
+            // TODO this would not be necessary if classloaders keep a list of loaded clases
+            enqueue(Reference{class_instance->super_class});
+            for (const auto &item : class_instance->interfaces) {
+                enqueue(Reference{item->clazz});
+            }
+
+            // resolved classes can have static variables:
+            if (class_instance->resolved) {
+                for (const auto &field : class_instance->fields) {
+                    if (field.is_static() && field.is_reference_type()) {
+                        enqueue(class_instance->static_field_values[field.index].reference);
+                    }
+                }
+            }
+
+            // TODO check if ClassFile references any other objects (e.g. inside constant pool entries)
+        }
+    }
+};
+}
+
+// TODO we do not handle references (pointers) in native code!
+void Heap::mark(std::vector<Thread *> &threads, bool gc_bit_marked) {
+    auto is_potential_pointer = [](void *pointer) {
+        auto value = reinterpret_cast<std::uintptr_t>(pointer);
+        return value != 0 && (value % alignof(std::max_align_t)) == 0;
+    };
+
+    // Build a hashmap of all known allocations to determine out which
+    // values on the operand stack and in local variables are pointers.
+    // TODO statically determine the types instead (see StackMapTable Attribute)
+    std::unordered_set<Object *> all_object_pointers;
+    for (const auto &clazz : classes) {
+        auto *object = reinterpret_cast<Object *>(clazz.get());
+        assert(is_potential_pointer(object));
+        assert(object->clazz == BootstrapClassLoader::constants().java_lang_Class);
+        all_object_pointers.insert(object);
+    }
+    for (const auto &allocation : allocations) {
+        auto *object = reinterpret_cast<Object *>(allocation.get());
+        assert(is_potential_pointer(object));
+        assert(object->clazz != BootstrapClassLoader::constants().java_lang_Class);
+        all_object_pointers.insert(object);
+    }
+
+    std::queue<Object *> queue;
+
+    // we don't free classes for now so they are always in the root set
+    for (const auto &clazz : classes) {
+        mark_recursively(queue, gc_bit_marked, Reference{clazz.get()}, all_object_pointers);
+    }
+
+    for (const auto &thread : threads) {
+        mark_recursively(queue, gc_bit_marked, thread->current_exception, all_object_pointers);
+        mark_recursively(queue, gc_bit_marked, thread->thread_object, all_object_pointers);
+
+        for (const auto &frame : thread->stack.frames) {
+            for (const auto &value : frame.locals) {
+                if (is_potential_pointer(value.reference.memory) &&
+                    all_object_pointers.contains(value.reference.object())) {
+                    mark_recursively(queue, gc_bit_marked, value.reference, all_object_pointers);
+                }
+            }
+            for (const auto &value : frame.operands.subspan(0, frame.operands_top)) {
+                if (is_potential_pointer(value.reference.memory) &&
+                    all_object_pointers.contains(value.reference.object())) {
+                    mark_recursively(queue, gc_bit_marked, value.reference, all_object_pointers);
+                }
+            }
+        }
+    }
+}
+
+size_t Heap::sweep(bool unmarked) {
+    std::erase_if(interned_strings, [unmarked](auto const &a) {
+        return a.second.object()->gc_bit() == unmarked;
+    });
+
+    size_t erased = std::erase_if(allocations, [unmarked](auto const &a) {
+        Reference reference{a.get()};
+        return reference.object()->gc_bit() == unmarked;
+    });
+
+    erased += std::erase_if(classes, [unmarked](auto const &a) {
+        // TODO we don't free classes for now
+        assert(a->header.gc_bit() != unmarked);
+        return a->header.gc_bit() == unmarked;
+    });
+
+    return erased;
+}
+
+// TODO We need to call this before we run out of memory.
+size_t Heap::garbage_collection(std::vector<Thread *> &threads) {
+    assert(all_objects_are_unmarked());
+
+    mark(threads, !gc_bit_unmarked);
+
+    size_t deleted = sweep(gc_bit_unmarked);
+
+    gc_bit_unmarked = !gc_bit_unmarked;
+
+    assert(all_objects_are_unmarked());
+
+    return deleted;
 }
