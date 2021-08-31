@@ -6,7 +6,7 @@ if [ -d "jdk" ]; then
 else
   git clone https://github.com/openjdk/jdk.git
   pushd jdk
-  git checkout -b SchokoVM jdk-11+9
+  git checkout -b SchokoVM jdk-11+28
   popd
 fi
 
